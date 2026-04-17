@@ -1,0 +1,9 @@
+discord.py>=2.3.0
+yt-dlp
+aiosqlite
+python-dotenv
+PyNaCl
+davey
+google-genai
+pytest
+pytest-asyncio

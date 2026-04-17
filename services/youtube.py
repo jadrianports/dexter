@@ -1,0 +1,173 @@
+"""yt-dlp wrapper for YouTube search, metadata extraction, and download."""
+
+from __future__ import annotations
+
+import asyncio
+import functools
+import re
+from pathlib import Path
+
+from yt_dlp import YoutubeDL
+
+import config
+from utils.logger import log
+
+_URL_PATTERN = re.compile(r"^https?://")
+
+SEARCH_OPTS = {
+    "quiet": True,
+    "no_warnings": True,
+    "skip_download": True,
+    "noplaylist": True,
+}
+
+PLAYLIST_OPTS = {
+    "quiet": True,
+    "no_warnings": True,
+    "extract_flat": True,
+    "skip_download": True,
+}
+
+EXTRACT_OPTS = {
+    "quiet": True,
+    "no_warnings": True,
+    "noplaylist": True,
+    "skip_download": True,
+}
+
+DOWNLOAD_OPTS = {
+    "format": "bestaudio/best",
+    "postprocessors": [
+        {
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "opus",
+            "preferredquality": config.AUDIO_QUALITY,
+        }
+    ],
+    "outtmpl": str(config.AUDIO_CACHE_DIR / "%(id)s.%(ext)s"),
+    "quiet": True,
+    "no_warnings": True,
+    "noplaylist": True,
+}
+
+
+class YouTubeService:
+    """Wraps yt-dlp for search, extract, and download operations."""
+
+    def is_url(self, query: str) -> bool:
+        """Check if the query is a URL rather than a search term."""
+        return bool(_URL_PATTERN.match(query.strip()))
+
+    def _extract(self, query: str, opts: dict | None = None) -> dict:
+        """Synchronous yt-dlp extract_info call."""
+        with YoutubeDL(opts or EXTRACT_OPTS) as ydl:
+            return ydl.extract_info(query, download=False)
+
+    def search(self, query: str, count: int | None = None) -> list[dict]:
+        """Search YouTube and return lightweight result dicts."""
+        if count is None:
+            count = config.SEARCH_RESULTS_COUNT
+
+        opts = {**SEARCH_OPTS, "default_search": f"ytsearch{count}"}
+        data = self._extract(query, opts)
+
+        entries = list(data.get("entries") or [])
+        results = []
+        for entry in entries[:count]:
+            thumbnails = entry.get("thumbnails") or []
+            thumbnail = thumbnails[0]["url"] if thumbnails else None
+            video_id = entry.get("id", "")
+            results.append(
+                {
+                    "video_id": video_id,
+                    "title": entry.get("title", "Unknown"),
+                    "url": entry.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}",
+                    "duration": entry.get("duration"),
+                    "thumbnail": thumbnail,
+                }
+            )
+        return results
+
+    def extract(self, url: str) -> dict:
+        """Full metadata extraction for a single video."""
+        data = self._extract(url)
+
+        duration = data.get("duration")
+        if duration is None or data.get("is_live"):
+            raise ValueError("Livestream URLs are not supported")
+        if duration > config.MAX_SONG_DURATION_SECONDS:
+            raise ValueError(
+                f"Duration {duration}s exceeds max of {config.MAX_SONG_DURATION_SECONDS}s"
+            )
+
+        artist = data.get("artist") or data.get("uploader") or None
+        thumbnails = data.get("thumbnails") or []
+        thumbnail = thumbnails[-1]["url"] if thumbnails else None
+
+        return {
+            "video_id": data["id"],
+            "title": data.get("title", "Unknown"),
+            "artist": artist,
+            "url": data.get("webpage_url", url),
+            "duration": duration,
+            "thumbnail": thumbnail,
+        }
+
+    def extract_playlist(self, url: str) -> list[dict]:
+        """Extract entries from a playlist URL. Truncates to MAX_PLAYLIST_IMPORT."""
+        opts = {**PLAYLIST_OPTS, "noplaylist": False}
+        data = self._extract(url, opts)
+        entries = list(data.get("entries") or [])
+
+        results = []
+        for entry in entries[: config.MAX_PLAYLIST_IMPORT]:
+            thumbnails = entry.get("thumbnails") or []
+            thumbnail = thumbnails[0]["url"] if thumbnails else None
+            video_id = entry.get("id", "")
+            results.append(
+                {
+                    "video_id": video_id,
+                    "title": entry.get("title", "Unknown"),
+                    "url": entry.get("webpage_url") or entry.get("url") or f"https://www.youtube.com/watch?v={video_id}",
+                    "duration": entry.get("duration"),
+                    "thumbnail": thumbnail,
+                }
+            )
+        return results
+
+    def download(self, video_id: str, url: str) -> Path | None:
+        """Download audio to cache. Returns file path or None on failure."""
+        cached = config.AUDIO_CACHE_DIR / f"{video_id}.opus"
+        if cached.exists():
+            return cached
+
+        try:
+            with YoutubeDL(DOWNLOAD_OPTS) as ydl:
+                ydl.download([url])
+            if cached.exists():
+                log.info(f"Downloaded {video_id} to cache")
+                return cached
+            return None
+        except Exception as e:
+            log.error(f"Download failed for {video_id}: {e}")
+            return None
+
+    async def async_search(self, query: str, count: int | None = None) -> list[dict]:
+        """Run search in a thread pool to avoid blocking the event loop."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(self.search, query, count))
+
+    async def async_extract(self, url: str) -> dict:
+        """Run extract in a thread pool."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.extract, url)
+
+    async def async_download(self, video_id: str, url: str) -> Path | None:
+        """Run download in a thread pool."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.download, video_id, url)
+
+    async def async_extract_playlist(self, url: str) -> list[dict]:
+        """Run playlist extraction in a thread pool."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.extract_playlist, url)

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_context7_context7__query-docs",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "Bash(/c/Users/James/Desktop/dexter/venv/Scripts/pip install:*)",
+      "Bash(/c/Users/James/Desktop/dexter/venv/Scripts/pip.exe install:*)",
+      "Bash(cmd:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(rm -rf venv)",
+      "Bash(python -m venv venv)",
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(venv/Scripts/python:*)",
+      "Bash(ls:*)",
+      "Bash(./venv/Scripts/pip install:*)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_seasonal.py -v)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_responses.py -v)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_message_buffer.py -v)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_prompts.py -v)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_database_phase2.py tests/test_database.py -v)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_user_profile.py -v)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_server_state.py -v)",
+      "Bash(./venv/Scripts/python -m pytest tests/test_ai_helpers.py -v)"
+    ]
+  }
+}
