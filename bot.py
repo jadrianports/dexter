@@ -244,11 +244,17 @@ async def first_run(guild_id: str | None = None):
 
         await bot.close()
 
-    # Load cogs so their commands are registered before sync
+    # Load cogs so their commands are registered before sync.
+    # Mirror on_ready: only load AI cogs when a Gemini key is configured,
+    # otherwise their setup references a gemini_service that won't exist.
     await bot.load_extension("cogs.music")
     await bot.load_extension("cogs.help")
-    await bot.load_extension("cogs.ai")
-    await bot.load_extension("cogs.imagine")
+    await bot.load_extension("cogs.events")
+    if os.getenv("GEMINI_API_KEY"):
+        await bot.load_extension("cogs.ai")
+        await bot.load_extension("cogs.imagine")
+    else:
+        log.warning("GEMINI_API_KEY not set — skipping AI cogs during first-run sync")
     await bot.start(DISCORD_TOKEN)
 
 
