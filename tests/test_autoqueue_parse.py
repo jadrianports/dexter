@@ -36,6 +36,11 @@ class TestParseSuggestions:
                '{"title":"Tadow","artist":"Masego"}]}'
         assert parse_suggestions(text) == VALID
 
+    def test_array_after_other_brackets(self):
+        # Gemini sometimes echoes context (a bracketed token) before the array.
+        text = 'recent: ["rock","pop"]\n[{"title":"A","artist":"B"}]'
+        assert parse_suggestions(text) == [{"title": "A", "artist": "B"}]
+
     def test_drops_items_missing_fields(self):
         text = '[{"title":"Good","artist":"A"},{"title":"No Artist"},{"artist":"No Title"}]'
         assert parse_suggestions(text) == [{"title": "Good", "artist": "A"}]

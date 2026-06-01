@@ -45,10 +45,10 @@ def parse_suggestions(response: str) -> list[dict] | None:
     text = re.sub(r"\s*```$", "", text).strip()
 
     candidates: list[str] = [text]
-    # Fallback: pull the first JSON array or object out of surrounding prose.
-    match = re.search(r"(\[.*\]|\{.*\})", text, re.DOTALL)
-    if match:
-        candidates.append(match.group(1))
+    # Fallback: pull JSON arrays/objects out of surrounding prose. Non-greedy +
+    # findall so a stray bracketed token before the real array (models often
+    # echo context first) doesn't swallow the actual payload.
+    candidates.extend(re.findall(r"\[.*?\]|\{.*?\}", text, re.DOTALL))
 
     for candidate in candidates:
         try:
