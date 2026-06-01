@@ -50,8 +50,8 @@ class SongSelect(discord.ui.Select):
                     await interaction.followup.send(embed=embeds.error(f"Something went wrong: {e}"))
                 else:
                     await interaction.response.send_message(embed=embeds.error(f"Something went wrong: {e}"))
-            except Exception:
-                pass
+            except discord.DiscordException as notify_error:
+                log.error(f"Failed to deliver select-callback error notice: {notify_error}")
         finally:
             self.view.stop()
 
@@ -218,8 +218,8 @@ class MusicCog(commands.Cog):
                         msg = await channel.fetch_message(queue._now_playing_message_id)
                         await msg.edit(embed=embed)
                         return
-                    except Exception:
-                        pass
+                    except (discord.NotFound, discord.HTTPException) as edit_error:
+                        log.debug(f"Now-playing edit failed, sending a new message: {edit_error}")
                 msg = await channel.send(embed=embed)
                 queue._now_playing_message_id = msg.id
         else:
@@ -373,7 +373,8 @@ class MusicCog(commands.Cog):
                                 count += 1
                                 if first_track is None:
                                     first_track = track
-                            except Exception:
+                            except (KeyError, TypeError) as entry_error:
+                                log.warning(f"Skipping malformed playlist entry: {entry_error}")
                                 continue
 
                         msg = f"Queued {count} tracks from playlist."
