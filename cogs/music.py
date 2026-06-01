@@ -184,12 +184,23 @@ class MusicCog(commands.Cog):
                     self._on_track_end(guild), self.bot.loop
                 )
 
-        # Stop current playback (old after_callback will fire but see stale generation)
-        if voice_client.is_playing() or voice_client.is_paused():
-            voice_client.stop()
+        # get_source() already spawned an ffmpeg subprocess. If we don't hand it
+        # to voice_client.play(), we must cleanup() it or it orphans.
+        try:
+            # Stop current playback (old after_callback will fire but see stale generation)
+            if voice_client.is_playing() or voice_client.is_paused():
+                voice_client.stop()
 
-        voice_client.play(source, after=after_callback)
-        log.info(f"Playing '{track.title}' in guild {guild.id}")
+            if not voice_client.is_connected():
+                source.cleanup()
+                queue.is_playing = False
+                return
+
+            voice_client.play(source, after=after_callback)
+            log.info(f"Playing '{track.title}' in guild {guild.id}")
+        except Exception:
+            source.cleanup()
+            raise
 
     async def _on_track_end(self, guild: discord.Guild) -> None:
         """Called when a track finishes naturally. Handles advance/loop/auto-queue logic."""
@@ -389,8 +400,17 @@ class MusicCog(commands.Cog):
 
                         await interaction.followup.send(msg)
                         return
+                    else:
+                        await interaction.followup.send(
+                            embed=embeds.error("That playlist came back empty — nothing to queue.")
+                        )
+                        return
                 except Exception as e:
-                    log.error(f"Playlist extraction failed: {e}")
+                    log.error(f"Playlist extraction failed: {e}", exc_info=True)
+                    await interaction.followup.send(
+                        embed=embeds.error("Couldn't load that playlist. Try a direct video URL.")
+                    )
+                    return
 
             # Direct URL — single video
             try:
