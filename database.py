@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS bot_daily_stats (
 
 async def init_db(db: aiosqlite.Connection) -> None:
     """Create all tables if they don't exist."""
+    # WAL improves read/write concurrency; busy_timeout makes brief lock
+    # contention block-and-retry instead of raising. (WAL is a no-op on :memory:.)
+    await db.execute("PRAGMA journal_mode=WAL")
+    await db.execute("PRAGMA busy_timeout=5000")
     await db.executescript(SCHEMA_SQL)
     await db.commit()
     log.info("Database schema initialized")
@@ -162,7 +166,7 @@ async def get_recent_songs(
            WHERE guild_id = ?
            ORDER BY queued_at DESC, id DESC
            LIMIT ?""",
-        (guild_id, str(limit)),
+        (guild_id, limit),
     )
     rows = await cursor.fetchall()
     return [dict(row) for row in rows]
