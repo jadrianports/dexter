@@ -138,7 +138,7 @@ class AICog(commands.Cog):
                 try:
                     data = await self.bot.youtube_service.async_extract(result["url"])
                 except Exception as extract_error:
-                    log.info(f"Auto-queue: skipping unextractable suggestion '{search_query}': {extract_error}")
+                    log.warning(f"Auto-queue: skipping unextractable suggestion '{search_query}': {extract_error}")
                     continue
 
                 if data["duration"] > config.MAX_SONG_DURATION_SECONDS:

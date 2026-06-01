@@ -373,7 +373,7 @@ class MusicCog(commands.Cog):
                                 count += 1
                                 if first_track is None:
                                     first_track = track
-                            except (KeyError, TypeError) as entry_error:
+                            except (KeyError, TypeError, AttributeError) as entry_error:
                                 log.warning(f"Skipping malformed playlist entry: {entry_error}")
                                 continue
 
