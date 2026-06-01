@@ -30,6 +30,49 @@ from services.gemini import GeminiRateLimitError, GeminiAPIError
 from utils.logger import log
 
 
+def parse_suggestions(response: str) -> list[dict] | None:
+    """Parse Gemini's recommendation response into a list of {title, artist} dicts.
+
+    Tolerant of: code fences, leading/trailing prose, and an object that wraps
+    the array (e.g. {"songs": [...]}). Returns None if nothing usable is found.
+    """
+    if not response or not response.strip():
+        return None
+
+    text = response.strip()
+    # Strip a leading ``` or ```json fence and a trailing ``` fence.
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text).strip()
+
+    candidates: list[str] = [text]
+    # Fallback: pull the first JSON array or object out of surrounding prose.
+    match = re.search(r"(\[.*\]|\{.*\})", text, re.DOTALL)
+    if match:
+        candidates.append(match.group(1))
+
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        # Accept a bare list, or the first list found inside a dict wrapper.
+        if isinstance(data, dict):
+            data = next((v for v in data.values() if isinstance(v, list)), None)
+        if not isinstance(data, list):
+            continue
+
+        valid = [
+            item for item in data
+            if isinstance(item, dict) and item.get("title") and item.get("artist")
+        ]
+        if valid:
+            return valid
+
+    log.warning(f"Auto-queue JSON parse failed: {response[:200]}")
+    return None
+
+
 class AICog(commands.Cog):
     """Handles /ask and AI-powered auto-queue."""
 
@@ -116,7 +159,7 @@ class AICog(commands.Cog):
             if not response:
                 return
 
-            suggestions = self._parse_suggestions(response)
+            suggestions = parse_suggestions(response)
             if not suggestions:
                 log.warning("Auto-queue: failed to parse suggestions")
                 return
@@ -182,23 +225,6 @@ class AICog(commands.Cog):
             log.error(f"Auto-queue Gemini error: {e}")
         except Exception as e:
             log.error(f"Auto-queue unexpected error: {e}", exc_info=True)
-
-    def _parse_suggestions(self, response: str) -> list[dict] | None:
-        """Parse Gemini's JSON response into song suggestions."""
-        cleaned = response.strip()
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-
-        try:
-            data = json.loads(cleaned)
-            if isinstance(data, list) and all(
-                isinstance(item, dict) and "title" in item and "artist" in item
-                for item in data
-            ):
-                return data
-        except (json.JSONDecodeError, TypeError):
-            log.warning(f"Auto-queue JSON parse failed: {response[:200]}")
-        return None
 
     def _get_text_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
         """Get the text channel for posting (reuses music cog's channel tracking)."""
