@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime
 import sys
 
 import aiosqlite
@@ -99,6 +100,8 @@ async def on_ready():
         idle_check.start()
     if not cache_cleanup.is_running():
         cache_cleanup.start()
+    if not ytdlp_update.is_running():
+        ytdlp_update.start()
 
     log.info("Dexter is ready.")
 
@@ -222,6 +225,19 @@ async def cache_cleanup():
 
 @cache_cleanup.before_loop
 async def before_cache_cleanup():
+    await bot.wait_until_ready()
+
+
+@tasks.loop(time=datetime.time(hour=4, minute=0))
+async def ytdlp_update():
+    """Proactively update yt-dlp daily at 04:00 (it breaks often)."""
+    from services.youtube import update_ytdlp
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, update_ytdlp)
+
+
+@ytdlp_update.before_loop
+async def before_ytdlp_update():
     await bot.wait_until_ready()
 
 
