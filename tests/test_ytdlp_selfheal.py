@@ -17,6 +17,12 @@ class TestUpdateYtdlp:
         with patch("services.youtube.subprocess.run", side_effect=Exception("pip boom")):
             assert update_ytdlp() is False
 
+    def test_update_sets_throttle(self):
+        yt._last_ytdlp_update = 0.0
+        with patch("services.youtube.subprocess.run", return_value=MagicMock(returncode=0)):
+            update_ytdlp()
+        assert yt._last_ytdlp_update > 0.0
+
 
 class TestDownloadRetryAfterUpdate:
     def setup_method(self):

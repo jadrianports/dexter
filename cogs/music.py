@@ -200,6 +200,7 @@ class MusicCog(commands.Cog):
             log.info(f"Playing '{track.title}' in guild {guild.id}")
         except Exception:
             source.cleanup()
+            queue.is_playing = False
             raise
 
     async def _on_track_end(self, guild: discord.Guild) -> None:

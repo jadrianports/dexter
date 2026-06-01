@@ -24,6 +24,8 @@ _UPDATE_THROTTLE_SECONDS: float = 3600.0
 
 def update_ytdlp() -> bool:
     """Update yt-dlp via pip. Returns True on success. Safe to call from a thread."""
+    global _last_ytdlp_update
+    _last_ytdlp_update = time.monotonic()  # throttle on-failure retries after any update
     try:
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-U", "yt-dlp"],
