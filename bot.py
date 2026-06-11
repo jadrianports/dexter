@@ -8,7 +8,7 @@ import datetime
 import random
 import sys
 
-import aiosqlite
+import asyncpg
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -32,7 +32,7 @@ if not DISCORD_TOKEN:
     sys.exit(1)
 
 
-def create_bot() -> commands.Bot:
+def create_bot() -> commands.AutoShardedBot:
     """Create and configure the bot instance."""
     intents = discord.Intents.default()
     intents.message_content = True
@@ -40,7 +40,7 @@ def create_bot() -> commands.Bot:
     intents.guilds = True
     intents.members = True
 
-    bot = commands.Bot(
+    bot = commands.AutoShardedBot(
         command_prefix="!",  # unused but required by commands.Bot
         intents=intents,
         activity=discord.Activity(
@@ -163,10 +163,23 @@ async def on_ready():
     """Initialize services, database, and cogs once the bot is connected."""
     log.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    # Database
-    bot.db = await aiosqlite.connect(config.BASE_DIR / "data" / "dexter.db")
-    bot.db.row_factory = aiosqlite.Row
-    await init_db(bot.db)
+    # One-time init guard (Pitfall 2 / T-04-07): AutoShardedBot fires on_ready on
+    # every shard connection and on reconnects. Only run pool creation, cog loading,
+    # and service wiring once — background-task guards (is_running()) handle those.
+    if hasattr(bot, "_ready_once"):
+        return
+    bot._ready_once = True
+
+    # Database — asyncpg connection pool (Phase 4 / SCALE-02)
+    # SECURITY (T-04-05): DSN comes from config.DATABASE_URL (env, git-ignored);
+    # the pool object and DSN string are never logged here.
+    bot.pool = await asyncpg.create_pool(
+        dsn=config.DATABASE_URL,
+        min_size=config.DB_POOL_MIN,
+        max_size=config.DB_POOL_MAX,
+        command_timeout=30,
+    )
+    await init_db(bot.pool)
 
     # Services
     bot.youtube_service = YouTubeService()
@@ -197,6 +210,11 @@ async def on_ready():
     from utils.logger import log_to_discord as _log_to_discord
     bot.log_to_discord = lambda embed: _log_to_discord(bot, embed)
 
+    # Phase 4: Queue persistence service (wired before cog loading so the service
+    # exists on bot before MusicCog setup() runs)
+    from services.queue_persistence import QueuePersistenceService
+    bot.queue_persistence = QueuePersistenceService(bot.pool)
+
     # Load cogs
     await bot.load_extension("cogs.music")
     await bot.load_extension("cogs.help")
@@ -216,6 +234,12 @@ async def on_ready():
         status_rotation.start()
 
     log.info("Dexter is ready.")
+
+    # Phase 4: Restore persisted queues — MUST run after load_extension so MusicCog
+    # is registered (Pitfall 4). Runs before startup message so the bot is fully
+    # ready before announcing itself (Anti-Pattern ordering).
+    from services.queue_persistence import restore_queues
+    await restore_queues(bot)
 
     # Phase 3: Startup message — MUST be last (after all load_extension calls and
     # background-task starts) so commands are registered first (Pitfall 5).
@@ -238,8 +262,8 @@ async def on_ready():
 @bot.event
 async def on_close():
     """Clean up resources on shutdown."""
-    if hasattr(bot, "db"):
-        await bot.db.close()
+    if hasattr(bot, "pool"):
+        await bot.pool.close()
 
 
 # ──────────────────────────── GLOBAL ERROR HANDLER ────────────────────────────
