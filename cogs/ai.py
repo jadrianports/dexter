@@ -27,6 +27,7 @@ from personality.responses import (
 )
 from personality.seasonal import get_seasonal_context
 from services.gemini import GeminiRateLimitError, GeminiAPIError
+from services.lyrics import build_genius_search_query
 from utils.logger import log
 
 
@@ -153,7 +154,20 @@ class AICog(commands.Cog):
             if not recent:
                 return
 
-            prompt = build_recommendation_prompt(recent)
+            # Clean messy YouTube titles/uploaders before the recommender sees them,
+            # so Gemini reads the real artist/title (e.g. "Joji - Glimpse Of Us" /
+            # "LatinHype" -> "Glimpse Of Us" / "Joji") instead of a re-uploader name.
+            cleaned = []
+            for song in recent:
+                c_title, c_artist = build_genius_search_query(
+                    song.get("title", ""), song.get("artist")
+                )
+                cleaned.append({
+                    "title": c_title or song.get("title", ""),
+                    "artist": c_artist or song.get("artist"),
+                })
+
+            prompt = build_recommendation_prompt(cleaned)
             response = await self.gemini.chat(prompt, [], priority=2)
 
             if not response:
