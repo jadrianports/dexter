@@ -122,7 +122,7 @@ class LyricsPageView(discord.ui.View):
     defense-in-depth against mention injection from scraped lyrics (T-03-14).
     """
 
-    def __init__(self, pages: list[str], title: str, timeout: float = 120.0) -> None:
+    def __init__(self, pages: list[str], title: str, timeout: float = 600.0) -> None:
         super().__init__(timeout=timeout)
         self.pages = pages
         self.title = title
@@ -364,6 +364,11 @@ class MusicCog(commands.Cog):
             queue.is_playing = False
             raise
 
+        # Auto-lyrics (off the playback path): post this song's lyrics to the
+        # lyrics thread if enabled. Never awaited — must not delay playback.
+        if queue.auto_lyrics:
+            asyncio.create_task(self._post_auto_lyrics(guild, track))
+
     async def _on_track_end(self, guild: discord.Guild) -> None:
         """Called when a track finishes naturally. Handles advance/loop/auto-queue logic."""
         queue = self.get_queue(guild.id)
@@ -407,6 +412,67 @@ class MusicCog(commands.Cog):
                         return  # Don't set is_playing = False; auto-queue will handle it
 
             queue.is_playing = False
+
+    async def _post_auto_lyrics(self, guild: discord.Guild, track: Track) -> None:
+        """Post the current track's lyrics to the per-guild '🎵 lyrics' thread.
+
+        Background task off the playback path. Resolves (or lazily creates) the
+        thread, fetches lyrics via the shared service, posts a paginated view.
+        Any failure is logged and swallowed so playback is never affected.
+        """
+        try:
+            queue = self.get_queue(guild.id)
+            none = discord.AllowedMentions.none()
+
+            # Resolve the lyrics thread; recreate if it was deleted.
+            thread: discord.Thread | None = None
+            if queue.lyrics_thread_id is not None:
+                thread = guild.get_thread(queue.lyrics_thread_id)
+                if thread is None:
+                    try:
+                        fetched = await guild.fetch_channel(queue.lyrics_thread_id)
+                        thread = fetched if isinstance(fetched, discord.Thread) else None
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        thread = None
+            if thread is None:
+                parent = self._get_text_channel(guild)
+                if parent is None:
+                    return  # no music channel known yet -> nowhere to post
+                thread = await parent.create_thread(
+                    name="🎵 lyrics",
+                    type=discord.ChannelType.public_thread,
+                )
+                queue.lyrics_thread_id = thread.id
+
+            lyrics_service = getattr(self.bot, "lyrics_service", None)
+            if lyrics_service is None:
+                return
+            lyrics_text = await lyrics_service.get_lyrics(track.title, track.artist)
+
+            if not lyrics_text:
+                await thread.send(
+                    f"no lyrics for **{track.title}** — instrumental, or genius is slacking.",
+                    allowed_mentions=none,
+                )
+                return
+
+            pages = chunk_lyrics(lyrics_text, config.LYRICS_PAGE_SIZE)
+            if not pages:
+                await thread.send(
+                    f"no lyrics for **{track.title}** — instrumental, or genius is slacking.",
+                    allowed_mentions=none,
+                )
+                return
+
+            view = LyricsPageView(pages, title=track.title)
+            msg = await thread.send(
+                embed=view._build_embed(),
+                view=view,
+                allowed_mentions=none,
+            )
+            view.message = msg
+        except Exception as exc:
+            log.warning(f"Auto-lyrics post failed in guild {guild.id}: {exc}")
 
     def _get_text_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
         """Get the text channel to post messages in (uses the channel where commands were last used)."""
@@ -939,6 +1005,30 @@ class MusicCog(commands.Cog):
         await self._play_track(interaction.guild, track)
         embed = embeds.now_playing(track, queue)
         await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="autolyrics", description="Auto-post each song's lyrics to a lyrics thread")
+    @app_commands.choices(mode=[
+        app_commands.Choice(name="on", value="on"),
+        app_commands.Choice(name="off", value="off"),
+    ])
+    async def autolyrics(
+        self, interaction: discord.Interaction, mode: app_commands.Choice[str]
+    ) -> None:
+        """Toggle auto-lyrics for this server (in-memory; resets on restart)."""
+        queue = self.get_queue(interaction.guild.id)
+        none = discord.AllowedMentions.none()
+        if mode.value == "on":
+            queue.auto_lyrics = True
+            await interaction.response.send_message(
+                "fine. i'll narrate your questionable taste in a thread. enjoy.",
+                allowed_mentions=none,
+            )
+        else:
+            queue.auto_lyrics = False
+            await interaction.response.send_message(
+                "auto-lyrics off. blessed silence.",
+                allowed_mentions=none,
+            )
 
     @app_commands.command(name="lyrics", description="Show lyrics for the current song")
     @app_commands.checks.cooldown(1, float(config.LYRICS_COOLDOWN_SECONDS))
