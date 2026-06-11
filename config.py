@@ -46,6 +46,32 @@ MOOD_EXHAUSTED_THRESHOLD = 50
 AUTO_QUEUE_MAX_ROUNDS = 3
 AUTO_QUEUE_SONGS_PER_ROUND = 3
 
+# --- Phase 3: Personality / Ambient Channel ---
+DEXTER_CHANNEL_ID = int(os.getenv("DEXTER_CHANNEL_ID", "0")) or None
+STREAK_TIMEZONE = os.getenv("STREAK_TIMEZONE", "America/New_York")  # IANA tz; override via env
+
+# --- Phase 3: Roasts & Personality ---
+UNPROMPTED_ROAST_CHANCE = 0.30          # 30% on voice join/leave
+LATE_NIGHT_ROAST_CHANCE = 0.50          # 50% on 1-5am joins
+AMBIENT_ROAST_CEILING_SECONDS = 300     # max 1 ambient roast per 5 min per user
+ROAST_COOLDOWN_SECONDS = 300            # same value, alias for clarity
+REPEAT_SONG_ROAST_THRESHOLD = 3         # plays same song ≥3× today → always roast
+LATE_NIGHT_HOURS = (1, 5)               # tuple[int,int]: hours 1-5 inclusive
+
+# --- Phase 3: Milestones ---
+MILESTONE_SONG_THRESHOLDS: list[int] = [100, 250, 500, 1000]
+MILESTONE_STREAK_THRESHOLDS: list[int] = [7, 14, 30, 60, 100]
+
+# --- Phase 3: Status & Idle ---
+STATUS_ROTATION_INTERVAL_SECONDS = 300  # 5 min
+IDLE_LONELINESS_THRESHOLD_SECONDS = 1800  # 30 min silence with humans in voice
+
+# --- Phase 3: Lyrics & History ---
+LYRICS_COOLDOWN_SECONDS = 10
+LYRICS_PAGE_SIZE = 1500                 # chars per embed page
+HISTORY_PAGE_SIZE = 10                  # songs per history page
+HISTORY_FETCH_LIMIT = 50
+
 # --- Error Logging ---
 ERROR_LOG_CHANNEL_ID = int(os.getenv("ERROR_LOG_CHANNEL_ID", "0")) or None
 
