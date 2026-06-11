@@ -132,10 +132,10 @@
 | PERS-09 | Phase 3 | Complete |
 | LYRIC-01 | Phase 3 | Complete |
 | HIST-01 | Phase 3 | Complete |
-| SCALE-01 | Phase 4 | Pending |
-| SCALE-02 | Phase 4 | Pending |
-| SCALE-03 | Phase 4 | Pending |
-| SCALE-04 | Phase 4 | Pending |
-| SCALE-05 | Phase 4 | Pending |
+| SCALE-01 | Phase 4 | Complete |
+| SCALE-02 | Phase 4 | Complete |
+| SCALE-03 | Phase 4 | Complete |
+| SCALE-04 | Phase 4 | Complete |
+| SCALE-05 | Phase 4 | Complete |
 
 **Coverage:** 45/45 v1 requirements mapped to exactly one phase. No orphans, no duplicates.

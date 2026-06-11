@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Personality + AI** - `/ask`, `/imagine`, mood, auto-queue, global rate limiter
 - [x] **Phase 2.5: Hardening** - Production-honest reliability pass (observability, WAL, FFmpeg cleanup, yt-dlp self-heal)
 - [x] **Phase 3: Alive** - Unprompted roasts, reactions, seasonal, status, streaks, `/lyrics`, `/history` (completed 2026-06-11)
-- [ ] **Phase 4: Scale** - Multi-server, PostgreSQL, sharding, queue persistence, hosting decision
+- [x] **Phase 4: Scale** - Multi-server, PostgreSQL, sharding, queue persistence, hosting decision (completed 2026-06-11)
 
 ## Phase Details
 
@@ -112,8 +112,22 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Bot runs as an `AutoShardedBot` and restores music queues across restarts
   4. A hosting/deployment decision is resolved and the bot runs 24/7 on the chosen provider
 
-**Plans**: TBD
-**Status**: Not started
+**Plans**: 5 plans (3 waves)
+**Wave 1**
+
+- [x] 04-01-PLAN.md — Pure-logic spine: queue cap (QueueFullError), Track to_dict/from_dict, MessageBuffer TTL eviction, Phase 4 config constants + unit tests [wave 1] (2026-06-12)
+- [x] 04-02-PLAN.md — database.py aiosqlite→asyncpg full rewrite (Postgres DDL incl. guild_queues, log_track_batch transaction), requirements swap, integration tests [wave 1] (2026-06-12)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 04-03-PLAN.md — bot.py: AutoShardedBot swap, asyncpg pool + _ready_once guard, queue_persistence service (persist + smart-rejoin restore) [wave 2] (2026-06-12)
+- [x] 04-05-PLAN.md — Infra: Dockerfile + docker-compose (arm64, Postgres, volumes), keep-alive/dead-man + pg_dump backup scripts, .env.example (Oracle A1 hosting decision) [wave 2]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 04-04-PLAN.md — Cog consumers: db→pool migration (music/ai/imagine), batched /play logging, queue-cap rejection, persist-on-mutation hooks + voice-channel-id capture [wave 3] (2026-06-12)
+
+**Status**: Executing (5/5 plans complete — all code committed; hosting infra in 04-05)
 
 > Out of committed scope (per PROJECT.md): web config dashboard ("maybe" only), and the live-concurrency reconnect race (`cogs/music.py:~609`) parked for a dedicated live `/gsd:debug` session once running 24/7.
 
@@ -128,4 +142,4 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
 | 3. Alive | 6/6 | Complete   | 2026-06-11 |
-| 4. Scale | 0% | Not started | - |
+| 4. Scale | 5/5 | Complete    | 2026-06-11 |

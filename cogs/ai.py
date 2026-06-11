@@ -85,8 +85,8 @@ class AICog(commands.Cog):
         return self.bot.gemini_service
 
     @property
-    def db(self):
-        return self.bot.db
+    def pool(self):
+        return self.bot.pool
 
     # ──────────────────────────── /ask ────────────────────────────
 
@@ -98,8 +98,8 @@ class AICog(commands.Cog):
 
         try:
             # Gather context
-            mood = await get_mood(self.db)
-            user_summary = await get_user_summary(self.db, str(interaction.user.id))
+            mood = await get_mood(self.bot.pool)
+            user_summary = await get_user_summary(self.bot.pool, str(interaction.user.id))
             seasonal = get_seasonal_context()
             conversation = self.bot.message_buffer.get_gemini_history(interaction.channel.id)
 
@@ -127,8 +127,8 @@ class AICog(commands.Cog):
             )
 
             # Update stats
-            await increment_daily_stat(self.db, "total_commands")
-            await increment_daily_stat(self.db, "total_ai_queries")
+            await increment_daily_stat(self.bot.pool, "total_commands")
+            await increment_daily_stat(self.bot.pool, "total_ai_queries")
 
         except GeminiRateLimitError:
             await interaction.followup.send(pick_random(RATE_LIMIT_MESSAGES))
@@ -150,7 +150,7 @@ class AICog(commands.Cog):
             return
 
         try:
-            recent = await get_recent_songs(self.db, guild_id=str(guild.id), limit=10)
+            recent = await get_recent_songs(self.bot.pool, guild_id=str(guild.id), limit=10)
             if not recent:
                 return
 

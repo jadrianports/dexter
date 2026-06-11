@@ -14,8 +14,11 @@ from database import (
     get_history_rows,
     get_repeat_song_count,
     update_user_streak,
+    log_track_batch,
+    increment_daily_stat,
+    mark_song_skipped,
 )
-from models.queue import Track, LoopMode, MusicQueue
+from models.queue import Track, LoopMode, MusicQueue, QueueFullError
 from models.user_profile import get_user_summary
 from personality.prompts import build_chat_prompt
 from personality.roasts import (
@@ -203,14 +206,20 @@ class HistoryPageView(discord.ui.View):
             title = row.get("title") or "Unknown"
             artist = row.get("artist") or "Unknown Artist"
             user_id = row.get("user_id") or "?"
-            queued_at = row.get("queued_at") or ""
+            queued_at = row.get("queued_at")
 
             # Resolve user_id to display name (fall back to the raw id)
             member = self.guild.get_member(int(user_id)) if user_id.isdigit() else None
             who = member.display_name if member else f"<@{user_id}>"
 
-            # Compact date: show only date portion (YYYY-MM-DD) from "YYYY-MM-DD HH:MM:SS"
-            when = queued_at[:10] if len(queued_at) >= 10 else queued_at
+            # Compact date: show only the date portion. queued_at is a TIMESTAMPTZ
+            # (datetime) from asyncpg now — format it; tolerate legacy str / None.
+            if hasattr(queued_at, "strftime"):
+                when = queued_at.strftime("%Y-%m-%d")
+            elif queued_at:
+                when = str(queued_at)[:10]
+            else:
+                when = "?"
 
             lines.append(f"**{title}** — {artist}\n  ↳ {who} · {when}")
 
@@ -271,8 +280,8 @@ class MusicCog(commands.Cog):
         return self.bot.audio_service
 
     @property
-    def db(self):
-        return self.bot.db
+    def pool(self):
+        return self.bot.pool
 
     def get_queue(self, guild_id: int) -> MusicQueue:
         """Get or create the MusicQueue for a guild."""
@@ -315,6 +324,7 @@ class MusicCog(commands.Cog):
             log.warning(f"Skipping unavailable: '{track.title}'")
             _skipped.append(track.title)
             next_track = queue.skip()
+            await self._persist_queue(guild, queue)
             if next_track:
                 await self._play_track(guild, next_track, _skipped)
             else:
@@ -385,6 +395,7 @@ class MusicCog(commands.Cog):
             state.auto_queue_results["played"] += 1
 
         next_track = queue.advance()
+        await self._persist_queue(guild, queue)
         if next_track:
             await self._play_track(guild, next_track)
             # Edit existing now-playing message, or send new one if edit fails
@@ -481,13 +492,26 @@ class MusicCog(commands.Cog):
             channel = guild.get_channel(queue._text_channel_id)
             if channel:
                 return channel
-        # Fallback
-        if guild.system_channel:
+        # Fallback — only use system_channel if we can actually post there (WR-06)
+        if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
             return guild.system_channel
         for channel in guild.text_channels:
             if channel.permissions_for(guild.me).send_messages:
                 return channel
         return None
+
+    async def _persist_queue(self, guild: discord.Guild, queue: MusicQueue) -> None:
+        """Persist queue state after every mutation (D-19/SCALE-04).
+
+        Captures voice-channel id live from guild.voice_client.channel (D-20) —
+        NOT stored on the model. Guarded with hasattr so a missing service never
+        crashes a command. Persistence failures are swallowed by the service (T-04-09).
+        """
+        if not hasattr(self.bot, "queue_persistence"):
+            return
+        # D-20: capture live, not from model — voice channel may change per session
+        vc_id = guild.voice_client.channel.id if guild.voice_client else None
+        await self.bot.queue_persistence.persist(guild, queue, vc_id)
 
     async def _queue_from_selection(self, interaction: discord.Interaction, selected: dict) -> None:
         """Queue a song after the user picks from the select menu."""
@@ -516,7 +540,15 @@ class MusicCog(commands.Cog):
         )
 
         queue = self.get_queue(interaction.guild.id)
-        position = queue.add(track) + 1
+        try:
+            position = queue.add(track) + 1
+        except QueueFullError:
+            await interaction.followup.send(
+                f"queue's full at {config.MAX_QUEUE_SIZE_PER_GUILD} tracks. impressive dedication, wrong bot.",
+                ephemeral=True,
+            )
+            return
+        await self._persist_queue(interaction.guild, queue)
 
         await self._log_track(interaction, track)
 
@@ -537,13 +569,13 @@ class MusicCog(commands.Cog):
     async def _get_top_artist(self, user_id: str) -> str | None:
         """Return the user's top artist from user_artist_counts, or None."""
         try:
-            cursor = await self.db.execute(
-                """SELECT artist FROM user_artist_counts
-                   WHERE user_id = ?
-                   ORDER BY play_count DESC LIMIT 1""",
-                (user_id,),
-            )
-            row = await cursor.fetchone()
+            async with self.bot.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT artist FROM user_artist_counts"
+                    " WHERE user_id = $1"
+                    " ORDER BY play_count DESC LIMIT 1",
+                    user_id,
+                )
             return row["artist"] if row else None
         except Exception as exc:
             log.debug("Top-artist lookup failed for %s: %s", user_id, exc)
@@ -587,11 +619,11 @@ class MusicCog(commands.Cog):
             return fallback_line
 
         try:
-            db = getattr(self.bot, "db", None)
+            pool = getattr(self.bot, "pool", None)
             user_summary: str | None = None
-            if db is not None:
+            if pool is not None:
                 try:
-                    user_summary = await get_user_summary(db, user_id)
+                    user_summary = await get_user_summary(pool, user_id)
                 except Exception as db_err:
                     log.debug("Music roast: taste lookup failed for %s: %s", user_id, db_err)
 
@@ -626,32 +658,28 @@ class MusicCog(commands.Cog):
 
     async def _log_track(self, interaction: discord.Interaction, track: Track) -> None:
         """Log a queued track to all database tables, then fire earned roasts."""
-        from database import log_song, update_artist_count, update_user_profile, increment_daily_stat
-
-        await log_song(
-            self.db,
+        # D-06 / SCALE-01: all 3 per-/play writes in ONE transaction via log_track_batch
+        await log_track_batch(
+            self.bot.pool,
             guild_id=str(interaction.guild.id),
             user_id=str(interaction.user.id),
+            username=interaction.user.display_name,
             title=track.title,
             artist=track.artist,
             url=track.url,
             duration=track.duration_seconds,
         )
-        await update_artist_count(self.db, user_id=str(interaction.user.id), artist=track.artist)
 
-        # update_user_profile increments total_songs_queued — fetch the new count after
-        await update_user_profile(self.db, user_id=str(interaction.user.id), username=interaction.user.display_name)
+        await increment_daily_stat(self.bot.pool, "total_songs_played")
+        await increment_daily_stat(self.bot.pool, "total_commands")
 
-        await increment_daily_stat(self.db, "total_songs_played")
-        await increment_daily_stat(self.db, "total_commands")
-
-        # Fetch new total_songs_queued for milestone check
+        # Fetch new total_songs_queued for milestone check (asyncpg $N params — T-04-04)
         try:
-            cursor = await self.db.execute(
-                "SELECT total_songs_queued FROM user_profiles WHERE user_id = ?",
-                (str(interaction.user.id),),
-            )
-            row = await cursor.fetchone()
+            async with self.bot.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT total_songs_queued FROM user_profiles WHERE user_id = $1",
+                    str(interaction.user.id),
+                )
             new_total: int = row["total_songs_queued"] if row else 0
         except Exception as exc:
             log.debug("Could not fetch total_songs_queued: %s", exc)
@@ -660,7 +688,7 @@ class MusicCog(commands.Cog):
         # ── PERS-04: Repeat-song roast (D-08, D-14 always fires at threshold) ──
         try:
             count = await get_repeat_song_count(
-                self.db,
+                self.bot.pool,
                 guild_id=str(interaction.guild.id),
                 user_id=str(interaction.user.id),
                 title=track.title,
@@ -707,7 +735,7 @@ class MusicCog(commands.Cog):
         # ── PERS-09: Streak update + streak-day milestone roast ──
         try:
             new_streak, longest, streak_milestone = await update_user_streak(
-                self.db,
+                self.bot.pool,
                 user_id=str(interaction.user.id),
                 tz_name=config.STREAK_TIMEZONE,
             )
@@ -769,6 +797,7 @@ class MusicCog(commands.Cog):
 
                         count = 0
                         skipped = 0
+                        cap_reached = False
                         first_track = None
                         for item in playlist_results:
                             try:
@@ -787,7 +816,11 @@ class MusicCog(commands.Cog):
                                     requested_by=interaction.user.id,
                                     thumbnail=item.get("thumbnail"),
                                 )
-                                queue.add(track)
+                                try:
+                                    queue.add(track)
+                                except QueueFullError:
+                                    cap_reached = True
+                                    break
                                 count += 1
                                 if first_track is None:
                                     first_track = track
@@ -795,7 +828,12 @@ class MusicCog(commands.Cog):
                                 log.warning(f"Skipping malformed playlist entry: {entry_error}")
                                 continue
 
+                        if count > 0:
+                            await self._persist_queue(interaction.guild, queue)
+
                         msg = f"Queued {count} tracks from playlist."
+                        if cap_reached:
+                            msg += f" (stopped at queue cap of {config.MAX_QUEUE_SIZE_PER_GUILD})"
                         if skipped > 0:
                             msg += f" ({skipped} skipped — too long)"
                         if len(playlist_results) >= config.MAX_PLAYLIST_IMPORT:
@@ -836,7 +874,15 @@ class MusicCog(commands.Cog):
             )
 
             queue = self.get_queue(interaction.guild.id)
-            position = queue.add(track) + 1
+            try:
+                position = queue.add(track) + 1
+            except QueueFullError:
+                await interaction.followup.send(
+                    f"queue's full at {config.MAX_QUEUE_SIZE_PER_GUILD} tracks. impressive dedication, wrong bot.",
+                    ephemeral=True,
+                )
+                return
+            await self._persist_queue(interaction.guild, queue)
 
             await self._log_track(interaction, track)
 
@@ -876,14 +922,14 @@ class MusicCog(commands.Cog):
         # Track skipped auto-queued songs for "ignored" memory
         current = queue.get_current()
         if current and current.was_auto_queued:
-            from database import mark_song_skipped
             from models.server_state import get_server_state
-            await mark_song_skipped(self.db, guild_id=str(interaction.guild.id), url=current.url)
+            await mark_song_skipped(self.bot.pool, guild_id=str(interaction.guild.id), url=current.url)
             if hasattr(self.bot, "server_states"):
                 state = get_server_state(self.bot.server_states, interaction.guild.id)
                 state.auto_queue_results["skipped"] += 1
 
         next_track = queue.skip()
+        await self._persist_queue(interaction.guild, queue)
         if next_track:
             await interaction.response.send_message(f"Skipped to **{next_track.title}**")
             # Play in background — don't block the response
@@ -930,6 +976,8 @@ class MusicCog(commands.Cog):
 
         queue._play_generation += 1  # invalidate any pending after-callbacks
         queue.clear()
+        if hasattr(self.bot, "queue_persistence"):
+            await self.bot.queue_persistence.clear_persisted(interaction.guild.id)
 
         if voice_client:
             voice_client.stop()
@@ -961,6 +1009,7 @@ class MusicCog(commands.Cog):
             )
 
         queue.shuffle()
+        await self._persist_queue(interaction.guild, queue)
         await interaction.response.send_message(f"Shuffled {len(queue.upcoming())} upcoming tracks.")
 
     @app_commands.command(name="loop", description="Set loop mode")
@@ -973,6 +1022,7 @@ class MusicCog(commands.Cog):
     async def loop(self, interaction: discord.Interaction, mode: app_commands.Choice[str]) -> None:
         queue = self.get_queue(interaction.guild.id)
         queue.loop_mode = LoopMode(mode.value)
+        await self._persist_queue(interaction.guild, queue)
         await interaction.response.send_message(f"Loop mode: **{mode.name}**")
 
     @app_commands.command(name="nowplaying", description="Show what's currently playing")
@@ -1099,7 +1149,7 @@ class MusicCog(commands.Cog):
         All sends use allowed_mentions=none (T-03-14).
         """
         rows = await get_history_rows(
-            self.db,
+            self.bot.pool,
             guild_id=str(interaction.guild.id),
             limit=int(config.HISTORY_FETCH_LIMIT),
         )

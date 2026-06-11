@@ -1,0 +1,37 @@
+# .dockerignore — keeps secrets, local state, and dev artifacts out of the image layer.
+# Security: .env (real secrets) must never enter a Docker layer (T-04-05).
+
+# Secrets — never in the image
+.env
+.env.local
+.env.*.local
+
+# Local DB / audio cache / logs — runtime data mounted as Docker volumes instead
+data/
+logs/
+
+# Git history — not needed in image
+.git/
+.gitignore
+
+# Python bytecode & caches
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Planning & docs — not needed at runtime
+.planning/
+docs/
+
+# Tests — not shipped in production image
+tests/
+
+# Editor / OS artifacts
+.vscode/
+.idea/
+*.swp
+*.DS_Store
+
+# Claude tooling
+.claude/

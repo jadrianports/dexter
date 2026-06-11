@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 3 code-complete (live UAT pending)
-last_updated: "2026-06-11T00:00:00Z"
-last_activity: 2026-06-11 -- 03-06 complete; Phase 3 all 6 plans code-complete; live Discord UAT pending (user-run)
+status: completed
+stopped_at: "Phase 04 Plan 04 complete — next: 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 3 final]"
+last_updated: "2026-06-11T21:36:45.349Z"
+last_activity: 2026-06-11
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 6
-  completed_plans: 6
-  percent: 0
+  completed_phases: 2
+  total_plans: 11
+  completed_plans: 11
+  percent: 40
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 03 — alive
+**Current focus:** Phase 04 — scale
 
 ## Current Position
 
-Phase: 03 (alive) — CODE-COMPLETE (live UAT pending)
-Plan: 6 of 6 — ALL COMPLETE (03-06 complete 2026-06-11)
-Status: Wave 1 done (03-01/02/03); Wave 2 done (03-04/05); Wave 3 done (03-06) — Phase 3 code-complete
-Last activity: 2026-06-11 -- 03-06 complete; bot.py wired with status_rotation, startup message, idle-loneliness, LyricsService; live Discord smoke-test PENDING (user-run)
+Phase: 04
+Plan: Not started
+Status: Plan 04 complete — ready for 04-05
+Last activity: 2026-06-11
 
-Progress: [██████░░░░] 60% (3 of 5 phases complete — Phase 3 code-complete, live UAT pending before marking phase done)
+Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 2/5 done)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (phases 1/2/2.5 shipped pre-GSD, no per-plan metrics captured)
+- Total plans completed: 5 (phases 1/2/2.5 shipped pre-GSD, no per-plan metrics captured)
 - Average duration: n/a
 - Total execution time: n/a
 
@@ -47,6 +47,7 @@ Progress: [██████░░░░] 60% (3 of 5 phases complete — Phase
 | 1. Music MVP | shipped | - | - |
 | 2. Personality + AI | shipped | - | - |
 | 2.5. Hardening | shipped | - | - |
+| 04 | 5 | - | - |
 
 **Recent Trend:**
 
@@ -70,6 +71,22 @@ Recent decisions affecting current work:
 - [03-06] idle-loneliness uses vc._idle_loneliness_seconds (not vc._idle_seconds) to avoid interfering with the auto-leave timer
 - [03-06] _resolve_dexter_channel is bot.py-local (small duplication vs cogs/events.py) to preserve strict file ownership
 - [03-06] startup message post wrapped in try/except so channel-resolution failure does not abort on_ready
+- [04-01] MAX_QUEUE_SIZE_PER_GUILD=500 (mid-range of D-04 allowed 500-1000)
+- [04-01] cap guard placed in MusicQueue.add() not cog so playlist loop is covered at source (Pitfall 3)
+- [04-01] MESSAGE_BUFFER_TTL_HOURS=24 per D-05; DB_POOL_MIN=2, DB_POOL_MAX=10 per D-01
+- [04-02] asyncpg==0.31.0 chosen (built-in pool, $N params, arm64 wheels, single-package)
+- [04-02] Raw SQL CREATE TABLE IF NOT EXISTS chosen over Alembic (start-fresh per D-14)
+- [04-02] log_track_batch wraps 3 per-/play inserts in one transaction (D-06/SCALE-01)
+- [04-02] guild_queues table (jsonb payload, TEXT PK) added for SCALE-04 queue persistence
+- [04-02] migrate_add_streak_columns deleted; streak cols baked into CREATE TABLE (D-16)
+- [04-03] _ready_once guard placed immediately after login log line to cover all subsequent on_ready init (pool, cogs, services) on AutoShardedBot reconnect
+- [04-03] module-level restore_queues() wrapper in queue_persistence.py for clean bot.py import pattern
+- [04-03] asyncpg jsonb payload normalised with isinstance check to handle both dict and str returns across asyncpg versions
+- [Phase 04-scale]: D-07/D-08/D-10: Oracle Cloud Always Free A1 ARM resolved as host; Docker Compose packaging for Hetzner portability; D-09/D-13 keepalive unifies Oracle idle-nudge + Healthchecks.io dead-man; D-12 pg_dump to Object Storage for DB backup (SCALE-05)
+- [04-04] 3 queue.add() catch sites (not 2): _queue_from_selection + playlist loop + direct URL — all wrapped with QueueFullError
+- [04-04] playlist loop uses break on QueueFullError + cap_reached flag in summary message
+- [04-04] _persist_queue helper captures vc_id live from guild.voice_client.channel (D-20); guarded with hasattr
+- [04-04] reconnect race region in on_voice_state_update left untouched per D-22
 
 ### Pending Todos
 
@@ -93,6 +110,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-06-11
-Stopped at: 03-06 complete — Phase 3 all 6 plans code-complete; bot.py wired with status_rotation loop, startup message, idle-loneliness, LyricsService; 251 tests passing; live Discord smoke-test pending (user-run independently)
-Resume file: Phase 4 — .planning/phases/04-scale/ (once live UAT confirms Phase 3 behavior)
+Last session: 2026-06-12T21:00:00.000Z
+Stopped at: Phase 04 Plan 04 complete — next: 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 3 final]
+Resume file: .planning/phases/04-scale/04-05-PLAN.md

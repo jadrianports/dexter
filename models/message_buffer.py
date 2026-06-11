@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
+
+import config
 
 
 class MessageBuffer:
@@ -12,9 +14,25 @@ class MessageBuffer:
     def __init__(self, max_length: int = 10) -> None:
         self._max_length = max_length
         self._buffers: dict[int, deque[dict]] = {}
+        self._last_seen: dict[int, datetime] = {}
+        self._ttl = timedelta(hours=config.MESSAGE_BUFFER_TTL_HOURS)
+
+    def _evict_stale(self) -> None:
+        """Remove channels that have not been seen within the TTL window."""
+        cutoff = datetime.now() - self._ttl
+        stale = [ch for ch, ts in self._last_seen.items() if ts < cutoff]
+        for ch in stale:
+            self._buffers.pop(ch, None)
+            self._last_seen.pop(ch, None)
 
     def add(self, channel_id: int, role: str, author: str, content: str) -> None:
-        """Add a message to the channel's buffer."""
+        """Add a message to the channel's buffer.
+
+        Evicts idle channels (not seen within MESSAGE_BUFFER_TTL_HOURS) before
+        adding, bounding memory growth across many guilds (SCALE-01).
+        """
+        self._evict_stale()
+        self._last_seen[channel_id] = datetime.now()
         if channel_id not in self._buffers:
             self._buffers[channel_id] = deque(maxlen=self._max_length)
         self._buffers[channel_id].append(

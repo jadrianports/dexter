@@ -6,6 +6,12 @@ import random
 from dataclasses import dataclass, field
 from enum import Enum
 
+import config
+
+
+class QueueFullError(Exception):
+    """Raised when MusicQueue.add() exceeds MAX_QUEUE_SIZE_PER_GUILD."""
+
 
 class LoopMode(Enum):
     OFF = "off"
@@ -25,6 +31,33 @@ class Track:
     requested_by: int
     was_auto_queued: bool = False
     thumbnail: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize this Track to a JSON-safe dict (for Postgres jsonb persistence)."""
+        return {
+            "video_id": self.video_id,
+            "title": self.title,
+            "artist": self.artist,
+            "url": self.url,
+            "duration_seconds": self.duration_seconds,
+            "requested_by": self.requested_by,
+            "was_auto_queued": self.was_auto_queued,
+            "thumbnail": self.thumbnail,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Track":
+        """Reconstruct a Track from a dict (e.g. deserialized from Postgres jsonb)."""
+        return cls(
+            video_id=d["video_id"],
+            title=d["title"],
+            artist=d.get("artist"),
+            url=d["url"],
+            duration_seconds=d["duration_seconds"],
+            requested_by=d["requested_by"],
+            was_auto_queued=d.get("was_auto_queued", False),
+            thumbnail=d.get("thumbnail"),
+        )
 
 
 class MusicQueue:
@@ -46,7 +79,14 @@ class MusicQueue:
         self.lyrics_thread_id: int | None = None  # reused "🎵 lyrics" thread id
 
     def add(self, track: Track) -> int:
-        """Add a track to the end of the queue. Returns its index."""
+        """Add a track to the end of the queue. Returns its index.
+
+        Raises QueueFullError if the queue has reached MAX_QUEUE_SIZE_PER_GUILD.
+        """
+        if len(self.tracks) >= config.MAX_QUEUE_SIZE_PER_GUILD:
+            raise QueueFullError(
+                f"Queue is at capacity ({config.MAX_QUEUE_SIZE_PER_GUILD} tracks)."
+            )
         self.tracks.append(track)
         return len(self.tracks) - 1
 

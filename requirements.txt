@@ -1,6 +1,6 @@
 discord.py>=2.3.0
 yt-dlp
-aiosqlite
+asyncpg==0.31.0
 python-dotenv
 PyNaCl
 davey
