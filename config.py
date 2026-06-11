@@ -84,3 +84,17 @@ ERROR_LOG_CHANNEL_ID = int(os.getenv("ERROR_LOG_CHANNEL_ID") or "0") or None
 
 # --- Bot ---
 OWNER_ID = int(os.getenv("OWNER_ID") or "0")
+
+# --- Phase 4: Database (Postgres) ---
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dexter:dexter@localhost:5432/dexter")
+DB_POOL_MIN = 2
+DB_POOL_MAX = 10
+
+# --- Phase 4: Queue persistence ---
+MAX_QUEUE_SIZE_PER_GUILD = 500
+
+# --- Phase 4: Message buffer ---
+MESSAGE_BUFFER_TTL_HOURS = 24
+
+# --- Phase 4: Keep-alive / down-detection ---
+HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "")
