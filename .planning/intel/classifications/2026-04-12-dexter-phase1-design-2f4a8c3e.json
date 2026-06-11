@@ -1,0 +1,28 @@
+{
+  "source_path": "C:/Users/James/Desktop/Projects/dexter/docs/superpowers/specs/2026-04-12-dexter-phase1-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Dexter Phase 1 MVP — Design Spec",
+  "summary": "Technical design spec for Dexter Phase 1 music-bot MVP: architecture, SQLite schema, queue model, services, slash commands, and edge cases.",
+  "scope": [
+    "bot.py entry point",
+    "config.py settings",
+    "SQLite database schema",
+    "MusicQueue model",
+    "YouTubeService",
+    "AudioService",
+    "slash commands",
+    "now playing embed",
+    "background tasks",
+    "logging",
+    "testing strategy"
+  ],
+  "cross_refs": [
+    "dexter-architecture.md",
+    "CLAUDE.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

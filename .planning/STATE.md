@@ -1,115 +1,78 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: "Phase 04 Plan 04 complete — next: 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 3 final]"
-last_updated: "2026-06-11T21:36:45.349Z"
-last_activity: 2026-06-11
+milestone_name: MVP
+status: shipped
+stopped_at: "v1.0 milestone closed and archived — next: /gsd-new-milestone"
+last_updated: "2026-06-12"
+last_activity: 2026-06-12
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 5
   total_plans: 11
   completed_plans: 11
-  percent: 40
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-11)
+See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 04 — scale
+**Current focus:** v1.0 shipped — planning next milestone (`/gsd-new-milestone`).
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
-Status: Plan 04 complete — ready for 04-05
-Last activity: 2026-06-11
+Milestone: v1.0 (MVP) — ✅ SHIPPED 2026-06-12
+Phase: none active
+Status: All 5 phases complete (11/11 GSD plans). Milestone archived.
+Last activity: 2026-06-12
 
-Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 2/5 done)
-
-## Performance Metrics
-
-**Velocity:**
-
-- Total plans completed: 5 (phases 1/2/2.5 shipped pre-GSD, no per-plan metrics captured)
-- Average duration: n/a
-- Total execution time: n/a
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1. Music MVP | shipped | - | - |
-| 2. Personality + AI | shipped | - | - |
-| 2.5. Hardening | shipped | - | - |
-| 04 | 5 | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: n/a (pre-GSD shipped work)
-- Trend: Stable
-
-*Updated after each plan completion*
+Progress: [██████████] 100% (5 of 5 phases complete)
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.md. Highlights:
 
-- [Resolved] Image-gen model = `gemini-2.5-flash-image` (ground-truth tie-break vs. divergent SPECs; matches shipped `config.py:36`)
-- [Phase 1/2] Layered cog → service → model architecture; `current_index` queue (no popping); global Gemini rate limiter with priority tiers
-- [Phase 2.5] Live-concurrency bugs are PARKED, not fixed blind — bot booted locally only; fixes must be verifiable by inspection + local boot
-- [Open → Phase 4] Hosting / 24/7 deployment is undecided (Oracle Cloud Always Free is a candidate but carries reclamation/termination risk); stay hosting-agnostic until Phase 4
-- [Pending → Phase 4] SQLite sufficient for v1–v3; PostgreSQL migration deferred to Phase 4
-- [03-06] idle-loneliness uses vc._idle_loneliness_seconds (not vc._idle_seconds) to avoid interfering with the auto-leave timer
-- [03-06] _resolve_dexter_channel is bot.py-local (small duplication vs cogs/events.py) to preserve strict file ownership
-- [03-06] startup message post wrapped in try/except so channel-resolution failure does not abort on_ready
-- [04-01] MAX_QUEUE_SIZE_PER_GUILD=500 (mid-range of D-04 allowed 500-1000)
-- [04-01] cap guard placed in MusicQueue.add() not cog so playlist loop is covered at source (Pitfall 3)
-- [04-01] MESSAGE_BUFFER_TTL_HOURS=24 per D-05; DB_POOL_MIN=2, DB_POOL_MAX=10 per D-01
-- [04-02] asyncpg==0.31.0 chosen (built-in pool, $N params, arm64 wheels, single-package)
-- [04-02] Raw SQL CREATE TABLE IF NOT EXISTS chosen over Alembic (start-fresh per D-14)
-- [04-02] log_track_batch wraps 3 per-/play inserts in one transaction (D-06/SCALE-01)
-- [04-02] guild_queues table (jsonb payload, TEXT PK) added for SCALE-04 queue persistence
-- [04-02] migrate_add_streak_columns deleted; streak cols baked into CREATE TABLE (D-16)
-- [04-03] _ready_once guard placed immediately after login log line to cover all subsequent on_ready init (pool, cogs, services) on AutoShardedBot reconnect
-- [04-03] module-level restore_queues() wrapper in queue_persistence.py for clean bot.py import pattern
-- [04-03] asyncpg jsonb payload normalised with isinstance check to handle both dict and str returns across asyncpg versions
-- [Phase 04-scale]: D-07/D-08/D-10: Oracle Cloud Always Free A1 ARM resolved as host; Docker Compose packaging for Hetzner portability; D-09/D-13 keepalive unifies Oracle idle-nudge + Healthchecks.io dead-man; D-12 pg_dump to Object Storage for DB backup (SCALE-05)
-- [04-04] 3 queue.add() catch sites (not 2): _queue_from_selection + playlist loop + direct URL — all wrapped with QueueFullError
-- [04-04] playlist loop uses break on QueueFullError + cap_reached flag in summary message
-- [04-04] _persist_queue helper captures vc_id live from guild.voice_client.channel (D-20); guarded with hasattr
-- [04-04] reconnect race region in on_voice_state_update left untouched per D-22
+- Hosting RESOLVED → Oracle Cloud Always Free A1 ARM; Docker Compose for portability (Phase 4)
+- Persistence migrated SQLite → PostgreSQL via asyncpg 0.31.0 (Phase 4)
+- Queue cap (500) enforced in `MusicQueue.add()`; `log_track_batch` single-transaction logging (Phase 4)
+- Gemini-first personality output with guaranteed template fallback; `priority=2` for all background AI (Phase 3)
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- [Phase 4] Hosting/24/7 deployment provider is OPEN — must be resolved in Phase 4 before claiming reliable 24/7 operation
-- [Parked] Reconnect race (`cogs/music.py:~609`) needs a live `/gsd:debug` session once running 24/7; cannot be verified by local boot
+- [Production risk] Oracle Cloud Always Free carries reclamation/termination risk (idle reclaim, inactivity, A1 capacity) — monitor once running 24/7.
+- [Parked] Live-concurrency reconnect race (`cogs/music.py:~609`) needs a live `/gsd:debug` session — cannot be verified by local boot.
 
 ## Deferred Items
 
-Items acknowledged and carried forward:
+Items acknowledged and deferred at v1.0 milestone close on 2026-06-12. All three are live-deploy
+verification that the Windows dev machine cannot run — they form the day-1 deployment checklist:
 
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| Scale | Multi-statement DB transactions / queue caps / buffer eviction under contention | Deferred | Phase 2.5 |
-| Hosting | 24/7 deployment provider decision | Open | Phase 2.5 |
-| Reliability | Live-concurrency reconnect race (`cogs/music.py:~609`) | Parked | Phase 2.5 |
-| Out of scope | Web config dashboard ("maybe" only) | Not committed | Phase 4 |
+| Category | Item | Status |
+|----------|------|--------|
+| uat | Phase 04 04-HUMAN-UAT.md — 6 pending live scenarios (Oracle A1 + Postgres + Discord) | partial |
+| verification | Phase 03 03-VERIFICATION.md — 9 live-Discord behavioral checks | human_needed |
+| verification | Phase 04 04-VERIFICATION.md — 6 live-deploy checks (Docker/Postgres/cron) | human_needed |
+
+Carried-forward engineering items (not blockers):
+
+| Category | Item | Status |
+|----------|------|--------|
+| reliability | Live-concurrency reconnect race (`cogs/music.py:~609`) | Parked — live /gsd:debug |
+| reliability | `clear_persisted()` not called on idle-leave / reconnect-failure (IN-02) | Deferred |
+| out-of-scope | Web config dashboard ("maybe" only) | Not committed |
 
 ## Session Continuity
 
-Last session: 2026-06-12T21:00:00.000Z
-Stopped at: Phase 04 Plan 04 complete — next: 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 3 final]
-Resume file: .planning/phases/04-scale/04-05-PLAN.md
+Last session: 2026-06-12
+Stopped at: v1.0 milestone closed and archived. ROADMAP/REQUIREMENTS archived to milestones/; PROJECT.md evolved; RETROSPECTIVE.md seeded.
+Next: `/gsd-new-milestone` to start the next cycle (or run the live-deploy UAT checklist when standing up the Oracle A1 VM).

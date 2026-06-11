@@ -1,0 +1,13 @@
+{
+  "source_path": "C:/Users/James/Desktop/Projects/dexter/docs/superpowers/plans/2026-04-12-dexter-phase1-mvp.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Dexter Phase 1 MVP — Implementation Plan",
+  "summary": "Task-by-task implementation plan for building the Dexter Discord music bot MVP with YouTube playback, queues, caching, and SQLite tracking.",
+  "scope": ["Discord bot", "music playback", "YouTube/yt-dlp", "FFmpeg audio", "MusicQueue model", "SQLite database", "audio cache", "slash commands", "cogs/services/models architecture"],
+  "cross_refs": ["docs/superpowers/specs/2026-04-12-dexter-phase1-design.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

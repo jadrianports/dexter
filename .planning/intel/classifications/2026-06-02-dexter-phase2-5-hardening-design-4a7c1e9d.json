@@ -1,0 +1,29 @@
+{
+  "source_path": "C:/Users/James/Desktop/Projects/dexter/docs/superpowers/specs/2026-06-02-dexter-phase2.5-hardening-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Dexter Phase 2.5 — Hardening Pass Design Spec",
+  "summary": "Reliability hardening design for the Dexter Discord bot: unsilence swallowed exceptions, fix deterministic bugs, and plug resource leaks verifiable from local boot.",
+  "scope": [
+    "database.py WAL mode and busy_timeout",
+    "cogs/music.py bare-except unsilencing and playlist error followup",
+    "services/audio.py FFmpeg source/process handling",
+    "services/youtube.py yt-dlp self-heal",
+    "cogs/ai.py auto-queue JSON parse",
+    "bot.py first-run Gemini-key guard and yt-dlp daily update loop",
+    "FFmpeg orphan cleanup",
+    "pytest test suite hardening"
+  ],
+  "cross_refs": [
+    "utils/logger.py:51",
+    "bot.py:86,116",
+    "TESTING.md",
+    "CLAUDE.md",
+    "tests/test_autoqueue_parse.py",
+    "tests/test_database_hardening.py"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Path under /specs/ plus implementation-contract content (modified-files map, line-referenced fixes, testing approach) = strong SPEC. A 'Decisions Made' table competes for ADR, but these are scoped engineering choices within a hardening pass rather than a single locked Context/Decision/Consequences record; resolved to SPEC per ambiguity rule favoring the dominant implementation-design signal."
+}

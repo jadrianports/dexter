@@ -1,0 +1,30 @@
+{
+  "source_path": "C:/Users/James/Desktop/Projects/dexter/docs/superpowers/specs/2026-04-13-dexter-phase2-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Dexter Phase 2 — Personality + AI Design Spec",
+  "summary": "Technical design spec for Dexter Phase 2: Gemini AI chat, image generation, personality/mood system, auto-queue, rate limiter, and supporting infrastructure.",
+  "scope": [
+    "services/gemini.py",
+    "rate limiter",
+    "personality prompts",
+    "message buffer",
+    "user profile",
+    "server state",
+    "/ask command",
+    "auto-queue",
+    "/imagine command",
+    "cooldowns",
+    "error log channel",
+    "events cog",
+    "database query helpers",
+    "config additions"
+  ],
+  "cross_refs": [
+    "dexter-architecture.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Path under /specs/ plus content signals (component designs, method signatures, data models, config and DB query contracts) confirm SPEC. A 'Decisions Made' table introduces ADR-like signal, but it is a summary of design choices within a broader implementation spec rather than per-decision ADRs, so SPEC dominates."
+}
