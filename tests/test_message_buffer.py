@@ -1,5 +1,8 @@
 """Tests for the rolling message buffer."""
 
+from datetime import datetime, timedelta
+
+import config
 from models.message_buffer import MessageBuffer
 
 
@@ -65,3 +68,41 @@ class TestMessageBufferClear:
         buf.add(channel_id=200, role="user", author="mike", content="hi")
         buf.clear(100)
         assert len(buf.get_history(200)) == 1
+
+
+class TestTTLEviction:
+    def test_stale_channel_evicted(self):
+        """Channel whose _last_seen is older than TTL is removed on next add()."""
+        buf = MessageBuffer(max_length=10)
+        buf.add(channel_id=100, role="user", author="jake", content="old")
+        # Manually backdate last_seen past TTL
+        buf._last_seen[100] = datetime.now() - timedelta(hours=config.MESSAGE_BUFFER_TTL_HOURS + 1)
+        # Add to a different channel — triggers eviction
+        buf.add(channel_id=200, role="user", author="mike", content="new")
+        assert buf.get_history(100) == []
+        assert len(buf.get_history(200)) == 1
+
+    def test_fresh_channel_survives_eviction(self):
+        """A channel added in the same add() call is NOT evicted — its history has 1 entry."""
+        buf = MessageBuffer(max_length=10)
+        buf.add(channel_id=100, role="user", author="jake", content="old")
+        buf._last_seen[100] = datetime.now() - timedelta(hours=config.MESSAGE_BUFFER_TTL_HOURS + 1)
+        buf.add(channel_id=200, role="user", author="mike", content="new")
+        # Channel 200 is fresh — should survive
+        assert len(buf.get_history(200)) == 1
+
+    def test_recent_channel_not_evicted(self):
+        """A channel within TTL window is NOT evicted."""
+        buf = MessageBuffer(max_length=10)
+        buf.add(channel_id=100, role="user", author="jake", content="recent")
+        # last_seen[100] is just now — well within TTL
+        buf.add(channel_id=200, role="user", author="mike", content="trigger")
+        assert len(buf.get_history(100)) == 1
+
+    def test_eviction_removes_from_last_seen(self):
+        """_last_seen dict is also cleaned up on eviction (no stale metadata)."""
+        buf = MessageBuffer(max_length=10)
+        buf.add(channel_id=100, role="user", author="jake", content="old")
+        buf._last_seen[100] = datetime.now() - timedelta(hours=config.MESSAGE_BUFFER_TTL_HOURS + 1)
+        buf.add(channel_id=200, role="user", author="mike", content="trigger")
+        assert 100 not in buf._last_seen
