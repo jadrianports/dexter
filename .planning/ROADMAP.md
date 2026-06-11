@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Personality + AI** - `/ask`, `/imagine`, mood, auto-queue, global rate limiter
 - [x] **Phase 2.5: Hardening** - Production-honest reliability pass (observability, WAL, FFmpeg cleanup, yt-dlp self-heal)
 - [x] **Phase 3: Alive** - Unprompted roasts, reactions, seasonal, status, streaks, `/lyrics`, `/history` (completed 2026-06-11)
-- [ ] **Phase 4: Scale** - Multi-server, PostgreSQL, sharding, queue persistence, hosting decision
+- [x] **Phase 4: Scale** - Multi-server, PostgreSQL, sharding, queue persistence, hosting decision (completed 2026-06-11)
 
 ## Phase Details
 
@@ -142,4 +142,4 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
 | 3. Alive | 6/6 | Complete   | 2026-06-11 |
-| 4. Scale | 5/5 | In Progress|  |
+| 4. Scale | 5/5 | Complete    | 2026-06-11 |
