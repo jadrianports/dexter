@@ -11,7 +11,7 @@ from discord.ext import commands
 import config
 from models.user_profile import get_user_summary
 from personality import roasts
-from personality.prompts import build_chat_prompt, DEXTER_SYSTEM_PROMPT
+from personality.prompts import build_chat_prompt
 from personality.roasts import pick_random
 from personality.seasonal import get_seasonal_context
 from services.gemini import GeminiRateLimitError
@@ -19,20 +19,8 @@ from utils.logger import log
 
 
 # ---------------------------------------------------------------------------
-# Ambient roast prompt builder (standalone — no mood/full context needed)
-# ---------------------------------------------------------------------------
-
-_AMBIENT_ROAST_PROMPT = """\
-You are Dexter (Dex). You are arrogant, contemptuous, and dry. \
-Sarcasm aimed outward and down at users only — never self-deprecating or bot-meta. \
-Lowercase everything. One emoji max. Under 120 characters. No introductions.
-
-USER CONTEXT:
-{user_context}
-
-SITUATION: {scenario}
-
-Respond with exactly one short roast line matching the register above."""
+# Ambient roasts reuse the locked few-shot DEXTER voice (DEXTER_SYSTEM_PROMPT via
+# build_chat_prompt) per D-06 — examples beat descriptions. See _generate_ambient_roast.
 
 
 class EventsCog(commands.Cog):
@@ -138,14 +126,16 @@ class EventsCog(commands.Cog):
             if "{name}" in scenario:
                 scenario = scenario.format(name=member.display_name)
 
-            system_prompt = _AMBIENT_ROAST_PROMPT.format(
-                user_context=user_context,
-                scenario=scenario,
-            )
+            # Use the locked few-shot DEXTER voice (D-06: examples >> descriptions).
+            # mood="normal" is a pure MOOD_CONTEXTS lookup (no DB call); seasonal omitted.
+            system_prompt = build_chat_prompt("normal", user_context, "")
             conversation = [
                 {
                     "role": "user",
-                    "content": scenario,
+                    "content": (
+                        f"{scenario}. respond with exactly one short roast line in your "
+                        "voice — under 120 characters, lowercase, no preamble."
+                    ),
                 }
             ]
 
