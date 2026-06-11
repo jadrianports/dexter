@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 .env
 data/cache/*.opus
+data/dexter.db
+data/dexter.db-shm
+data/dexter.db-wal
 logs/
 venv/
 .venv/
