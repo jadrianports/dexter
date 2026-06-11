@@ -112,8 +112,22 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Bot runs as an `AutoShardedBot` and restores music queues across restarts
   4. A hosting/deployment decision is resolved and the bot runs 24/7 on the chosen provider
 
-**Plans**: TBD
-**Status**: Not started
+**Plans**: 5 plans (3 waves)
+**Wave 1**
+
+- [x] 04-01-PLAN.md — Pure-logic spine: queue cap (QueueFullError), Track to_dict/from_dict, MessageBuffer TTL eviction, Phase 4 config constants + unit tests [wave 1] (2026-06-12)
+- [ ] 04-02-PLAN.md — database.py aiosqlite→asyncpg full rewrite (Postgres DDL incl. guild_queues, log_track_batch transaction), requirements swap, integration tests [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-03-PLAN.md — bot.py: AutoShardedBot swap, asyncpg pool + _ready_once guard, queue_persistence service (persist + smart-rejoin restore) [wave 2]
+- [ ] 04-05-PLAN.md — Infra: Dockerfile + docker-compose (arm64, Postgres, volumes), keep-alive/dead-man + pg_dump backup scripts, .env.example (Oracle A1 hosting decision) [wave 2]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-04-PLAN.md — Cog consumers: db→pool migration (music/ai/imagine), batched /play logging, queue-cap rejection, persist-on-mutation hooks + voice-channel-id capture [wave 3]
+
+**Status**: Executing (1/5 plans complete)
 
 > Out of committed scope (per PROJECT.md): web config dashboard ("maybe" only), and the live-concurrency reconnect race (`cogs/music.py:~609`) parked for a dedicated live `/gsd:debug` session once running 24/7.
 
@@ -128,4 +142,4 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
 | 3. Alive | 6/6 | Complete   | 2026-06-11 |
-| 4. Scale | 0% | Not started | - |
+| 4. Scale | 1/5 | Executing | - |

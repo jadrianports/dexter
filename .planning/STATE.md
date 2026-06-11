@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 code-complete (live UAT pending)
-last_updated: "2026-06-11T00:00:00Z"
-last_activity: 2026-06-11 -- 03-06 complete; Phase 3 all 6 plans code-complete; live Discord UAT pending (user-run)
+stopped_at: Phase 04 Plan 01 complete
+last_updated: "2026-06-12T20:04:25Z"
+last_activity: 2026-06-12 -- Phase 04 Plan 01 (pure-logic spine) executed
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 6
-  completed_plans: 6
-  percent: 0
+  completed_phases: 1
+  total_plans: 11
+  completed_plans: 7
+  percent: 25
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 03 — alive
+**Current focus:** Phase 04 — scale
 
 ## Current Position
 
-Phase: 03 (alive) — CODE-COMPLETE (live UAT pending)
-Plan: 6 of 6 — ALL COMPLETE (03-06 complete 2026-06-11)
-Status: Wave 1 done (03-01/02/03); Wave 2 done (03-04/05); Wave 3 done (03-06) — Phase 3 code-complete
-Last activity: 2026-06-11 -- 03-06 complete; bot.py wired with status_rotation, startup message, idle-loneliness, LyricsService; live Discord smoke-test PENDING (user-run)
+Phase: 04 (scale) — EXECUTING
+Plan: 2 of 5
+Status: Executing Phase 04 (Plan 01 complete)
+Last activity: 2026-06-12 -- Phase 04 Plan 01 (pure-logic spine) complete
 
-Progress: [██████░░░░] 60% (3 of 5 phases complete — Phase 3 code-complete, live UAT pending before marking phase done)
+Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 1/5 done)
 
 ## Performance Metrics
 
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - [03-06] idle-loneliness uses vc._idle_loneliness_seconds (not vc._idle_seconds) to avoid interfering with the auto-leave timer
 - [03-06] _resolve_dexter_channel is bot.py-local (small duplication vs cogs/events.py) to preserve strict file ownership
 - [03-06] startup message post wrapped in try/except so channel-resolution failure does not abort on_ready
+- [04-01] MAX_QUEUE_SIZE_PER_GUILD=500 (mid-range of D-04 allowed 500-1000)
+- [04-01] cap guard placed in MusicQueue.add() not cog so playlist loop is covered at source (Pitfall 3)
+- [04-01] MESSAGE_BUFFER_TTL_HOURS=24 per D-05; DB_POOL_MIN=2, DB_POOL_MAX=10 per D-01
 
 ### Pending Todos
 
@@ -93,6 +96,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-06-11
-Stopped at: 03-06 complete — Phase 3 all 6 plans code-complete; bot.py wired with status_rotation loop, startup message, idle-loneliness, LyricsService; 251 tests passing; live Discord smoke-test pending (user-run independently)
-Resume file: Phase 4 — .planning/phases/04-scale/ (once live UAT confirms Phase 3 behavior)
+Last session: 2026-06-12T20:04:25Z
+Stopped at: Phase 04 Plan 01 complete — next: 04-02-PLAN.md (database.py aiosqlite→asyncpg)
+Resume file: .planning/phases/04-scale/04-02-PLAN.md
