@@ -87,7 +87,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] 03-01-PLAN.md — Foundation: Phase 3 config constants, personality/roasts.py template pools, DEXTER_SYSTEM_PROMPT few-shot rewrite [wave 1]
 - [x] 03-02-PLAN.md — Streak DB migration + pure compute_streak + repeat-song/streak/history DB helpers [wave 1]
-- [ ] 03-03-PLAN.md — LyricsService (Genius + AZLyrics fallback) + pure lyrics helpers + deps [wave 1]
+- [x] 03-03-PLAN.md — LyricsService (Genius + AZLyrics fallback) + pure lyrics helpers + deps [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -127,5 +127,5 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 1. Music MVP | 100% | Complete | 2026-04-12 |
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
-| 3. Alive | 2/6 | In Progress|  |
+| 3. Alive | 3/6 | In Progress|  |
 | 4. Scale | 0% | Not started | - |
