@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 04 Plan 01 complete
-last_updated: "2026-06-12T20:04:25Z"
-last_activity: 2026-06-12 -- Phase 04 Plan 01 (pure-logic spine) executed
+stopped_at: Phase 04 Plan 02 complete
+last_updated: "2026-06-12T21:00:00Z"
+last_activity: 2026-06-12 -- Phase 04 Plan 02 (database.py aiosqlite→asyncpg) executed
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
-  completed_plans: 7
-  percent: 25
+  completed_plans: 8
+  percent: 27
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 04 (scale) — EXECUTING
-Plan: 2 of 5
-Status: Executing Phase 04 (Plan 01 complete)
-Last activity: 2026-06-12 -- Phase 04 Plan 01 (pure-logic spine) complete
+Plan: 3 of 5
+Status: Executing Phase 04 (Plan 02 complete)
+Last activity: 2026-06-12 -- Phase 04 Plan 02 (database.py aiosqlite→asyncpg) complete
 
-Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 1/5 done)
+Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 2/5 done)
 
 ## Performance Metrics
 
@@ -73,6 +73,11 @@ Recent decisions affecting current work:
 - [04-01] MAX_QUEUE_SIZE_PER_GUILD=500 (mid-range of D-04 allowed 500-1000)
 - [04-01] cap guard placed in MusicQueue.add() not cog so playlist loop is covered at source (Pitfall 3)
 - [04-01] MESSAGE_BUFFER_TTL_HOURS=24 per D-05; DB_POOL_MIN=2, DB_POOL_MAX=10 per D-01
+- [04-02] asyncpg==0.31.0 chosen (built-in pool, $N params, arm64 wheels, single-package)
+- [04-02] Raw SQL CREATE TABLE IF NOT EXISTS chosen over Alembic (start-fresh per D-14)
+- [04-02] log_track_batch wraps 3 per-/play inserts in one transaction (D-06/SCALE-01)
+- [04-02] guild_queues table (jsonb payload, TEXT PK) added for SCALE-04 queue persistence
+- [04-02] migrate_add_streak_columns deleted; streak cols baked into CREATE TABLE (D-16)
 
 ### Pending Todos
 
@@ -96,6 +101,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-06-12T20:04:25Z
-Stopped at: Phase 04 Plan 01 complete — next: 04-02-PLAN.md (database.py aiosqlite→asyncpg)
-Resume file: .planning/phases/04-scale/04-02-PLAN.md
+Last session: 2026-06-12T21:00:00Z
+Stopped at: Phase 04 Plan 02 complete — next: 04-03-PLAN.md (bot.py AutoShardedBot + pool + queue_persistence)
+Resume file: .planning/phases/04-scale/04-03-PLAN.md

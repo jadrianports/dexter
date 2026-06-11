@@ -116,7 +116,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Wave 1**
 
 - [x] 04-01-PLAN.md — Pure-logic spine: queue cap (QueueFullError), Track to_dict/from_dict, MessageBuffer TTL eviction, Phase 4 config constants + unit tests [wave 1] (2026-06-12)
-- [ ] 04-02-PLAN.md — database.py aiosqlite→asyncpg full rewrite (Postgres DDL incl. guild_queues, log_track_batch transaction), requirements swap, integration tests [wave 1]
+- [x] 04-02-PLAN.md — database.py aiosqlite→asyncpg full rewrite (Postgres DDL incl. guild_queues, log_track_batch transaction), requirements swap, integration tests [wave 1] (2026-06-12)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -127,7 +127,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] 04-04-PLAN.md — Cog consumers: db→pool migration (music/ai/imagine), batched /play logging, queue-cap rejection, persist-on-mutation hooks + voice-channel-id capture [wave 3]
 
-**Status**: Executing (1/5 plans complete)
+**Status**: Executing (2/5 plans complete)
 
 > Out of committed scope (per PROJECT.md): web config dashboard ("maybe" only), and the live-concurrency reconnect race (`cogs/music.py:~609`) parked for a dedicated live `/gsd:debug` session once running 24/7.
 
@@ -142,4 +142,4 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
 | 3. Alive | 6/6 | Complete   | 2026-06-11 |
-| 4. Scale | 1/5 | Executing | - |
+| 4. Scale | 2/5 | Executing | - |
