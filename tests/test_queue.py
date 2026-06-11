@@ -19,6 +19,19 @@ def make_track(video_id: str = "abc123", title: str = "Test Song", **kwargs) -> 
     return Track(**defaults)
 
 
+def test_auto_lyrics_defaults_off_and_survives_clear():
+    q = MusicQueue(123)
+    # default OFF, no thread yet
+    assert q.auto_lyrics is False
+    assert q.lyrics_thread_id is None
+    # it's a per-server preference, NOT playback state -> clear() must not reset it
+    q.auto_lyrics = True
+    q.lyrics_thread_id = 999
+    q.clear()
+    assert q.auto_lyrics is True
+    assert q.lyrics_thread_id == 999
+
+
 class TestMusicQueueAdd:
     def test_add_track(self):
         q = MusicQueue(guild_id=1)
