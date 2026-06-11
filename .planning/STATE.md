@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 04 Plan 03 complete
-last_updated: "2026-06-12T21:37:00Z"
-last_activity: 2026-06-12 -- Phase 04 Plan 03 (AutoShardedBot + asyncpg pool + queue_persistence) executed
+stopped_at: "Phase 04 Plan 03 complete — next: 04-04-PLAN.md (cog consumers: db→pool migration, batched /play logging, persist-on-mutation hooks) and 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 2+3]"
+last_updated: "2026-06-11T20:49:57.523Z"
+last_activity: 2026-06-12 -- Phase 04 Plan 03 (AutoShardedBot + asyncpg pool + queue_persistence) complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
-  completed_plans: 8
-  percent: 27
+  completed_plans: 10
+  percent: 20
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 04 (scale) — EXECUTING
-Plan: 4 of 5
-Status: Executing Phase 04 (Plan 03 complete)
+Plan: 5 of 5
+Status: Ready to execute
 Last activity: 2026-06-12 -- Phase 04 Plan 03 (AutoShardedBot + asyncpg pool + queue_persistence) complete
 
 Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 2/5 done)
@@ -81,6 +81,7 @@ Recent decisions affecting current work:
 - [04-03] _ready_once guard placed immediately after login log line to cover all subsequent on_ready init (pool, cogs, services) on AutoShardedBot reconnect
 - [04-03] module-level restore_queues() wrapper in queue_persistence.py for clean bot.py import pattern
 - [04-03] asyncpg jsonb payload normalised with isinstance check to handle both dict and str returns across asyncpg versions
+- [Phase 04-scale]: D-07/D-08/D-10: Oracle Cloud Always Free A1 ARM resolved as host; Docker Compose packaging for Hetzner portability; D-09/D-13 keepalive unifies Oracle idle-nudge + Healthchecks.io dead-man; D-12 pg_dump to Object Storage for DB backup (SCALE-05)
 
 ### Pending Todos
 
@@ -104,6 +105,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-06-12T21:37:00Z
+Last session: 2026-06-11T20:48:58.247Z
 Stopped at: Phase 04 Plan 03 complete — next: 04-04-PLAN.md (cog consumers: db→pool migration, batched /play logging, persist-on-mutation hooks) and 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 2+3]
 Resume file: .planning/phases/04-scale/04-04-PLAN.md

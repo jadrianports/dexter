@@ -121,7 +121,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 04-03-PLAN.md — bot.py: AutoShardedBot swap, asyncpg pool + _ready_once guard, queue_persistence service (persist + smart-rejoin restore) [wave 2] (2026-06-12)
-- [ ] 04-05-PLAN.md — Infra: Dockerfile + docker-compose (arm64, Postgres, volumes), keep-alive/dead-man + pg_dump backup scripts, .env.example (Oracle A1 hosting decision) [wave 2]
+- [x] 04-05-PLAN.md — Infra: Dockerfile + docker-compose (arm64, Postgres, volumes), keep-alive/dead-man + pg_dump backup scripts, .env.example (Oracle A1 hosting decision) [wave 2]
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -142,4 +142,4 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
 | 3. Alive | 6/6 | Complete   | 2026-06-11 |
-| 4. Scale | 3/5 | Executing | - |
+| 4. Scale | 4/5 | In Progress|  |

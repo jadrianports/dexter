@@ -136,6 +136,6 @@
 | SCALE-02 | Phase 4 | Pending |
 | SCALE-03 | Phase 4 | Pending |
 | SCALE-04 | Phase 4 | Pending |
-| SCALE-05 | Phase 4 | Pending |
+| SCALE-05 | Phase 4 | Complete |
 
 **Coverage:** 45/45 v1 requirements mapped to exactly one phase. No orphans, no duplicates.
