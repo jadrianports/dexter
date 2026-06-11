@@ -318,6 +318,7 @@ class MusicCog(commands.Cog):
             log.warning(f"Skipping unavailable: '{track.title}'")
             _skipped.append(track.title)
             next_track = queue.skip()
+            await self._persist_queue(guild, queue)
             if next_track:
                 await self._play_track(guild, next_track, _skipped)
             else:
@@ -388,6 +389,7 @@ class MusicCog(commands.Cog):
             state.auto_queue_results["played"] += 1
 
         next_track = queue.advance()
+        await self._persist_queue(guild, queue)
         if next_track:
             await self._play_track(guild, next_track)
             # Edit existing now-playing message, or send new one if edit fails
@@ -492,6 +494,19 @@ class MusicCog(commands.Cog):
                 return channel
         return None
 
+    async def _persist_queue(self, guild: discord.Guild, queue: MusicQueue) -> None:
+        """Persist queue state after every mutation (D-19/SCALE-04).
+
+        Captures voice-channel id live from guild.voice_client.channel (D-20) —
+        NOT stored on the model. Guarded with hasattr so a missing service never
+        crashes a command. Persistence failures are swallowed by the service (T-04-09).
+        """
+        if not hasattr(self.bot, "queue_persistence"):
+            return
+        # D-20: capture live, not from model — voice channel may change per session
+        vc_id = guild.voice_client.channel.id if guild.voice_client else None
+        await self.bot.queue_persistence.persist(guild, queue, vc_id)
+
     async def _queue_from_selection(self, interaction: discord.Interaction, selected: dict) -> None:
         """Queue a song after the user picks from the select menu."""
         await interaction.response.defer()
@@ -519,7 +534,15 @@ class MusicCog(commands.Cog):
         )
 
         queue = self.get_queue(interaction.guild.id)
-        position = queue.add(track) + 1
+        try:
+            position = queue.add(track) + 1
+        except QueueFullError:
+            await interaction.followup.send(
+                f"queue's full at {config.MAX_QUEUE_SIZE_PER_GUILD} tracks. impressive dedication, wrong bot.",
+                ephemeral=True,
+            )
+            return
+        await self._persist_queue(interaction.guild, queue)
 
         await self._log_track(interaction, track)
 
@@ -768,6 +791,7 @@ class MusicCog(commands.Cog):
 
                         count = 0
                         skipped = 0
+                        cap_reached = False
                         first_track = None
                         for item in playlist_results:
                             try:
@@ -786,7 +810,11 @@ class MusicCog(commands.Cog):
                                     requested_by=interaction.user.id,
                                     thumbnail=item.get("thumbnail"),
                                 )
-                                queue.add(track)
+                                try:
+                                    queue.add(track)
+                                except QueueFullError:
+                                    cap_reached = True
+                                    break
                                 count += 1
                                 if first_track is None:
                                     first_track = track
@@ -794,7 +822,12 @@ class MusicCog(commands.Cog):
                                 log.warning(f"Skipping malformed playlist entry: {entry_error}")
                                 continue
 
+                        if count > 0:
+                            await self._persist_queue(interaction.guild, queue)
+
                         msg = f"Queued {count} tracks from playlist."
+                        if cap_reached:
+                            msg += f" (stopped at queue cap of {config.MAX_QUEUE_SIZE_PER_GUILD})"
                         if skipped > 0:
                             msg += f" ({skipped} skipped — too long)"
                         if len(playlist_results) >= config.MAX_PLAYLIST_IMPORT:
@@ -835,7 +868,15 @@ class MusicCog(commands.Cog):
             )
 
             queue = self.get_queue(interaction.guild.id)
-            position = queue.add(track) + 1
+            try:
+                position = queue.add(track) + 1
+            except QueueFullError:
+                await interaction.followup.send(
+                    f"queue's full at {config.MAX_QUEUE_SIZE_PER_GUILD} tracks. impressive dedication, wrong bot.",
+                    ephemeral=True,
+                )
+                return
+            await self._persist_queue(interaction.guild, queue)
 
             await self._log_track(interaction, track)
 
@@ -882,6 +923,7 @@ class MusicCog(commands.Cog):
                 state.auto_queue_results["skipped"] += 1
 
         next_track = queue.skip()
+        await self._persist_queue(interaction.guild, queue)
         if next_track:
             await interaction.response.send_message(f"Skipped to **{next_track.title}**")
             # Play in background — don't block the response
@@ -928,6 +970,8 @@ class MusicCog(commands.Cog):
 
         queue._play_generation += 1  # invalidate any pending after-callbacks
         queue.clear()
+        if hasattr(self.bot, "queue_persistence"):
+            await self.bot.queue_persistence.clear_persisted(interaction.guild.id)
 
         if voice_client:
             voice_client.stop()
@@ -959,6 +1003,7 @@ class MusicCog(commands.Cog):
             )
 
         queue.shuffle()
+        await self._persist_queue(interaction.guild, queue)
         await interaction.response.send_message(f"Shuffled {len(queue.upcoming())} upcoming tracks.")
 
     @app_commands.command(name="loop", description="Set loop mode")
@@ -971,6 +1016,7 @@ class MusicCog(commands.Cog):
     async def loop(self, interaction: discord.Interaction, mode: app_commands.Choice[str]) -> None:
         queue = self.get_queue(interaction.guild.id)
         queue.loop_mode = LoopMode(mode.value)
+        await self._persist_queue(interaction.guild, queue)
         await interaction.response.send_message(f"Loop mode: **{mode.name}**")
 
     @app_commands.command(name="nowplaying", description="Show what's currently playing")
