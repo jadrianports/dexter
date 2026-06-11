@@ -125,13 +125,13 @@
 | PERS-02 | Phase 3 | Complete |
 | PERS-03 | Phase 3 | Complete |
 | PERS-04 | Phase 3 | Complete |
-| PERS-05 | Phase 3 | Pending |
-| PERS-06 | Phase 3 | Pending |
+| PERS-05 | Phase 3 | Complete |
+| PERS-06 | Phase 3 | Complete |
 | PERS-07 | Phase 3 | Complete |
 | PERS-08 | Phase 3 | Complete |
 | PERS-09 | Phase 3 | Complete |
-| LYRIC-01 | Phase 3 | Pending |
-| HIST-01 | Phase 3 | Pending |
+| LYRIC-01 | Phase 3 | Complete |
+| HIST-01 | Phase 3 | Complete |
 | SCALE-01 | Phase 4 | Pending |
 | SCALE-02 | Phase 4 | Pending |
 | SCALE-03 | Phase 4 | Pending |

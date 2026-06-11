@@ -98,7 +98,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] 03-06-PLAN.md — bot.py: status rotation, startup message, idle-loneliness, lyrics wiring [wave 3]
 
-**Status**: Planned
+**Status**: Code-complete (10/10 must-haves verified; live Discord UAT pending)
 
 ### Phase 4: Scale
 
