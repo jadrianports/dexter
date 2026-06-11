@@ -91,7 +91,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-04-PLAN.md — EventsCog: voice join/leave/move roasts, reactions, expanded seasonal [wave 2]
+- [x] 03-04-PLAN.md — EventsCog: voice join/leave/move roasts, reactions, expanded seasonal [wave 2]
 - [ ] 03-05-PLAN.md — MusicCog: /lyrics, /history, repeat-song + streak/milestone roasts [wave 2]
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -127,5 +127,5 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 1. Music MVP | 100% | Complete | 2026-04-12 |
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
-| 3. Alive | 3/6 | In Progress|  |
+| 3. Alive | 4/6 | In Progress|  |
 | 4. Scale | 0% | Not started | - |
