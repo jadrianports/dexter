@@ -217,6 +217,23 @@ async def on_ready():
 
     log.info("Dexter is ready.")
 
+    # Phase 3: Startup message — MUST be last (after all load_extension calls and
+    # background-task starts) so commands are registered first (Pitfall 5).
+    # Uses STARTUP_MESSAGES (arrogant, D-02) — never self-deprecating.
+    # Wrapped in try/except so a post failure does NOT abort on_ready.
+    # SECURITY (T-03-19): allowed_mentions=none() prevents mention injection.
+    try:
+        from personality.roasts import STARTUP_MESSAGES, pick_random as _pick_random
+        for guild in bot.guilds:
+            channel = _resolve_dexter_channel(guild)
+            if channel:
+                await channel.send(
+                    _pick_random(STARTUP_MESSAGES),
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+    except Exception as exc:
+        log.warning("Startup message post failed: %s", exc)
+
 
 @bot.event
 async def on_close():
@@ -318,8 +335,48 @@ async def idle_check():
                 if channel:
                     await channel.send("Left the voice channel after being alone for too long.")
         else:
+            # Reset the auto-leave idle timer (humans are present)
             if hasattr(vc, "_idle_seconds"):
                 vc._idle_seconds = 0
+
+            # Phase 3 — Idle-loneliness (PERS-08): post a lonely message once after
+            # IDLE_LONELINESS_THRESHOLD_SECONDS of silence while humans are in voice.
+            #
+            # SEPARATE accumulator (vc._idle_loneliness_seconds) — must NOT touch
+            # vc._idle_seconds so the auto-leave timer is completely unaffected.
+            # Reset the loneliness window whenever a new track starts playing
+            # (track title change signals fresh activity in the channel).
+            current_track = queue.get_current() if hasattr(queue, "get_current") else None
+            current_title = getattr(current_track, "title", None) if current_track else None
+
+            if not hasattr(vc, "_idle_loneliness_seconds"):
+                vc._idle_loneliness_seconds = 0
+                vc._loneliness_posted = False
+                vc._loneliness_last_title = current_title
+
+            # Detect a new song started → reset loneliness window
+            if current_title != vc._loneliness_last_title:
+                vc._idle_loneliness_seconds = 0
+                vc._loneliness_posted = False
+                vc._loneliness_last_title = current_title
+
+            if not vc._loneliness_posted:
+                vc._idle_loneliness_seconds += 60
+
+                if vc._idle_loneliness_seconds >= config.IDLE_LONELINESS_THRESHOLD_SECONDS:
+                    # Only post once per silence window
+                    vc._loneliness_posted = True
+                    try:
+                        from personality.roasts import IDLE_LONELINESS_MESSAGES, pick_random as _pr
+                        channel = _resolve_dexter_channel(guild)
+                        if channel:
+                            await channel.send(
+                                _pr(IDLE_LONELINESS_MESSAGES),
+                                # SECURITY (T-03-19): prevent mention injection
+                                allowed_mentions=discord.AllowedMentions.none(),
+                            )
+                    except Exception as exc:
+                        log.warning("Idle-loneliness post failed: %s", exc)
 
 
 @idle_check.before_loop
