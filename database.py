@@ -68,7 +68,10 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     username TEXT NOT NULL,
     total_songs_queued INTEGER DEFAULT 0,
     first_seen_at TEXT DEFAULT (datetime('now')),
-    last_active_at TEXT DEFAULT (datetime('now'))
+    last_active_at TEXT DEFAULT (datetime('now')),
+    current_streak INTEGER DEFAULT 0,
+    longest_streak INTEGER DEFAULT 0,
+    last_streak_date TEXT
 );
 
 CREATE TABLE IF NOT EXISTS song_history (
@@ -114,6 +117,29 @@ CREATE TABLE IF NOT EXISTS bot_daily_stats (
 """
 
 
+async def migrate_add_streak_columns(db: aiosqlite.Connection) -> None:
+    """Idempotent additive migration: add streak columns to user_profiles if absent.
+
+    Safe to call on an already-migrated DB (D-19). Column names are hard-coded
+    literals — never derived from input — so no injection surface (T-03-04).
+    Must be called AFTER executescript(SCHEMA_SQL) so the table exists first.
+    """
+    cursor = await db.execute("PRAGMA table_info(user_profiles)")
+    existing = {row[1] for row in await cursor.fetchall()}
+    migrations = [
+        ("current_streak", "INTEGER DEFAULT 0"),
+        ("longest_streak", "INTEGER DEFAULT 0"),
+        ("last_streak_date", "TEXT"),
+    ]
+    for col_name, col_def in migrations:
+        if col_name not in existing:
+            await db.execute(
+                f"ALTER TABLE user_profiles ADD COLUMN {col_name} {col_def}"
+            )
+    await db.commit()
+    log.debug("Streak column migration complete")
+
+
 async def init_db(db: aiosqlite.Connection) -> None:
     """Create all tables if they don't exist."""
     # WAL improves read/write concurrency; busy_timeout makes brief lock
@@ -121,6 +147,7 @@ async def init_db(db: aiosqlite.Connection) -> None:
     await db.execute("PRAGMA journal_mode=WAL")
     await db.execute("PRAGMA busy_timeout=5000")
     await db.executescript(SCHEMA_SQL)
+    await migrate_add_streak_columns(db)  # additive streak migration (D-19, Pitfall 4)
     await db.commit()
     log.info("Database schema initialized")
 
@@ -262,3 +289,86 @@ async def get_daily_command_count(db: aiosqlite.Connection) -> int:
     )
     row = await cursor.fetchone()
     return row["total_commands"] if row else 0
+
+
+async def get_repeat_song_count(
+    db: aiosqlite.Connection, *, guild_id: str, user_id: str, title: str
+) -> int:
+    """Count plays of the same song by this user in this guild today (PERS-04).
+
+    All parameters are bound via parameterized placeholders — no string
+    interpolation — preventing SQL injection (T-03-03).
+    """
+    cursor = await db.execute(
+        """SELECT COUNT(*) as cnt FROM song_history
+           WHERE guild_id = ? AND user_id = ? AND title = ?
+             AND date(queued_at) = date('now')""",
+        (guild_id, user_id, title),
+    )
+    row = await cursor.fetchone()
+    return row["cnt"] if row else 0
+
+
+async def update_user_streak(
+    db: aiosqlite.Connection, *, user_id: str, tz_name: str
+) -> tuple[int, int, int | None]:
+    """Update streak for user; return (new_streak, new_longest, milestone_or_None).
+
+    Reads current_streak / last_streak_date from user_profiles, runs compute_streak(),
+    persists the result, and checks config.MILESTONE_STREAK_THRESHOLDS for an exact
+    crossing (D-21: fires once per threshold on exact equality, no extra bookkeeping).
+
+    Returns:
+        (new_streak, new_longest_streak, milestone_value)
+        milestone_value is the threshold int if new_streak exactly equals one of
+        MILESTONE_STREAK_THRESHOLDS AND it increased this call; else None.
+    """
+    cursor = await db.execute(
+        "SELECT current_streak, longest_streak, last_streak_date FROM user_profiles WHERE user_id = ?",
+        (user_id,),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        # User not found — no-op to avoid phantom writes
+        return (0, 0, None)
+
+    old_streak: int = row["current_streak"] or 0
+    old_longest: int = row["longest_streak"] or 0
+    last_date: str | None = row["last_streak_date"]
+
+    new_streak, new_date = compute_streak(old_streak, last_date, tz_name)
+    new_longest = max(old_longest, new_streak)
+
+    await db.execute(
+        """UPDATE user_profiles
+           SET current_streak = ?, longest_streak = ?, last_streak_date = ?
+           WHERE user_id = ?""",
+        (new_streak, new_longest, new_date, user_id),
+    )
+    await db.commit()
+
+    # Milestone: fires when new_streak exactly equals a threshold AND increased
+    milestone: int | None = None
+    if new_streak > old_streak and new_streak in config.MILESTONE_STREAK_THRESHOLDS:
+        milestone = new_streak
+
+    return (new_streak, new_longest, milestone)
+
+
+async def get_history_rows(
+    db: aiosqlite.Connection, *, guild_id: str, limit: int = 50
+) -> list[dict]:
+    """Return the last N songs for a guild, newest first, with queued_at (HIST-01).
+
+    LIMIT is bound as an int parameter — not string-interpolated (T-03-03).
+    """
+    cursor = await db.execute(
+        """SELECT title, artist, url, duration_seconds, user_id, queued_at
+           FROM song_history
+           WHERE guild_id = ?
+           ORDER BY queued_at DESC, id DESC
+           LIMIT ?""",
+        (guild_id, int(limit)),
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
