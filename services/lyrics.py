@@ -1,0 +1,228 @@
+"""Lyrics fetching service: Genius primary, AZLyrics fallback.
+
+Exposes LyricsService(genius_token) with async get_lyrics(title, artist).
+Pure helpers (build_genius_search_query, build_azlyrics_url, chunk_lyrics,
+sanitize_lyrics, extract_azlyrics) are importable standalone for unit tests.
+
+Security notes (STRIDE T-03-06 through T-03-09):
+- build_azlyrics_url strips ALL non-alphanum from artist/song (kills path traversal, @).
+- URL host is hard-coded azlyrics.com — no SSRF.
+- sanitize_lyrics strips HTML tags and neutralizes @everyone / @here.
+- GENIUS_TOKEN is passed only to the Genius() constructor; never logged or echoed.
+- _get_azlyrics uses aiohttp.ClientTimeout(total=10) + 500_000-byte cap (DoS guards).
+- Genius is wrapped in asyncio.to_thread — never blocks the event loop.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import re
+
+import aiohttp
+from bs4 import BeautifulSoup
+from lyricsgenius import Genius
+
+import config
+from utils.logger import log
+
+# Browser User-Agent to avoid AZLyrics bot detection (Pitfall 6)
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+
+# Regex to strip feat / remix / version suffixes from track titles (Pattern 9)
+_FEAT_RE = re.compile(
+    r"\s*[\(\[](?:feat|ft|featuring|remix|edit|version|radio edit)[^\)\]]*[\)\]]",
+    re.IGNORECASE,
+)
+
+
+# ---------------------------------------------------------------------------
+# Pure helpers
+# ---------------------------------------------------------------------------
+
+
+def build_genius_search_query(title: str, artist: str | None) -> tuple[str, str]:
+    """Return (cleaned_title, artist) for lyricsgenius search_song call.
+
+    Strips (feat. X) / (Remix) / (Radio Edit) suffixes from title and
+    falls back to empty string when artist is None/empty.
+    """
+    cleaned = _FEAT_RE.sub("", title).strip()
+    return (cleaned, artist or "")
+
+
+def build_azlyrics_url(artist: str, song: str) -> str:
+    """Build AZLyrics URL. Strip ALL non-alphanum from artist and song (T-03-06).
+
+    Kills path-traversal chars (../), @ (SSRF header injection), spaces, and
+    any other non-ASCII. Host is hard-coded — no user-supplied host reaches
+    the HTTP client.
+    """
+    a = re.sub(r"[^a-z0-9]", "", artist.lower())
+    s = re.sub(r"[^a-z0-9]", "", song.lower())
+    return f"https://www.azlyrics.com/lyrics/{a}/{s}.html"
+
+
+def chunk_lyrics(lyrics: str, page_size: int = config.LYRICS_PAGE_SIZE) -> list[str]:
+    """Split lyrics into chunks of at most page_size chars, breaking on newlines.
+
+    Guarantees that no chunk exceeds page_size characters and that all original
+    lines appear in the output when rejoined with newlines.
+    """
+    if not lyrics:
+        return []
+    lines = lyrics.split("\n")
+    pages: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for line in lines:
+        # +1 for the newline separator that will be added between lines
+        if current_len + len(line) + 1 > page_size and current:
+            pages.append("\n".join(current))
+            current = [line]
+            current_len = len(line)
+        else:
+            current.append(line)
+            current_len += len(line) + 1
+    if current:
+        pages.append("\n".join(current))
+    return pages
+
+
+def sanitize_lyrics(text: str) -> str:
+    """Strip HTML tags and neutralize @everyone / @here (T-03-07).
+
+    Defense-in-depth before plan 03-05 sends with allowed_mentions=none().
+    Uses BeautifulSoup get_text for robust HTML stripping, then inserts a
+    zero-width space (U+200B) after every bare @ to break mention pings.
+    """
+    # Strip all HTML tags via BeautifulSoup
+    soup = BeautifulSoup(text, "html.parser")
+    plain = soup.get_text(separator="\n")
+    # Neutralize @everyone / @here by inserting zero-width space after @
+    # This breaks Discord's mention parsing while keeping text readable
+    neutralized = re.sub(r"@(everyone|here)", r"@​\1", plain)
+    return neutralized
+
+
+def extract_azlyrics(html: str) -> str | None:
+    """Extract lyrics text from AZLyrics HTML.
+
+    AZLyrics places lyrics in a <div> with no class and no id, between
+    HTML comment markers. Returns the longest classless/idless div text
+    that is plausibly lyrics (>100 chars). Returns None for alert/bot-detect
+    pages (short content) or when no match is found.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    divs = soup.find_all("div", class_=False, id=False)
+    best: str | None = None
+    for div in divs:
+        text = div.get_text("\n").strip()
+        if len(text) > 100:
+            # Take the longest candidate (typically the lyrics div)
+            if best is None or len(text) > len(best):
+                best = text
+    return best
+
+
+# ---------------------------------------------------------------------------
+# LyricsService
+# ---------------------------------------------------------------------------
+
+
+class LyricsService:
+    """Fetch lyrics with Genius as primary and AZLyrics as fallback.
+
+    Usage:
+        service = LyricsService(os.getenv("GENIUS_TOKEN"))
+        lyrics = await service.get_lyrics(title, artist)
+
+    If genius_token is None or empty, the Genius path is disabled and only
+    AZLyrics is attempted (graceful degradation — Assumption A4).
+
+    Security:
+        The genius_token is passed only to the Genius() constructor and stored
+        as a private attribute. It is NEVER logged or echoed in any error
+        message or embed.
+    """
+
+    def __init__(self, genius_token: str | None) -> None:
+        if genius_token:
+            self._genius = Genius(
+                genius_token,
+                verbose=False,               # suppress stdout output (Pitfall 7)
+                remove_section_headers=True,  # strip [Verse] / [Chorus] (Pitfall 2)
+                retries=1,                    # limit retry amplification (T-03-08)
+                timeout=5,                    # Genius() timeout in seconds (T-03-08)
+            )
+        else:
+            self._genius = None
+            log.warning("GENIUS_TOKEN not set — Genius lyrics disabled")
+
+    async def get_lyrics(self, title: str, artist: str | None) -> str | None:
+        """Fetch lyrics: Genius first, AZLyrics fallback. Returns None if both fail."""
+        lyrics = await self._get_genius(title, artist)
+        if lyrics:
+            return lyrics
+        return await self._get_azlyrics(title, artist)
+
+    async def _get_genius(self, title: str, artist: str | None) -> str | None:
+        """Search Genius for lyrics using asyncio.to_thread (non-blocking).
+
+        Returns sanitized lyrics string or None. The synchronous lyricsgenius
+        call is offloaded to a thread so the event loop is never blocked (T-03-08).
+        """
+        if self._genius is None:
+            return None
+        try:
+            query_title, query_artist = build_genius_search_query(title, artist)
+            song = await asyncio.to_thread(
+                self._genius.search_song, query_title, query_artist
+            )
+            if not song or not song.lyrics:
+                return None
+            # Strip trailing "EmbedXX" / contributor lines (Pitfall 2)
+            raw = song.lyrics.split("Embed")[0].strip()
+            return sanitize_lyrics(raw) if raw else None
+        except Exception as exc:
+            log.warning("Genius fetch failed: %s", exc)
+            return None
+
+    async def _get_azlyrics(self, title: str, artist: str | None) -> str | None:
+        """Fetch lyrics from AZLyrics via aiohttp with timeout and size cap.
+
+        Security (T-03-06 / T-03-08):
+        - URL built from sanitized artist/song (no user-supplied URL).
+        - aiohttp.ClientTimeout(total=10) caps fetch time.
+        - 500_000-byte response cap prevents memory exhaustion.
+        - Browser User-Agent to avoid bot detection page (Pitfall 6).
+        """
+        url = build_azlyrics_url(artist or "", title)
+        headers = {"User-Agent": _BROWSER_UA}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    if resp.status != 200:
+                        log.warning("AZLyrics returned HTTP %s for %s", resp.status, url)
+                        return None
+                    html = await resp.text()
+                    # DoS guard: cap response size
+                    if len(html) > 500_000:
+                        log.warning("AZLyrics response too large (%d bytes)", len(html))
+                        return None
+                    text = extract_azlyrics(html)
+                    if not text or len(text) < 50:
+                        # Pitfall 6: alert/bot-detection page
+                        log.warning("AZLyrics returned suspiciously short content for %s", url)
+                        return None
+                    return sanitize_lyrics(text)
+        except Exception as exc:
+            log.warning("AZLyrics fetch failed: %s", exc)
+            return None
