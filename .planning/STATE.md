@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 04 Plan 02 complete
-last_updated: "2026-06-12T21:00:00Z"
-last_activity: 2026-06-12 -- Phase 04 Plan 02 (database.py aiosqlite→asyncpg) executed
+stopped_at: Phase 04 Plan 03 complete
+last_updated: "2026-06-12T21:37:00Z"
+last_activity: 2026-06-12 -- Phase 04 Plan 03 (AutoShardedBot + asyncpg pool + queue_persistence) executed
 progress:
   total_phases: 5
   completed_phases: 1
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 04 (scale) — EXECUTING
-Plan: 3 of 5
-Status: Executing Phase 04 (Plan 02 complete)
-Last activity: 2026-06-12 -- Phase 04 Plan 02 (database.py aiosqlite→asyncpg) complete
+Plan: 4 of 5
+Status: Executing Phase 04 (Plan 03 complete)
+Last activity: 2026-06-12 -- Phase 04 Plan 03 (AutoShardedBot + asyncpg pool + queue_persistence) complete
 
 Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 2/5 done)
 
@@ -78,6 +78,9 @@ Recent decisions affecting current work:
 - [04-02] log_track_batch wraps 3 per-/play inserts in one transaction (D-06/SCALE-01)
 - [04-02] guild_queues table (jsonb payload, TEXT PK) added for SCALE-04 queue persistence
 - [04-02] migrate_add_streak_columns deleted; streak cols baked into CREATE TABLE (D-16)
+- [04-03] _ready_once guard placed immediately after login log line to cover all subsequent on_ready init (pool, cogs, services) on AutoShardedBot reconnect
+- [04-03] module-level restore_queues() wrapper in queue_persistence.py for clean bot.py import pattern
+- [04-03] asyncpg jsonb payload normalised with isinstance check to handle both dict and str returns across asyncpg versions
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-06-12T21:00:00Z
-Stopped at: Phase 04 Plan 02 complete — next: 04-03-PLAN.md (bot.py AutoShardedBot + pool + queue_persistence)
-Resume file: .planning/phases/04-scale/04-03-PLAN.md
+Last session: 2026-06-12T21:37:00Z
+Stopped at: Phase 04 Plan 03 complete — next: 04-04-PLAN.md (cog consumers: db→pool migration, batched /play logging, persist-on-mutation hooks) and 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 2+3]
+Resume file: .planning/phases/04-scale/04-04-PLAN.md
