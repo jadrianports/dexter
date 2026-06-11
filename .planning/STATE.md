@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-06-11T04:40:14.580Z"
-last_activity: 2026-06-11 -- 03-05 complete; /lyrics + /history + repeat-song/milestone roasts
+stopped_at: Phase 3 code-complete (live UAT pending)
+last_updated: "2026-06-11T00:00:00Z"
+last_activity: 2026-06-11 -- 03-06 complete; Phase 3 all 6 plans code-complete; live Discord UAT pending (user-run)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 03 (alive) — EXECUTING
-Plan: 6 of 6 (03-05 complete; 03-06 next)
-Status: Wave 1 done (03-01/02/03 complete); Wave 2 done (03-04/05 complete); Wave 3: 03-06 remaining
-Last activity: 2026-06-11 -- 03-05 complete; /lyrics + /history (paginated) + repeat-song + milestone/streak roasts in _log_track
+Phase: 03 (alive) — CODE-COMPLETE (live UAT pending)
+Plan: 6 of 6 — ALL COMPLETE (03-06 complete 2026-06-11)
+Status: Wave 1 done (03-01/02/03); Wave 2 done (03-04/05); Wave 3 done (03-06) — Phase 3 code-complete
+Last activity: 2026-06-11 -- 03-06 complete; bot.py wired with status_rotation, startup message, idle-loneliness, LyricsService; live Discord smoke-test PENDING (user-run)
 
-Progress: [██████░░░░] 60% (3 of 5 phases complete)
+Progress: [██████░░░░] 60% (3 of 5 phases complete — Phase 3 code-complete, live UAT pending before marking phase done)
 
 ## Performance Metrics
 
@@ -67,6 +67,9 @@ Recent decisions affecting current work:
 - [Phase 2.5] Live-concurrency bugs are PARKED, not fixed blind — bot booted locally only; fixes must be verifiable by inspection + local boot
 - [Open → Phase 4] Hosting / 24/7 deployment is undecided (Oracle Cloud Always Free is a candidate but carries reclamation/termination risk); stay hosting-agnostic until Phase 4
 - [Pending → Phase 4] SQLite sufficient for v1–v3; PostgreSQL migration deferred to Phase 4
+- [03-06] idle-loneliness uses vc._idle_loneliness_seconds (not vc._idle_seconds) to avoid interfering with the auto-leave timer
+- [03-06] _resolve_dexter_channel is bot.py-local (small duplication vs cogs/events.py) to preserve strict file ownership
+- [03-06] startup message post wrapped in try/except so channel-resolution failure does not abort on_ready
 
 ### Pending Todos
 
@@ -91,5 +94,5 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-06-11
-Stopped at: 03-05 complete — /lyrics + /history commands with pagination; repeat-song + streak/milestone roasts wired in _log_track (PERS-04, PERS-09); 251 tests passing
-Resume file: .planning/phases/03-alive/03-06-PLAN.md
+Stopped at: 03-06 complete — Phase 3 all 6 plans code-complete; bot.py wired with status_rotation loop, startup message, idle-loneliness, LyricsService; 251 tests passing; live Discord smoke-test pending (user-run independently)
+Resume file: Phase 4 — .planning/phases/04-scale/ (once live UAT confirms Phase 3 behavior)

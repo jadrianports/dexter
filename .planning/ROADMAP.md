@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Music MVP** - YouTube playback, queue model, cache-first audio, idle leave
 - [x] **Phase 2: Personality + AI** - `/ask`, `/imagine`, mood, auto-queue, global rate limiter
 - [x] **Phase 2.5: Hardening** - Production-honest reliability pass (observability, WAL, FFmpeg cleanup, yt-dlp self-heal)
-- [ ] **Phase 3: Alive** - Unprompted roasts, reactions, seasonal, status, streaks, `/lyrics`, `/history`
+- [x] **Phase 3: Alive** - Unprompted roasts, reactions, seasonal, status, streaks, `/lyrics`, `/history` (completed 2026-06-11)
 - [ ] **Phase 4: Scale** - Multi-server, PostgreSQL, sharding, queue persistence, hosting decision
 
 ## Phase Details
@@ -92,11 +92,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 03-04-PLAN.md — EventsCog: voice join/leave/move roasts, reactions, expanded seasonal [wave 2]
-- [ ] 03-05-PLAN.md — MusicCog: /lyrics, /history, repeat-song + streak/milestone roasts [wave 2]
+- [x] 03-05-PLAN.md — MusicCog: /lyrics, /history, repeat-song + streak/milestone roasts [wave 2]
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-06-PLAN.md — bot.py: status rotation, startup message, idle-loneliness, lyrics wiring [wave 3]
+- [x] 03-06-PLAN.md — bot.py: status rotation, startup message, idle-loneliness, lyrics wiring [wave 3]
 
 **Status**: Planned
 
@@ -127,5 +127,5 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 1. Music MVP | 100% | Complete | 2026-04-12 |
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
-| 3. Alive | 4/6 | In Progress|  |
+| 3. Alive | 6/6 | Complete   | 2026-06-11 |
 | 4. Scale | 0% | Not started | - |
