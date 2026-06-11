@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 04 Plan 03 complete — next: 04-04-PLAN.md (cog consumers: db→pool migration, batched /play logging, persist-on-mutation hooks) and 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 2+3]"
-last_updated: "2026-06-11T20:49:57.523Z"
-last_activity: 2026-06-12 -- Phase 04 Plan 03 (AutoShardedBot + asyncpg pool + queue_persistence) complete
+stopped_at: "Phase 04 Plan 04 complete — next: 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 3 final]"
+last_updated: "2026-06-12T21:00:00.000Z"
+last_activity: 2026-06-12 -- Phase 04 Plan 04 (cog db→pool migration, log_track_batch, persist-on-mutation) complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
-  completed_plans: 10
-  percent: 20
+  completed_plans: 11
+  percent: 22
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 Phase: 04 (scale) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-06-12 -- Phase 04 Plan 03 (AutoShardedBot + asyncpg pool + queue_persistence) complete
+Status: Plan 04 complete — ready for 04-05
+Last activity: 2026-06-12 -- Phase 04 Plan 04 (cog db→pool migration, log_track_batch, persist-on-mutation) complete
 
 Progress: [███████░░░] 65% (3 of 5 phases complete — Phase 4 executing, Plan 2/5 done)
 
@@ -82,6 +82,10 @@ Recent decisions affecting current work:
 - [04-03] module-level restore_queues() wrapper in queue_persistence.py for clean bot.py import pattern
 - [04-03] asyncpg jsonb payload normalised with isinstance check to handle both dict and str returns across asyncpg versions
 - [Phase 04-scale]: D-07/D-08/D-10: Oracle Cloud Always Free A1 ARM resolved as host; Docker Compose packaging for Hetzner portability; D-09/D-13 keepalive unifies Oracle idle-nudge + Healthchecks.io dead-man; D-12 pg_dump to Object Storage for DB backup (SCALE-05)
+- [04-04] 3 queue.add() catch sites (not 2): _queue_from_selection + playlist loop + direct URL — all wrapped with QueueFullError
+- [04-04] playlist loop uses break on QueueFullError + cap_reached flag in summary message
+- [04-04] _persist_queue helper captures vc_id live from guild.voice_client.channel (D-20); guarded with hasattr
+- [04-04] reconnect race region in on_voice_state_update left untouched per D-22
 
 ### Pending Todos
 
@@ -105,6 +109,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-06-11T20:48:58.247Z
-Stopped at: Phase 04 Plan 03 complete — next: 04-04-PLAN.md (cog consumers: db→pool migration, batched /play logging, persist-on-mutation hooks) and 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 2+3]
-Resume file: .planning/phases/04-scale/04-04-PLAN.md
+Last session: 2026-06-12T21:00:00.000Z
+Stopped at: Phase 04 Plan 04 complete — next: 04-05-PLAN.md (Dockerfile + docker-compose infra) [wave 3 final]
+Resume file: .planning/phases/04-scale/04-05-PLAN.md

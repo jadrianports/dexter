@@ -125,9 +125,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04-04-PLAN.md — Cog consumers: db→pool migration (music/ai/imagine), batched /play logging, queue-cap rejection, persist-on-mutation hooks + voice-channel-id capture [wave 3]
+- [x] 04-04-PLAN.md — Cog consumers: db→pool migration (music/ai/imagine), batched /play logging, queue-cap rejection, persist-on-mutation hooks + voice-channel-id capture [wave 3] (2026-06-12)
 
-**Status**: Executing (2/5 plans complete)
+**Status**: Executing (5/5 plans complete — all code committed; hosting infra in 04-05)
 
 > Out of committed scope (per PROJECT.md): web config dashboard ("maybe" only), and the live-concurrency reconnect race (`cogs/music.py:~609`) parked for a dedicated live `/gsd:debug` session once running 24/7.
 
@@ -142,4 +142,4 @@ Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4
 | 2. Personality + AI | 100% | Complete | 2026-04-13 |
 | 2.5. Hardening | 100% | Complete | 2026-06-02 |
 | 3. Alive | 6/6 | Complete   | 2026-06-11 |
-| 4. Scale | 4/5 | In Progress|  |
+| 4. Scale | 5/5 | In Progress|  |
