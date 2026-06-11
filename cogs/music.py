@@ -206,14 +206,20 @@ class HistoryPageView(discord.ui.View):
             title = row.get("title") or "Unknown"
             artist = row.get("artist") or "Unknown Artist"
             user_id = row.get("user_id") or "?"
-            queued_at = row.get("queued_at") or ""
+            queued_at = row.get("queued_at")
 
             # Resolve user_id to display name (fall back to the raw id)
             member = self.guild.get_member(int(user_id)) if user_id.isdigit() else None
             who = member.display_name if member else f"<@{user_id}>"
 
-            # Compact date: show only date portion (YYYY-MM-DD) from "YYYY-MM-DD HH:MM:SS"
-            when = queued_at[:10] if len(queued_at) >= 10 else queued_at
+            # Compact date: show only the date portion. queued_at is a TIMESTAMPTZ
+            # (datetime) from asyncpg now — format it; tolerate legacy str / None.
+            if hasattr(queued_at, "strftime"):
+                when = queued_at.strftime("%Y-%m-%d")
+            elif queued_at:
+                when = str(queued_at)[:10]
+            else:
+                when = "?"
 
             lines.append(f"**{title}** — {artist}\n  ↳ {who} · {when}")
 
@@ -486,8 +492,8 @@ class MusicCog(commands.Cog):
             channel = guild.get_channel(queue._text_channel_id)
             if channel:
                 return channel
-        # Fallback
-        if guild.system_channel:
+        # Fallback — only use system_channel if we can actually post there (WR-06)
+        if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
             return guild.system_channel
         for channel in guild.text_channels:
             if channel.permissions_for(guild.me).send_messages:

@@ -6,6 +6,7 @@ import json
 
 import asyncpg
 
+import config
 from models.queue import LoopMode, Track
 from utils.logger import log
 
@@ -111,20 +112,40 @@ class QueuePersistenceService:
 
             queue = music_cog.get_queue(guild_id)
 
-            # Restore in-memory queue state
-            queue.tracks = [Track.from_dict(t) for t in payload.get("tracks", [])]
-            queue.current_index = payload.get("current_index", 0)
+            # Restore in-memory queue state. Respect the per-guild cap on restore
+            # (CR-03): persisted data could exceed it after a config change or
+            # tampering — truncate defensively rather than bypassing the cap.
+            restored = [Track.from_dict(t) for t in payload.get("tracks", [])]
+            if len(restored) > config.MAX_QUEUE_SIZE_PER_GUILD:
+                log.warning(
+                    "restore_queues: guild %s queue (%d) exceeds cap %d — truncating",
+                    guild_id, len(restored), config.MAX_QUEUE_SIZE_PER_GUILD,
+                )
+                restored = restored[: config.MAX_QUEUE_SIZE_PER_GUILD]
+            queue.tracks = restored
+
+            # Clamp current_index into range (CR-03): a stale or non-int index must
+            # not reach get_current() -> _play_track(None).
+            raw_index = payload.get("current_index", 0)
+            if not isinstance(raw_index, int):
+                raw_index = 0
+            queue.current_index = (
+                max(0, min(raw_index, len(queue.tracks) - 1)) if queue.tracks else 0
+            )
+
             queue.loop_mode = LoopMode(payload.get("loop_mode", "off"))
             queue._text_channel_id = payload.get("text_channel_id")
 
-            # Smart rejoin (D-21): only connect if humans are already in the channel
+            # Smart rejoin (D-21): only connect if humans are already in the channel,
+            # we have something to play, and we are not already connected (CR-03).
             vc_id = payload.get("voice_channel_id")
-            if vc_id and queue.tracks:
+            current = queue.get_current() if queue.tracks else None
+            if vc_id and current is not None and guild.voice_client is None:
                 vc_channel = guild.get_channel(vc_id)
                 if vc_channel and any(not m.bot for m in vc_channel.members):
                     try:
                         await vc_channel.connect()
-                        await music_cog._play_track(guild, queue.get_current())
+                        await music_cog._play_track(guild, current)
                     except Exception as exc:
                         log.warning(
                             "Smart rejoin failed for guild %s: %s", guild_id, exc

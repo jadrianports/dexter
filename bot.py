@@ -32,7 +32,25 @@ if not DISCORD_TOKEN:
     sys.exit(1)
 
 
-def create_bot() -> commands.AutoShardedBot:
+class DexterBot(commands.AutoShardedBot):
+    """AutoShardedBot subclass that tears down the asyncpg pool on shutdown.
+
+    discord.py has no `on_close` event (CR-01) — resource cleanup must override
+    close(), which the library invokes exactly once during shutdown. Without this
+    the pool leaks a full set of Postgres connections on every restart cycle.
+    """
+
+    async def close(self) -> None:
+        pool = getattr(self, "pool", None)
+        if pool is not None:
+            try:
+                await pool.close()
+            except Exception as exc:
+                log.warning("Error closing asyncpg pool on shutdown: %s", exc)
+        await super().close()
+
+
+def create_bot() -> DexterBot:
     """Create and configure the bot instance."""
     intents = discord.Intents.default()
     intents.message_content = True
@@ -40,7 +58,7 @@ def create_bot() -> commands.AutoShardedBot:
     intents.guilds = True
     intents.members = True
 
-    bot = commands.AutoShardedBot(
+    bot = DexterBot(
         command_prefix="!",  # unused but required by commands.Bot
         intents=intents,
         activity=discord.Activity(
@@ -163,13 +181,41 @@ async def on_ready():
     """Initialize services, database, and cogs once the bot is connected."""
     log.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    # One-time init guard (Pitfall 2 / T-04-07): AutoShardedBot fires on_ready on
-    # every shard connection and on reconnects. Only run pool creation, cog loading,
-    # and service wiring once — background-task guards (is_running()) handle those.
-    if hasattr(bot, "_ready_once"):
+    # One-time init guard (Pitfall 2 / T-04-07 + WR-01). AutoShardedBot fires
+    # on_ready on every shard connection and on reconnects. `_ready_done` is set
+    # only AFTER a successful init, so a transient failure (e.g. cold Postgres)
+    # retries on the next ready event instead of dead-locking permanently.
+    # `_ready_initializing` blocks concurrent re-entry while the first init is
+    # still awaiting (multiple shards each fire READY).
+    if getattr(bot, "_ready_done", False) or getattr(bot, "_ready_initializing", False):
         return
-    bot._ready_once = True
+    bot._ready_initializing = True
+    try:
+        await _initialize_once()
+        bot._ready_done = True
+    except Exception:
+        log.exception("on_ready init failed; cleaning up to retry on next ready event")
+        _pool = getattr(bot, "pool", None)
+        if _pool is not None:
+            try:
+                await _pool.close()
+            except Exception:
+                pass
+            if hasattr(bot, "pool"):
+                del bot.pool
+        return
+    finally:
+        bot._ready_initializing = False
 
+    await _post_startup_messages()
+
+
+async def _initialize_once() -> None:
+    """One-time boot init: pool, services, cogs, queue restore.
+
+    Raises on failure so on_ready can clean up and allow a retry (WR-01). Cog
+    loads are idempotent so a retry after a partial init never double-loads.
+    """
     # Database — asyncpg connection pool (Phase 4 / SCALE-02)
     # SECURITY (T-04-05): DSN comes from config.DATABASE_URL (env, git-ignored);
     # the pool object and DSN string are never logged here.
@@ -215,13 +261,14 @@ async def on_ready():
     from services.queue_persistence import QueuePersistenceService
     bot.queue_persistence = QueuePersistenceService(bot.pool)
 
-    # Load cogs
-    await bot.load_extension("cogs.music")
-    await bot.load_extension("cogs.help")
-    await bot.load_extension("cogs.events")
+    # Load cogs (idempotent — a retry after a partial init must not double-load)
+    for _ext in ("cogs.music", "cogs.help", "cogs.events"):
+        if _ext not in bot.extensions:
+            await bot.load_extension(_ext)
     if hasattr(bot, "gemini_service"):
-        await bot.load_extension("cogs.ai")
-        await bot.load_extension("cogs.imagine")
+        for _ext in ("cogs.ai", "cogs.imagine"):
+            if _ext not in bot.extensions:
+                await bot.load_extension(_ext)
 
     # Start background tasks
     if not idle_check.is_running():
@@ -241,10 +288,13 @@ async def on_ready():
     from services.queue_persistence import restore_queues
     await restore_queues(bot)
 
+
+async def _post_startup_messages() -> None:
+    """Post the arrogant startup message to each guild (best-effort)."""
     # Phase 3: Startup message — MUST be last (after all load_extension calls and
     # background-task starts) so commands are registered first (Pitfall 5).
     # Uses STARTUP_MESSAGES (arrogant, D-02) — never self-deprecating.
-    # Wrapped in try/except so a post failure does NOT abort on_ready.
+    # Wrapped in try/except so a post failure does NOT abort startup.
     # SECURITY (T-03-19): allowed_mentions=none() prevents mention injection.
     try:
         from personality.roasts import STARTUP_MESSAGES, pick_random as _pick_random
@@ -257,13 +307,6 @@ async def on_ready():
                 )
     except Exception as exc:
         log.warning("Startup message post failed: %s", exc)
-
-
-@bot.event
-async def on_close():
-    """Clean up resources on shutdown."""
-    if hasattr(bot, "pool"):
-        await bot.pool.close()
 
 
 # ──────────────────────────── GLOBAL ERROR HANDLER ────────────────────────────
