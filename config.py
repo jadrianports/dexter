@@ -3,6 +3,13 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env before reading any environment variables below. config.py is imported
+# (e.g. by bot.py) before that entry point calls load_dotenv(), so without this the
+# import-time getenv calls (DEXTER_CHANNEL_ID, OWNER_ID, etc.) would miss .env values.
+load_dotenv()
+
 # --- Paths ---
 BASE_DIR = Path(__file__).resolve().parent
 AUDIO_CACHE_DIR = BASE_DIR / "data" / "cache"
@@ -47,8 +54,8 @@ AUTO_QUEUE_MAX_ROUNDS = 3
 AUTO_QUEUE_SONGS_PER_ROUND = 3
 
 # --- Phase 3: Personality / Ambient Channel ---
-DEXTER_CHANNEL_ID = int(os.getenv("DEXTER_CHANNEL_ID", "0")) or None
-STREAK_TIMEZONE = os.getenv("STREAK_TIMEZONE", "America/New_York")  # IANA tz; override via env
+DEXTER_CHANNEL_ID = int(os.getenv("DEXTER_CHANNEL_ID") or "0") or None
+STREAK_TIMEZONE = os.getenv("STREAK_TIMEZONE") or "America/New_York"  # IANA tz; override via env
 
 # --- Phase 3: Roasts & Personality ---
 UNPROMPTED_ROAST_CHANCE = 0.30          # 30% on voice join/leave
@@ -73,7 +80,7 @@ HISTORY_PAGE_SIZE = 10                  # songs per history page
 HISTORY_FETCH_LIMIT = 50
 
 # --- Error Logging ---
-ERROR_LOG_CHANNEL_ID = int(os.getenv("ERROR_LOG_CHANNEL_ID", "0")) or None
+ERROR_LOG_CHANNEL_ID = int(os.getenv("ERROR_LOG_CHANNEL_ID") or "0") or None
 
 # --- Bot ---
-OWNER_ID = int(os.getenv("OWNER_ID", "0"))
+OWNER_ID = int(os.getenv("OWNER_ID") or "0")
