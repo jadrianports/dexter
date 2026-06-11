@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import random
 import sys
 
 import aiosqlite
@@ -53,6 +54,107 @@ def create_bot() -> commands.Bot:
 bot = create_bot()
 
 
+# ──────────────────────────── STATUS ROTATION HELPERS ────────────────────────────
+
+# Module-level index counter that increments on each status_rotation tick.
+# Starts at -1 so the first tick yields index 0.
+_status_index: int = -1
+
+
+def _resolve_dexter_channel(guild: discord.Guild) -> discord.TextChannel | None:
+    """Resolve the Dexter ambient channel for a guild via D-09/D-10 fallback.
+
+    Order:
+      1. config.DEXTER_CHANNEL_ID (explicit env designation)
+      2. Last active music channel (MusicCog queue._text_channel_id)
+      3. guild.system_channel (if the bot can send there)
+      4. First writable text channel
+
+    Mirrors EventsCog._get_ambient_channel exactly; kept local to bot.py to
+    preserve file-ownership boundaries (duplication is acceptable per plan).
+    """
+    # Step 1: explicit designation
+    if config.DEXTER_CHANNEL_ID:
+        ch = guild.get_channel(config.DEXTER_CHANNEL_ID)
+        if ch and isinstance(ch, discord.TextChannel):
+            return ch
+
+    # Step 2: last active music channel
+    music_cog = bot.cogs.get("MusicCog")
+    if music_cog is not None:
+        queue = music_cog.get_queue(guild.id)
+        channel_id = getattr(queue, "_text_channel_id", None)
+        if channel_id is not None:
+            ch = guild.get_channel(channel_id)
+            if ch and isinstance(ch, discord.TextChannel):
+                return ch
+
+    # Step 3: system channel
+    if guild.system_channel is not None:
+        perms = guild.system_channel.permissions_for(guild.me)
+        if perms.send_messages:
+            return guild.system_channel
+
+    # Step 4: first writable text channel
+    for ch in guild.text_channels:
+        perms = ch.permissions_for(guild.me)
+        if perms.send_messages:
+            return ch
+
+    return None
+
+
+def _pick_next_status() -> str:
+    """Cycle through the status pool, returning the next status string.
+
+    Pool order (round-robin across all guilds' data):
+      0: current-song line (if anything is playing in any active queue)
+      1: server-count line
+      2: static personality line from STATUS_LINES pool
+      3: seasonal line (if one applies today, else fall through to personality)
+
+    Falls back gracefully if any pool entry is empty or unavailable.
+    """
+    from personality.roasts import STATUS_LINES, pick_random
+    from personality.seasonal import get_seasonal_context
+
+    global _status_index
+    _status_index += 1
+
+    # Build the pool dynamically each tick so it reflects current state.
+    pool: list[str] = []
+
+    # Slot 0: current-song line (pick from any actively-playing queue)
+    current_song_text: str | None = None
+    music_cog = bot.cogs.get("MusicCog")
+    if music_cog is not None:
+        for guild in bot.guilds:
+            queue = music_cog.get_queue(guild.id)
+            track = queue.get_current() if hasattr(queue, "get_current") else None
+            if track and getattr(queue, "is_playing", False):
+                title = getattr(track, "title", None) or str(track)
+                current_song_text = title[:80]  # cap for presence display
+                break
+    if current_song_text:
+        pool.append(current_song_text)
+
+    # Slot 1: server-count line
+    n = len(bot.guilds)
+    pool.append(f"{n} server{'s' if n != 1 else ''} that don't deserve me")
+
+    # Slot 2: static personality line
+    pool.append(pick_random(STATUS_LINES))
+
+    # Slot 3: seasonal line (append only when non-empty)
+    seasonal = get_seasonal_context()
+    if seasonal:
+        # Use a short excerpt — presence name is capped at 128 chars by Discord
+        seasonal_short = seasonal.split(".")[0][:80]
+        pool.append(seasonal_short)
+
+    return pool[_status_index % len(pool)]
+
+
 # ──────────────────────────── SERVICE WIRING ────────────────────────────
 
 
@@ -83,6 +185,14 @@ async def on_ready():
     else:
         log.warning("GEMINI_API_KEY not set — AI features disabled")
 
+    # Phase 3: Lyrics service (wired unconditionally — LyricsService degrades
+    # gracefully when GENIUS_TOKEN is missing: Genius path disabled, AZLyrics still works)
+    # SECURITY (T-03-18): token passed to LyricsService(); never logged here.
+    genius_token = os.getenv("GENIUS_TOKEN")
+    from services.lyrics import LyricsService
+    bot.lyrics_service = LyricsService(genius_token)
+    log.info("Lyrics service initialized")
+
     # Phase 2: Error log channel helper
     from utils.logger import log_to_discord as _log_to_discord
     bot.log_to_discord = lambda embed: _log_to_discord(bot, embed)
@@ -102,6 +212,8 @@ async def on_ready():
         cache_cleanup.start()
     if not ytdlp_update.is_running():
         ytdlp_update.start()
+    if not status_rotation.is_running():
+        status_rotation.start()
 
     log.info("Dexter is ready.")
 
@@ -238,6 +350,26 @@ async def ytdlp_update():
 
 @ytdlp_update.before_loop
 async def before_ytdlp_update():
+    await bot.wait_until_ready()
+
+
+@tasks.loop(seconds=config.STATUS_ROTATION_INTERVAL_SECONDS)
+async def status_rotation():
+    """Rotate bot presence every STATUS_ROTATION_INTERVAL_SECONDS through the status pool."""
+    try:
+        status_text = _pick_next_status()
+        await bot.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.listening,
+                name=status_text,
+            )
+        )
+    except Exception as exc:
+        log.warning("status_rotation: change_presence failed: %s", exc)
+
+
+@status_rotation.before_loop
+async def before_status_rotation():
     await bot.wait_until_ready()
 
 
