@@ -1,7 +1,8 @@
 """Tests for the MusicQueue model."""
 
 import pytest
-from models.queue import Track, LoopMode, MusicQueue
+import config
+from models.queue import Track, LoopMode, MusicQueue, QueueFullError
 
 
 def make_track(video_id: str = "abc123", title: str = "Test Song", **kwargs) -> Track:
@@ -188,3 +189,86 @@ class TestMusicQueueGetCurrent:
         q.add(make_track())
         q.current_index = 5
         assert q.get_current() is None
+
+
+class TestQueueCap:
+    def test_add_raises_when_full(self):
+        q = MusicQueue(guild_id=1)
+        for i in range(config.MAX_QUEUE_SIZE_PER_GUILD):
+            q.add(make_track(video_id=str(i)))
+        with pytest.raises(QueueFullError):
+            q.add(make_track(video_id="overflow"))
+
+    def test_add_returns_index_when_not_full(self):
+        """add() still returns the inserted index (len-1) — preserve existing contract."""
+        q = MusicQueue(guild_id=1)
+        idx = q.add(make_track(video_id="a"))
+        assert idx == 0
+        idx2 = q.add(make_track(video_id="b"))
+        assert idx2 == 1
+
+    def test_add_at_exact_cap_raises(self):
+        """Adding exactly one more than capacity raises QueueFullError."""
+        q = MusicQueue(guild_id=1)
+        for i in range(config.MAX_QUEUE_SIZE_PER_GUILD):
+            q.add(make_track(video_id=str(i)))
+        assert len(q.tracks) == config.MAX_QUEUE_SIZE_PER_GUILD
+        with pytest.raises(QueueFullError):
+            q.add(make_track(video_id="one_too_many"))
+
+
+class TestTrackSerialization:
+    def test_to_dict_round_trip(self):
+        """Track.from_dict(t.to_dict()) == t — lossless round-trip."""
+        t = make_track()
+        assert Track.from_dict(t.to_dict()) == t
+
+    def test_round_trip_with_all_fields(self):
+        """Round-trip with a fully-populated track (all optional fields set)."""
+        t = make_track(
+            video_id="xyz",
+            title="Full Track",
+            artist="Some Artist",
+            url="https://youtube.com/watch?v=xyz",
+            duration_seconds=300,
+            requested_by=99999,
+            was_auto_queued=True,
+            thumbnail="https://img.youtube.com/vi/xyz/0.jpg",
+        )
+        assert Track.from_dict(t.to_dict()) == t
+
+    def test_from_dict_tolerates_missing_artist(self):
+        """from_dict uses .get() for artist — missing key yields None."""
+        d = {
+            "video_id": "v1",
+            "title": "No Artist",
+            "url": "https://youtube.com/watch?v=v1",
+            "duration_seconds": 120,
+            "requested_by": 42,
+        }
+        t = Track.from_dict(d)
+        assert t.artist is None
+
+    def test_from_dict_tolerates_missing_thumbnail(self):
+        """from_dict uses .get() for thumbnail — missing key yields None."""
+        d = {
+            "video_id": "v2",
+            "title": "No Thumb",
+            "url": "https://youtube.com/watch?v=v2",
+            "duration_seconds": 180,
+            "requested_by": 42,
+        }
+        t = Track.from_dict(d)
+        assert t.thumbnail is None
+
+    def test_from_dict_tolerates_missing_was_auto_queued(self):
+        """from_dict defaults was_auto_queued to False when key is absent."""
+        d = {
+            "video_id": "v3",
+            "title": "No AutoQ",
+            "url": "https://youtube.com/watch?v=v3",
+            "duration_seconds": 200,
+            "requested_by": 42,
+        }
+        t = Track.from_dict(d)
+        assert t.was_auto_queued is False
