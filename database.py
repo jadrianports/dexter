@@ -2,11 +2,65 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import aiosqlite
 
+import config
 from utils.logger import log
+
+# ---------------------------------------------------------------------------
+# Pure streak helper functions (no DB, no Discord — unit-testable seam)
+# ---------------------------------------------------------------------------
+
+
+def get_local_date(tz_name: str) -> date:
+    """Return today's date in the given IANA timezone.
+
+    Uses datetime.now(tz=ZoneInfo(tz_name)).date() — NOT date.today() or
+    datetime.utcnow() — so DST and UTC offset are handled correctly (D-17,
+    Pitfall 3).
+    """
+    return datetime.now(tz=ZoneInfo(tz_name)).date()
+
+
+def compute_streak(
+    current_streak: int,
+    last_streak_date: str | None,
+    tz_name: str,
+) -> tuple[int, str]:
+    """Return (new_streak, new_last_date) based on D-18 strict-reset rules.
+
+    Rules:
+    - last_streak_date is None  → first activity; return (1, today_iso)
+    - delta == 0 (same day)     → no-op; return (current_streak, last_streak_date)
+    - delta == 1 (consecutive)  → increment; return (current_streak + 1, today_iso)
+    - delta >= 2 (missed day)   → strict reset; return (1, today_iso)
+
+    Both today and last_streak_date are in the configured timezone (tz_name),
+    ensuring a consistent calendar-day boundary for all users (D-17).
+    """
+    today = get_local_date(tz_name)
+    today_str = today.isoformat()
+
+    if last_streak_date is None:
+        return (1, today_str)
+
+    last = date.fromisoformat(last_streak_date)
+    delta = (today - last).days
+
+    if delta == 0:
+        return (current_streak, last_streak_date)
+    elif delta == 1:
+        return (current_streak + 1, today_str)
+    else:
+        return (1, today_str)
+
+
+# ---------------------------------------------------------------------------
+# Schema
+# ---------------------------------------------------------------------------
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS user_profiles (
