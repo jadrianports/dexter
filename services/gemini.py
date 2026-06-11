@@ -93,7 +93,23 @@ class GeminiService:
 
     def __init__(self, api_key: str | None = None) -> None:
         key = api_key or ""
-        self._client = genai.Client(api_key=key)
+        # Auto-retry transient server overloads (503/500/502/504) with exponential
+        # backoff so a momentary "model overloaded" spike self-heals instead of
+        # failing the request. 429 is deliberately EXCLUDED — rate limits are owned
+        # by our _RateLimiter + priority tiers (a priority-2 429 must fall back, not
+        # silently retry and contend with user /ask requests).
+        self._client = genai.Client(
+            api_key=key,
+            http_options=types.HttpOptions(
+                retry_options=types.HttpRetryOptions(
+                    attempts=3,
+                    initial_delay=1.0,
+                    max_delay=8.0,
+                    exp_base=2.0,
+                    http_status_codes=[500, 502, 503, 504],
+                ),
+            ),
+        )
         self._rate_limiter = _RateLimiter()
 
     async def chat(

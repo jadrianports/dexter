@@ -7,3 +7,7 @@ davey
 google-genai
 pytest
 pytest-asyncio
+tzdata
+lyricsgenius
+beautifulsoup4
+aiohttp

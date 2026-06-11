@@ -10,7 +10,23 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
+from database import (
+    get_history_rows,
+    get_repeat_song_count,
+    update_user_streak,
+)
 from models.queue import Track, LoopMode, MusicQueue
+from models.user_profile import get_user_summary
+from personality.prompts import build_chat_prompt
+from personality.roasts import (
+    pick_random,
+    NO_LYRICS_FOUND,
+    REPEAT_SONG_ROAST_TEMPLATES,
+    MILESTONE_SONG_TEMPLATES,
+    MILESTONE_STREAK_TEMPLATES,
+)
+from services.gemini import GeminiRateLimitError
+from services.lyrics import chunk_lyrics
 from utils import embeds
 from utils.logger import log
 
@@ -50,8 +66,8 @@ class SongSelect(discord.ui.Select):
                     await interaction.followup.send(embed=embeds.error(f"Something went wrong: {e}"))
                 else:
                     await interaction.response.send_message(embed=embeds.error(f"Something went wrong: {e}"))
-            except Exception:
-                pass
+            except discord.DiscordException as notify_error:
+                log.error(f"Failed to deliver select-callback error notice: {notify_error}")
         finally:
             self.view.stop()
 
@@ -92,6 +108,151 @@ class QueuePageView(discord.ui.View):
     async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
+
+
+class LyricsPageView(discord.ui.View):
+    """Paginated lyrics view with Previous/Next buttons.
+
+    Takes pre-chunked pages (list[str]) rather than a MusicQueue — avoids
+    the QueuePageView coupling issue (RESEARCH.md Pitfall 8). Stores a
+    reference to the interaction message so on_timeout can visually disable
+    buttons (RESEARCH.md Open Question 3).
+
+    All sends/edits use allowed_mentions=discord.AllowedMentions.none() as
+    defense-in-depth against mention injection from scraped lyrics (T-03-14).
+    """
+
+    def __init__(self, pages: list[str], title: str, timeout: float = 600.0) -> None:
+        super().__init__(timeout=timeout)
+        self.pages = pages
+        self.title = title
+        self.page = 0
+        self.message: discord.Message | None = None  # set after send
+
+    def _build_embed(self) -> discord.Embed:
+        total = len(self.pages)
+        embed = discord.Embed(
+            title=f"Lyrics — {self.title}",
+            description=self.pages[self.page],
+            color=0x5865F2,  # discord blurple for lyrics
+        )
+        embed.set_footer(text=f"Page {self.page + 1}/{total}")
+        return embed
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
+    async def prev_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        self.page = max(0, self.page - 1)
+        await interaction.response.edit_message(
+            embed=self._build_embed(),
+            view=self,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
+    async def next_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        self.page = min(len(self.pages) - 1, self.page + 1)
+        await interaction.response.edit_message(
+            embed=self._build_embed(),
+            view=self,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+
+class HistoryPageView(discord.ui.View):
+    """Paginated history view with Previous/Next buttons.
+
+    Takes a list of song-history dicts and a guild reference for username
+    resolution (D-16: show title / artist / who-requested / when). All
+    sends/edits use allowed_mentions=discord.AllowedMentions.none() (T-03-14).
+    """
+
+    def __init__(
+        self,
+        rows: list[dict],
+        guild: discord.Guild,
+        timeout: float = 120.0,
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.rows = rows
+        self.guild = guild
+        self.page = 0
+        self.per_page = config.HISTORY_PAGE_SIZE
+        self.message: discord.Message | None = None  # set after send
+
+    def _build_embed(self) -> discord.Embed:
+        total_pages = max(1, (len(self.rows) + self.per_page - 1) // self.per_page)
+        start = self.page * self.per_page
+        end = min(start + self.per_page, len(self.rows))
+        page_rows = self.rows[start:end]
+
+        lines: list[str] = []
+        for row in page_rows:
+            title = row.get("title") or "Unknown"
+            artist = row.get("artist") or "Unknown Artist"
+            user_id = row.get("user_id") or "?"
+            queued_at = row.get("queued_at") or ""
+
+            # Resolve user_id to display name (fall back to the raw id)
+            member = self.guild.get_member(int(user_id)) if user_id.isdigit() else None
+            who = member.display_name if member else f"<@{user_id}>"
+
+            # Compact date: show only date portion (YYYY-MM-DD) from "YYYY-MM-DD HH:MM:SS"
+            when = queued_at[:10] if len(queued_at) >= 10 else queued_at
+
+            lines.append(f"**{title}** — {artist}\n  ↳ {who} · {when}")
+
+        embed = discord.Embed(
+            title=f"Server History ({len(self.rows)} songs)",
+            description="\n\n".join(lines) if lines else "No entries on this page.",
+            color=0x40EC88,
+        )
+        embed.set_footer(text=f"Page {self.page + 1}/{total_pages}")
+        return embed
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
+    async def prev_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        self.page = max(0, self.page - 1)
+        await interaction.response.edit_message(
+            embed=self._build_embed(),
+            view=self,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
+    async def next_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        total_pages = max(1, (len(self.rows) + self.per_page - 1) // self.per_page)
+        self.page = min(total_pages - 1, self.page + 1)
+        await interaction.response.edit_message(
+            embed=self._build_embed(),
+            view=self,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
 
 
 class MusicCog(commands.Cog):
@@ -184,12 +345,29 @@ class MusicCog(commands.Cog):
                     self._on_track_end(guild), self.bot.loop
                 )
 
-        # Stop current playback (old after_callback will fire but see stale generation)
-        if voice_client.is_playing() or voice_client.is_paused():
-            voice_client.stop()
+        # get_source() already spawned an ffmpeg subprocess. If we don't hand it
+        # to voice_client.play(), we must cleanup() it or it orphans.
+        try:
+            # Stop current playback (old after_callback will fire but see stale generation)
+            if voice_client.is_playing() or voice_client.is_paused():
+                voice_client.stop()
 
-        voice_client.play(source, after=after_callback)
-        log.info(f"Playing '{track.title}' in guild {guild.id}")
+            if not voice_client.is_connected():
+                source.cleanup()
+                queue.is_playing = False
+                return
+
+            voice_client.play(source, after=after_callback)
+            log.info(f"Playing '{track.title}' in guild {guild.id}")
+        except Exception:
+            source.cleanup()
+            queue.is_playing = False
+            raise
+
+        # Auto-lyrics (off the playback path): post this song's lyrics to the
+        # lyrics thread if enabled. Never awaited — must not delay playback.
+        if queue.auto_lyrics:
+            asyncio.create_task(self._post_auto_lyrics(guild, track))
 
     async def _on_track_end(self, guild: discord.Guild) -> None:
         """Called when a track finishes naturally. Handles advance/loop/auto-queue logic."""
@@ -218,8 +396,8 @@ class MusicCog(commands.Cog):
                         msg = await channel.fetch_message(queue._now_playing_message_id)
                         await msg.edit(embed=embed)
                         return
-                    except Exception:
-                        pass
+                    except (discord.NotFound, discord.HTTPException) as edit_error:
+                        log.debug(f"Now-playing edit failed, sending a new message: {edit_error}")
                 msg = await channel.send(embed=embed)
                 queue._now_playing_message_id = msg.id
         else:
@@ -234,6 +412,67 @@ class MusicCog(commands.Cog):
                         return  # Don't set is_playing = False; auto-queue will handle it
 
             queue.is_playing = False
+
+    async def _post_auto_lyrics(self, guild: discord.Guild, track: Track) -> None:
+        """Post the current track's lyrics to the per-guild '🎵 lyrics' thread.
+
+        Background task off the playback path. Resolves (or lazily creates) the
+        thread, fetches lyrics via the shared service, posts a paginated view.
+        Any failure is logged and swallowed so playback is never affected.
+        """
+        try:
+            queue = self.get_queue(guild.id)
+            none = discord.AllowedMentions.none()
+
+            # Resolve the lyrics thread; recreate if it was deleted.
+            thread: discord.Thread | None = None
+            if queue.lyrics_thread_id is not None:
+                thread = guild.get_thread(queue.lyrics_thread_id)
+                if thread is None:
+                    try:
+                        fetched = await guild.fetch_channel(queue.lyrics_thread_id)
+                        thread = fetched if isinstance(fetched, discord.Thread) else None
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        thread = None
+            if thread is None:
+                parent = self._get_text_channel(guild)
+                if parent is None:
+                    return  # no music channel known yet -> nowhere to post
+                thread = await parent.create_thread(
+                    name="🎵 lyrics",
+                    type=discord.ChannelType.public_thread,
+                )
+                queue.lyrics_thread_id = thread.id
+
+            lyrics_service = getattr(self.bot, "lyrics_service", None)
+            if lyrics_service is None:
+                return
+            lyrics_text = await lyrics_service.get_lyrics(track.title, track.artist)
+
+            if not lyrics_text:
+                await thread.send(
+                    f"no lyrics for **{track.title}** — instrumental, or genius is slacking.",
+                    allowed_mentions=none,
+                )
+                return
+
+            pages = chunk_lyrics(lyrics_text, config.LYRICS_PAGE_SIZE)
+            if not pages:
+                await thread.send(
+                    f"no lyrics for **{track.title}** — instrumental, or genius is slacking.",
+                    allowed_mentions=none,
+                )
+                return
+
+            view = LyricsPageView(pages, title=track.title)
+            msg = await thread.send(
+                embed=view._build_embed(),
+                view=view,
+                allowed_mentions=none,
+            )
+            view.message = msg
+        except Exception as exc:
+            log.warning(f"Auto-lyrics post failed in guild {guild.id}: {exc}")
 
     def _get_text_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
         """Get the text channel to post messages in (uses the channel where commands were last used)."""
@@ -295,8 +534,98 @@ class MusicCog(commands.Cog):
             embed = embeds.song_queued(track, position)
             await interaction.followup.send(embed=embed)
 
+    async def _get_top_artist(self, user_id: str) -> str | None:
+        """Return the user's top artist from user_artist_counts, or None."""
+        try:
+            cursor = await self.db.execute(
+                """SELECT artist FROM user_artist_counts
+                   WHERE user_id = ?
+                   ORDER BY play_count DESC LIMIT 1""",
+                (user_id,),
+            )
+            row = await cursor.fetchone()
+            return row["artist"] if row else None
+        except Exception as exc:
+            log.debug("Top-artist lookup failed for %s: %s", user_id, exc)
+            return None
+
+    async def _post_music_roast(
+        self, guild: discord.Guild, line: str
+    ) -> None:
+        """Post a roast line to the music channel with allowed_mentions=none (D-11, T-03-14)."""
+        channel = self._get_text_channel(guild)
+        if channel is None:
+            return
+        try:
+            await channel.send(line, allowed_mentions=discord.AllowedMentions.none())
+        except discord.HTTPException as exc:
+            log.debug("Music roast post failed: %s", exc)
+
+    async def _build_roast_line(
+        self,
+        user_id: str,
+        scenario_content: str,
+        fallback_pool: list[str],
+        fallback_kwargs: dict,
+    ) -> str:
+        """Attempt a priority-2 Gemini roast; fall back to template on any failure.
+
+        Mirrors EventsCog._generate_ambient_roast but scoped to music-path earned
+        roasts (D-08, D-14). Uses the locked few-shot DEXTER voice (D-06) via
+        build_chat_prompt. priority=2 only — never contends with /ask (D-08).
+        """
+        # Prepare template fallback first (guaranteed path, PERS-04/PERS-09)
+        fallback_line = pick_random(fallback_pool)
+        if fallback_kwargs:
+            try:
+                fallback_line = fallback_line.format(**fallback_kwargs)
+            except KeyError:
+                pass  # template without matching placeholder — use as-is
+
+        gemini_service = getattr(self.bot, "gemini_service", None)
+        if gemini_service is None:
+            return fallback_line
+
+        try:
+            db = getattr(self.bot, "db", None)
+            user_summary: str | None = None
+            if db is not None:
+                try:
+                    user_summary = await get_user_summary(db, user_id)
+                except Exception as db_err:
+                    log.debug("Music roast: taste lookup failed for %s: %s", user_id, db_err)
+
+            user_context = user_summary or "No data on this user yet."
+            system_prompt = build_chat_prompt("normal", user_context, "")
+            conversation = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"{scenario_content}. respond with exactly one short roast line "
+                        "in your voice — under 120 characters, lowercase, no preamble."
+                    ),
+                }
+            ]
+
+            result = await gemini_service.chat(system_prompt, conversation, priority=2)
+
+            if result:
+                result = result.strip()
+                if len(result) > 500:
+                    result = result[:497] + "..."
+                if result and result[0].isupper():
+                    result = result[0].lower() + result[1:]
+                return result
+
+        except GeminiRateLimitError:
+            log.debug("Music roast: Gemini rate limited, using template")
+        except Exception as exc:
+            log.debug("Music roast: Gemini failed: %s", exc)
+
+        return fallback_line
+
     async def _log_track(self, interaction: discord.Interaction, track: Track) -> None:
-        """Log a queued track to all database tables."""
+        """Log a queued track to all database tables, then fire earned roasts."""
         from database import log_song, update_artist_count, update_user_profile, increment_daily_stat
 
         await log_song(
@@ -309,9 +638,98 @@ class MusicCog(commands.Cog):
             duration=track.duration_seconds,
         )
         await update_artist_count(self.db, user_id=str(interaction.user.id), artist=track.artist)
+
+        # update_user_profile increments total_songs_queued — fetch the new count after
         await update_user_profile(self.db, user_id=str(interaction.user.id), username=interaction.user.display_name)
+
         await increment_daily_stat(self.db, "total_songs_played")
         await increment_daily_stat(self.db, "total_commands")
+
+        # Fetch new total_songs_queued for milestone check
+        try:
+            cursor = await self.db.execute(
+                "SELECT total_songs_queued FROM user_profiles WHERE user_id = ?",
+                (str(interaction.user.id),),
+            )
+            row = await cursor.fetchone()
+            new_total: int = row["total_songs_queued"] if row else 0
+        except Exception as exc:
+            log.debug("Could not fetch total_songs_queued: %s", exc)
+            new_total = 0
+
+        # ── PERS-04: Repeat-song roast (D-08, D-14 always fires at threshold) ──
+        try:
+            count = await get_repeat_song_count(
+                self.db,
+                guild_id=str(interaction.guild.id),
+                user_id=str(interaction.user.id),
+                title=track.title,
+            )
+            if count >= config.REPEAT_SONG_ROAST_THRESHOLD:
+                top_artist = await self._get_top_artist(str(interaction.user.id))
+                scenario = (
+                    f"{interaction.user.display_name} has queued '{track.title}' "
+                    f"{count} times today"
+                    + (f", their top artist is {top_artist}" if top_artist else "")
+                )
+                line = await self._build_roast_line(
+                    user_id=str(interaction.user.id),
+                    scenario_content=scenario,
+                    fallback_pool=REPEAT_SONG_ROAST_TEMPLATES,
+                    fallback_kwargs={
+                        "name": interaction.user.display_name,
+                        "title": track.title,
+                        "count": count,
+                    },
+                )
+                await self._post_music_roast(interaction.guild, line)
+        except Exception as exc:
+            log.debug("Repeat-song roast failed (non-blocking): %s", exc)
+
+        # ── PERS-09: Song-count milestone roast ──
+        try:
+            if new_total in config.MILESTONE_SONG_THRESHOLDS:
+                top_artist = await self._get_top_artist(str(interaction.user.id))
+                scenario = (
+                    f"{interaction.user.display_name} just queued their {new_total}th song"
+                    + (f", their top artist is {top_artist}" if top_artist else "")
+                )
+                line = await self._build_roast_line(
+                    user_id=str(interaction.user.id),
+                    scenario_content=scenario,
+                    fallback_pool=MILESTONE_SONG_TEMPLATES,
+                    fallback_kwargs={"count": new_total},
+                )
+                await self._post_music_roast(interaction.guild, line)
+        except Exception as exc:
+            log.debug("Song-count milestone roast failed (non-blocking): %s", exc)
+
+        # ── PERS-09: Streak update + streak-day milestone roast ──
+        try:
+            new_streak, longest, streak_milestone = await update_user_streak(
+                self.db,
+                user_id=str(interaction.user.id),
+                tz_name=config.STREAK_TIMEZONE,
+            )
+            if streak_milestone is not None:
+                top_artist = await self._get_top_artist(str(interaction.user.id))
+                scenario = (
+                    f"{interaction.user.display_name} just hit a {streak_milestone}-day streak"
+                    + (f", their top artist is {top_artist}" if top_artist else "")
+                    + (f", their record is {longest} days" if longest else "")
+                )
+                line = await self._build_roast_line(
+                    user_id=str(interaction.user.id),
+                    scenario_content=scenario,
+                    fallback_pool=MILESTONE_STREAK_TEMPLATES,
+                    fallback_kwargs={
+                        "days": new_streak,
+                        "record": longest,
+                    },
+                )
+                await self._post_music_roast(interaction.guild, line)
+        except Exception as exc:
+            log.debug("Streak/milestone roast failed (non-blocking): %s", exc)
 
     # ──────────────────────────── SLASH COMMANDS ────────────────────────────
 
@@ -373,7 +791,8 @@ class MusicCog(commands.Cog):
                                 count += 1
                                 if first_track is None:
                                     first_track = track
-                            except Exception:
+                            except (KeyError, TypeError, AttributeError) as entry_error:
+                                log.warning(f"Skipping malformed playlist entry: {entry_error}")
                                 continue
 
                         msg = f"Queued {count} tracks from playlist."
@@ -388,8 +807,17 @@ class MusicCog(commands.Cog):
 
                         await interaction.followup.send(msg)
                         return
+                    else:
+                        await interaction.followup.send(
+                            embed=embeds.error("That playlist came back empty — nothing to queue.")
+                        )
+                        return
                 except Exception as e:
-                    log.error(f"Playlist extraction failed: {e}")
+                    log.error(f"Playlist extraction failed: {e}", exc_info=True)
+                    await interaction.followup.send(
+                        embed=embeds.error("Couldn't load that playlist. Try a direct video URL.")
+                    )
+                    return
 
             # Direct URL — single video
             try:
@@ -577,6 +1005,122 @@ class MusicCog(commands.Cog):
         await self._play_track(interaction.guild, track)
         embed = embeds.now_playing(track, queue)
         await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="autolyrics", description="Auto-post each song's lyrics to a lyrics thread")
+    @app_commands.choices(mode=[
+        app_commands.Choice(name="on", value="on"),
+        app_commands.Choice(name="off", value="off"),
+    ])
+    async def autolyrics(
+        self, interaction: discord.Interaction, mode: app_commands.Choice[str]
+    ) -> None:
+        """Toggle auto-lyrics for this server (in-memory; resets on restart)."""
+        queue = self.get_queue(interaction.guild.id)
+        none = discord.AllowedMentions.none()
+        if mode.value == "on":
+            queue.auto_lyrics = True
+            await interaction.response.send_message(
+                "fine. i'll narrate your questionable taste in a thread. enjoy.",
+                allowed_mentions=none,
+            )
+        else:
+            queue.auto_lyrics = False
+            await interaction.response.send_message(
+                "auto-lyrics off. blessed silence.",
+                allowed_mentions=none,
+            )
+
+    @app_commands.command(name="lyrics", description="Show lyrics for the current song")
+    @app_commands.checks.cooldown(1, float(config.LYRICS_COOLDOWN_SECONDS))
+    async def lyrics(self, interaction: discord.Interaction) -> None:
+        """Fetch and paginate lyrics for the current song (LYRIC-01, D-15).
+
+        Defers before the network call (Genius fetch can take 2-5s).
+        Falls back to NO_LYRICS_FOUND personality error when nothing is
+        playing or neither Genius nor AZLyrics returns lyrics (D-15).
+        self.bot.lyrics_service is wired by plan 03-06 on_ready — guarded
+        with hasattr so a cold-start without the service degrades cleanly.
+        All sends use allowed_mentions=none (T-03-14 / defense-in-depth).
+        """
+        queue = self.get_queue(interaction.guild.id)
+        track = queue.get_current()
+
+        if not track or not queue.is_playing:
+            return await interaction.response.send_message(
+                embed=embeds.error("nothing is playing. queue something first."),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer()
+
+        # Guard: lyrics_service wired by 03-06; degrade if absent
+        lyrics_service = getattr(self.bot, "lyrics_service", None)
+        if lyrics_service is None:
+            await interaction.followup.send(
+                pick_random(NO_LYRICS_FOUND),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
+
+        lyrics_text = await lyrics_service.get_lyrics(track.title, track.artist)
+
+        if not lyrics_text:
+            await interaction.followup.send(
+                pick_random(NO_LYRICS_FOUND),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
+
+        pages = chunk_lyrics(lyrics_text, config.LYRICS_PAGE_SIZE)
+        if not pages:
+            await interaction.followup.send(
+                pick_random(NO_LYRICS_FOUND),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
+
+        view = LyricsPageView(pages, title=track.title)
+        msg = await interaction.followup.send(
+            embed=view._build_embed(),
+            view=view,
+            allowed_mentions=discord.AllowedMentions.none(),
+            wait=True,
+        )
+        view.message = msg
+
+    @app_commands.command(name="history", description="Show recently queued songs")
+    @app_commands.checks.cooldown(1, 5.0)
+    async def history(self, interaction: discord.Interaction) -> None:
+        """Show server-wide recent song history with pagination (HIST-01, D-16).
+
+        Fetches up to config.HISTORY_FETCH_LIMIT rows from song_history,
+        paginated at config.HISTORY_PAGE_SIZE per page. Each row shows:
+        title / artist / who requested (username or fallback) / when (date).
+        All sends use allowed_mentions=none (T-03-14).
+        """
+        rows = await get_history_rows(
+            self.db,
+            guild_id=str(interaction.guild.id),
+            limit=int(config.HISTORY_FETCH_LIMIT),
+        )
+
+        if not rows:
+            return await interaction.response.send_message(
+                embed=embeds.error("no history yet. queue something."),
+                ephemeral=True,
+            )
+
+        view = HistoryPageView(rows, guild=interaction.guild)
+        msg = await interaction.response.send_message(
+            embed=view._build_embed(),
+            view=view,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        # Fetch the sent message to store on the view for on_timeout
+        try:
+            view.message = await interaction.original_response()
+        except discord.HTTPException:
+            pass
 
     # ──────────────────────────── VOICE EVENTS ────────────────────────────
 

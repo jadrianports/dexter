@@ -40,6 +40,10 @@ class MusicQueue:
         self._now_playing_message_id: int | None = None
         self._play_generation: int = 0  # incremented each time a new track starts
         self._text_channel_id: int | None = None  # channel where commands are used
+        # Auto-lyrics: per-guild, in-memory. Deliberately NOT reset by clear() —
+        # it's a server preference, not playback state. Resets only on restart.
+        self.auto_lyrics: bool = False
+        self.lyrics_thread_id: int | None = None  # reused "🎵 lyrics" thread id
 
     def add(self, track: Track) -> int:
         """Add a track to the end of the queue. Returns its index."""

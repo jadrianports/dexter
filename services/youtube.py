@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 import functools
 import re
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 from yt_dlp import YoutubeDL
@@ -13,6 +16,28 @@ import config
 from utils.logger import log
 
 _URL_PATTERN = re.compile(r"^https?://")
+
+# On-failure self-update throttle: attempt at most once per hour.
+_last_ytdlp_update: float = 0.0
+_UPDATE_THROTTLE_SECONDS: float = 3600.0
+
+
+def update_ytdlp() -> bool:
+    """Update yt-dlp via pip. Returns True on success. Safe to call from a thread."""
+    global _last_ytdlp_update
+    _last_ytdlp_update = time.monotonic()  # throttle on-failure retries after any update
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-U", "yt-dlp"],
+            check=True,
+            capture_output=True,
+            timeout=120,
+        )
+        log.info("yt-dlp updated successfully")
+        return True
+    except Exception as e:
+        log.error(f"yt-dlp update failed: {e}")
+        return False
 
 SEARCH_OPTS = {
     "quiet": True,
@@ -150,6 +175,23 @@ class YouTubeService:
             return None
         except Exception as e:
             log.error(f"Download failed for {video_id}: {e}")
+            # Self-heal: yt-dlp breaks often. Update (throttled) and retry once.
+            global _last_ytdlp_update
+            now = time.monotonic()
+            if now - _last_ytdlp_update < _UPDATE_THROTTLE_SECONDS:
+                return None
+            _last_ytdlp_update = now
+            log.warning(f"Attempting yt-dlp self-update after download failure for {video_id}")
+            if not update_ytdlp():
+                return None
+            try:
+                with YoutubeDL(DOWNLOAD_OPTS) as ydl:
+                    ydl.download([url])
+                if cached.exists():
+                    log.info(f"Downloaded {video_id} after yt-dlp update")
+                    return cached
+            except Exception as retry_error:
+                log.error(f"Retry after update failed for {video_id}: {retry_error}")
             return None
 
     async def async_search(self, query: str, count: int | None = None) -> list[dict]:

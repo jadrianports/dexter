@@ -40,6 +40,57 @@ class TestBuildChatPrompt:
         assert "sarcastic" in result.lower()
 
 
+class TestDexterSystemPromptStructure:
+    """Assertions that the rewritten DEXTER_SYSTEM_PROMPT meets D-06 requirements."""
+
+    def test_contains_all_four_format_placeholders(self):
+        """build_chat_prompt depends on all four placeholder tokens."""
+        for token in ["{max_length}", "{mood_context}", "{user_context}", "{seasonal_context}"]:
+            assert token in DEXTER_SYSTEM_PROMPT, (
+                f"Missing placeholder {token!r} in DEXTER_SYSTEM_PROMPT"
+            )
+
+    def test_contains_at_least_four_dexter_exemplar_markers(self):
+        """D-06: few-shot section requires ≥4 DEXTER: exemplar markers."""
+        count = DEXTER_SYSTEM_PROMPT.count("DEXTER:")
+        assert count >= 4, (
+            f"Expected ≥4 'DEXTER:' markers in system prompt; found {count}"
+        )
+
+    def test_contains_canonical_formula_line(self):
+        """The locked canonical exemplar from CONTEXT.md must be present."""
+        assert "impressive commitment to being boring" in DEXTER_SYSTEM_PROMPT
+
+    def test_banned_mode_language_present(self):
+        """Explicit banned-mode rules must be stated in the prompt."""
+        lower = DEXTER_SYSTEM_PROMPT.lower()
+        # At least one of the banned-mode markers must appear
+        assert any(
+            phrase in lower
+            for phrase in ["banned", "never reference", "do not", "fourth wall", "self-deprecat"]
+        ), "Banned-mode rules not found in DEXTER_SYSTEM_PROMPT"
+
+    def test_build_chat_prompt_no_unfilled_placeholders(self):
+        """build_chat_prompt must not leave any of the four known keys unfilled."""
+        result = build_chat_prompt("normal", "top artist: drake", "It's December.")
+        assert result, "build_chat_prompt returned empty string"
+        for key in ["max_length", "mood_context", "user_context", "seasonal_context"]:
+            assert "{" + key + "}" not in result, (
+                f"Unfilled placeholder {{{key}}} in build_chat_prompt output"
+            )
+
+    def test_build_chat_prompt_no_key_error(self):
+        """build_chat_prompt must not raise KeyError on valid inputs."""
+        # Would raise KeyError if any literal { } in the prompt are unescaped
+        try:
+            result = build_chat_prompt("normal", None, "")
+            assert result
+        except KeyError as e:
+            raise AssertionError(
+                f"build_chat_prompt raised KeyError: {e} — check for unescaped braces in DEXTER_SYSTEM_PROMPT"
+            )
+
+
 class TestBuildRecommendationPrompt:
     def test_includes_song_list(self):
         songs = [
