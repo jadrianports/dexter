@@ -112,11 +112,11 @@ class EventsCog(commands.Cog):
 
         try:
             # Reuse the Phase-2 taste-summary path (same helper /ask uses)
-            db = getattr(self.bot, "db", None)
+            pool = getattr(self.bot, "pool", None)
             user_summary: str | None = None
-            if db is not None:
+            if pool is not None:
                 try:
-                    user_summary = await get_user_summary(db, str(member.id))
+                    user_summary = await get_user_summary(pool, str(member.id))
                 except Exception as db_err:
                     log.debug(f"Ambient roast: taste lookup failed for {member.id}: {db_err}")
 

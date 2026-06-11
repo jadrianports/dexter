@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import aiosqlite
+import asyncpg
 
 import config
 from database import get_daily_command_count
@@ -33,9 +33,9 @@ def get_server_state(
     return states[guild_id]
 
 
-async def get_mood(db: aiosqlite.Connection) -> str:
+async def get_mood(pool: asyncpg.Pool) -> str:
     """Determine the bot's current mood based on today's command count."""
-    count = await get_daily_command_count(db)
+    count = await get_daily_command_count(pool)
     if count <= config.MOOD_NORMAL_THRESHOLD:
         return "normal"
     if count <= config.MOOD_TIRED_THRESHOLD:
