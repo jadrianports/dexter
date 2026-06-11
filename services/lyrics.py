@@ -38,6 +38,30 @@ _FEAT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Strip YouTube/upload noise tags like (Official Audio), [HD], (Lyric Video),
+# (Remastered 2009), (Visualizer) — only brackets that CONTAIN a noise keyword,
+# so genuine title parentheticals (e.g. "(When September Ends)") are preserved.
+_NOISE_RE = re.compile(
+    r"\s*[\(\[][^\)\]]*\b(?:"
+    r"official|audio|video|music\s*video|m/?v|lyrics?|lyric\s*video|visuali[sz]er|"
+    r"hd|hq|4k|8k|remaster(?:ed)?|explicit|clean|live|performance|"
+    r"color\s*coded|sub(?:title|bed|s)?|eng\s*sub|full\s*album"
+    r")\b[^\)\]]*[\)\]]",
+    re.IGNORECASE,
+)
+
+# A provided "artist" that is really a YouTube channel name, not the artist
+# (e.g. "Trackateering Music", "ArtistVEVO", "Artist - Topic", "XYZ Records").
+_JUNK_ARTIST_RE = re.compile(
+    r"(?:vevo\b|-\s*topic\b|\bofficial\b|\bmusic\b|\brecords\b|"
+    r"\bentertainment\b|\bchannel\b|\bnetwork\b|\bproductions?\b)",
+    re.IGNORECASE,
+)
+
+# "Artist - Title" separator (hyphen/en-dash/em-dash, space-padded) and trim chars.
+_DASH_SPLIT_RE = re.compile(r"\s[-–—]\s")
+_DASH_TRIM = " -–—\t"
+
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -45,13 +69,50 @@ _FEAT_RE = re.compile(
 
 
 def build_genius_search_query(title: str, artist: str | None) -> tuple[str, str]:
-    """Return (cleaned_title, artist) for lyricsgenius search_song call.
+    """Return a (title, artist) cleaned for a lyricsgenius search_song() call.
 
-    Strips (feat. X) / (Remix) / (Radio Edit) suffixes from title and
-    falls back to empty string when artist is None/empty.
+    Real YouTube titles are messy and the uploader/"artist" field is unreliable —
+    it can be a label, a "- Topic" auto-channel, a VEVO channel, or a random
+    re-uploader (e.g. "Rodrigo Lima", "LatinHype"). So:
+      - strip feat/remix and noise tags ("(Official Audio)", "[HD]", "(Lyric Video)"),
+      - if the title is "Artist - Title", the artist baked into the TITLE wins and
+        the uploader field is ignored entirely,
+      - otherwise use the uploader only if it isn't an obvious junk channel.
+
+    e.g. ("Arctic Monkeys - Suck It And See", "Rodrigo Lima") -> ("Suck It And See", "Arctic Monkeys")
+         ("Billy Joel - Vienna (Audio) (Official Audio)", "Trackateering Music") -> ("Vienna", "Billy Joel")
+    Falls back gracefully: empty title -> ("", "").
     """
-    cleaned = _FEAT_RE.sub("", title).strip()
-    return (cleaned, artist or "")
+    t = _NOISE_RE.sub("", _FEAT_RE.sub("", title or ""))
+    t = re.sub(r"\s+", " ", t).strip(_DASH_TRIM)
+    a = (artist or "").strip()
+
+    parts = _DASH_SPLIT_RE.split(t, maxsplit=1)
+    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+        # "Artist - Title": the embedded artist is canonical; ignore the unreliable
+        # uploader field (could be a random re-uploader, not the real artist).
+        a, t = parts[0].strip(_DASH_TRIM), parts[1].strip(_DASH_TRIM)
+    elif (not a) or _JUNK_ARTIST_RE.search(a):
+        # No "Artist - Title" in the title; drop an empty/junk-channel uploader so
+        # we search the title alone instead of by a channel name.
+        a = ""
+
+    return (t.strip(_DASH_TRIM), a.strip(_DASH_TRIM))
+
+
+def _artist_matches(wanted: str, got: str) -> bool:
+    """Loose artist-equality check for validating a Genius search result.
+
+    Genius can return an unrelated song for a title it doesn't have. When we
+    searched with a specific artist, require the matched song's artist to loosely
+    match (normalized substring either direction) before trusting the lyrics.
+    Returns True when either side is empty (nothing to validate against).
+    """
+    w = re.sub(r"[^a-z0-9]", "", (wanted or "").lower())
+    g = re.sub(r"[^a-z0-9]", "", (got or "").lower())
+    if not w or not g:
+        return True
+    return w in g or g in w
 
 
 def build_azlyrics_url(artist: str, song: str) -> str:
@@ -151,9 +212,11 @@ class LyricsService:
 
     def __init__(self, genius_token: str | None) -> None:
         if genius_token:
+            # NOTE: lyricsgenius 3.x removed the `verbose` kwarg — passing it raises
+            # TypeError at init, which (with GENIUS_TOKEN set) aborted on_ready before
+            # cogs loaded. Keep only kwargs valid in the installed 3.x signature.
             self._genius = Genius(
                 genius_token,
-                verbose=False,               # suppress stdout output (Pitfall 7)
                 remove_section_headers=True,  # strip [Verse] / [Chorus] (Pitfall 2)
                 retries=1,                    # limit retry amplification (T-03-08)
                 timeout=5,                    # Genius() timeout in seconds (T-03-08)
@@ -163,11 +226,20 @@ class LyricsService:
             log.warning("GENIUS_TOKEN not set — Genius lyrics disabled")
 
     async def get_lyrics(self, title: str, artist: str | None) -> str | None:
-        """Fetch lyrics: Genius first, AZLyrics fallback. Returns None if both fail."""
-        lyrics = await self._get_genius(title, artist)
+        """Fetch lyrics: Genius first, AZLyrics fallback. Returns None if both fail.
+
+        Cleans the (often messy YouTube) title/artist ONCE here via
+        build_genius_search_query, so BOTH the Genius search and the AZLyrics
+        URL use the same normalized query (previously AZLyrics used the raw
+        title, which produced wrong matches).
+        """
+        q_title, q_artist = build_genius_search_query(title, artist)
+        if not q_title:
+            return None
+        lyrics = await self._get_genius(q_title, q_artist)
         if lyrics:
             return lyrics
-        return await self._get_azlyrics(title, artist)
+        return await self._get_azlyrics(q_title, q_artist)
 
     async def _get_genius(self, title: str, artist: str | None) -> str | None:
         """Search Genius for lyrics using asyncio.to_thread (non-blocking).
@@ -184,6 +256,19 @@ class LyricsService:
             )
             if not song or not song.lyrics:
                 return None
+            # Safety net: Genius can return a confidently-wrong song for a title it
+            # doesn't have. If we searched with a specific artist, require the matched
+            # artist to loosely match — otherwise treat it as "not found" (a
+            # personality "no lyrics" line beats the wrong song's lyrics).
+            matched_artist = getattr(song, "artist", "")
+            if query_artist and isinstance(matched_artist, str) and matched_artist:
+                if not _artist_matches(query_artist, matched_artist):
+                    log.info(
+                        "Genius returned a non-matching artist (wanted %r, got %r) — rejecting",
+                        query_artist,
+                        matched_artist,
+                    )
+                    return None
             # Strip trailing "EmbedXX" / contributor lines (Pitfall 2)
             raw = song.lyrics.split("Embed")[0].strip()
             return sanitize_lyrics(raw) if raw else None

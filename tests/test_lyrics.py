@@ -57,6 +57,68 @@ class TestBuildGeniusSearchQuery:
         assert isinstance(result, tuple)
         assert len(result) == 2
 
+    def test_youtube_artist_title_split_with_junk_channel(self):
+        """The real bug: 'Billy Joel - Vienna (Audio) (Official Audio)' / channel name."""
+        from services.lyrics import build_genius_search_query
+
+        title, artist = build_genius_search_query(
+            "Billy Joel - Vienna (Audio) (Official Audio)", "Trackateering Music"
+        )
+        assert title == "Vienna"
+        assert artist == "Billy Joel"
+
+    def test_strips_official_music_video_and_vevo_channel(self):
+        from services.lyrics import build_genius_search_query
+
+        title, artist = build_genius_search_query(
+            "Rick Astley - Never Gonna Give You Up (Official Music Video)", "RickAstleyVEVO"
+        )
+        assert title == "Never Gonna Give You Up"
+        assert artist == "Rick Astley"
+
+    def test_topic_channel_artist_ignored(self):
+        from services.lyrics import build_genius_search_query
+
+        title, artist = build_genius_search_query("Adele - Hello", "Adele - Topic")
+        assert title == "Hello"
+        assert artist == "Adele"
+
+    def test_noise_tag_stripped_but_real_parenthetical_kept(self):
+        from services.lyrics import build_genius_search_query
+
+        t1, _ = build_genius_search_query("Hello (Official Video)", "Adele")
+        assert t1 == "Hello"
+        t2, _ = build_genius_search_query("Wake Me Up (When September Ends)", "Green Day")
+        assert "(When September Ends)" in t2
+
+    def test_reliable_artist_kept_when_title_has_artist_prefix(self):
+        from services.lyrics import build_genius_search_query
+
+        title, artist = build_genius_search_query("Drake - God's Plan (Official Audio)", "Drake")
+        assert title == "God's Plan"
+        assert artist == "Drake"
+
+    def test_random_reuploader_channel_ignored_for_split_title(self):
+        """The deeper bug: a random re-uploader name must NOT be used as the artist
+        when the title already carries 'Artist - Title' (e.g. Rodrigo Lima / LatinHype)."""
+        from services.lyrics import build_genius_search_query
+
+        title, artist = build_genius_search_query("Arctic Monkeys - Suck It And See", "Rodrigo Lima")
+        assert title == "Suck It And See"
+        assert artist == "Arctic Monkeys"
+
+        title2, artist2 = build_genius_search_query("Joji - Glimpse Of Us", "LatinHype")
+        assert title2 == "Glimpse Of Us"
+        assert artist2 == "Joji"
+
+    def test_artist_matches_helper(self):
+        from services.lyrics import _artist_matches
+
+        assert _artist_matches("Arctic Monkeys", "Arctic Monkeys")
+        assert _artist_matches("Joji", "Joji (Ft. Diplo)")
+        assert not _artist_matches("Arctic Monkeys", "Rodrigo Lima")
+        assert _artist_matches("", "anything")  # nothing to validate -> allow
+
 
 class TestBuildAZLyricsUrl:
     """Tests for build_azlyrics_url(artist, song)."""
@@ -309,6 +371,16 @@ class TestLyricsServiceInit:
             mock_genius_cls.assert_called_once()
             call_args = mock_genius_cls.call_args
             assert call_args[0][0] == "fake-token-value"
+
+    def test_valid_token_constructs_against_real_genius(self):
+        """Regression: constructing with a token must NOT raise against the REAL
+        lyricsgenius API (do not mock Genius here). The mocked test above hid a
+        lyricsgenius 3.x signature change — the `verbose` kwarg was removed —
+        which raised TypeError at init and aborted on_ready before cogs loaded."""
+        from services.lyrics import LyricsService
+
+        service = LyricsService("dummy-token-never-used-for-network")
+        assert service._genius is not None
 
     @pytest.mark.asyncio
     async def test_get_genius_returns_none_when_no_token(self):
