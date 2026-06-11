@@ -14,8 +14,11 @@ from database import (
     get_history_rows,
     get_repeat_song_count,
     update_user_streak,
+    log_track_batch,
+    increment_daily_stat,
+    mark_song_skipped,
 )
-from models.queue import Track, LoopMode, MusicQueue
+from models.queue import Track, LoopMode, MusicQueue, QueueFullError
 from models.user_profile import get_user_summary
 from personality.prompts import build_chat_prompt
 from personality.roasts import (
@@ -271,8 +274,8 @@ class MusicCog(commands.Cog):
         return self.bot.audio_service
 
     @property
-    def db(self):
-        return self.bot.db
+    def pool(self):
+        return self.bot.pool
 
     def get_queue(self, guild_id: int) -> MusicQueue:
         """Get or create the MusicQueue for a guild."""
@@ -537,13 +540,13 @@ class MusicCog(commands.Cog):
     async def _get_top_artist(self, user_id: str) -> str | None:
         """Return the user's top artist from user_artist_counts, or None."""
         try:
-            cursor = await self.db.execute(
-                """SELECT artist FROM user_artist_counts
-                   WHERE user_id = ?
-                   ORDER BY play_count DESC LIMIT 1""",
-                (user_id,),
-            )
-            row = await cursor.fetchone()
+            async with self.bot.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT artist FROM user_artist_counts"
+                    " WHERE user_id = $1"
+                    " ORDER BY play_count DESC LIMIT 1",
+                    user_id,
+                )
             return row["artist"] if row else None
         except Exception as exc:
             log.debug("Top-artist lookup failed for %s: %s", user_id, exc)
@@ -587,11 +590,11 @@ class MusicCog(commands.Cog):
             return fallback_line
 
         try:
-            db = getattr(self.bot, "db", None)
+            pool = getattr(self.bot, "pool", None)
             user_summary: str | None = None
-            if db is not None:
+            if pool is not None:
                 try:
-                    user_summary = await get_user_summary(db, user_id)
+                    user_summary = await get_user_summary(pool, user_id)
                 except Exception as db_err:
                     log.debug("Music roast: taste lookup failed for %s: %s", user_id, db_err)
 
@@ -626,32 +629,28 @@ class MusicCog(commands.Cog):
 
     async def _log_track(self, interaction: discord.Interaction, track: Track) -> None:
         """Log a queued track to all database tables, then fire earned roasts."""
-        from database import log_song, update_artist_count, update_user_profile, increment_daily_stat
-
-        await log_song(
-            self.db,
+        # D-06 / SCALE-01: all 3 per-/play writes in ONE transaction via log_track_batch
+        await log_track_batch(
+            self.bot.pool,
             guild_id=str(interaction.guild.id),
             user_id=str(interaction.user.id),
+            username=interaction.user.display_name,
             title=track.title,
             artist=track.artist,
             url=track.url,
             duration=track.duration_seconds,
         )
-        await update_artist_count(self.db, user_id=str(interaction.user.id), artist=track.artist)
 
-        # update_user_profile increments total_songs_queued — fetch the new count after
-        await update_user_profile(self.db, user_id=str(interaction.user.id), username=interaction.user.display_name)
+        await increment_daily_stat(self.bot.pool, "total_songs_played")
+        await increment_daily_stat(self.bot.pool, "total_commands")
 
-        await increment_daily_stat(self.db, "total_songs_played")
-        await increment_daily_stat(self.db, "total_commands")
-
-        # Fetch new total_songs_queued for milestone check
+        # Fetch new total_songs_queued for milestone check (asyncpg $N params — T-04-04)
         try:
-            cursor = await self.db.execute(
-                "SELECT total_songs_queued FROM user_profiles WHERE user_id = ?",
-                (str(interaction.user.id),),
-            )
-            row = await cursor.fetchone()
+            async with self.bot.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT total_songs_queued FROM user_profiles WHERE user_id = $1",
+                    str(interaction.user.id),
+                )
             new_total: int = row["total_songs_queued"] if row else 0
         except Exception as exc:
             log.debug("Could not fetch total_songs_queued: %s", exc)
@@ -660,7 +659,7 @@ class MusicCog(commands.Cog):
         # ── PERS-04: Repeat-song roast (D-08, D-14 always fires at threshold) ──
         try:
             count = await get_repeat_song_count(
-                self.db,
+                self.bot.pool,
                 guild_id=str(interaction.guild.id),
                 user_id=str(interaction.user.id),
                 title=track.title,
@@ -707,7 +706,7 @@ class MusicCog(commands.Cog):
         # ── PERS-09: Streak update + streak-day milestone roast ──
         try:
             new_streak, longest, streak_milestone = await update_user_streak(
-                self.db,
+                self.bot.pool,
                 user_id=str(interaction.user.id),
                 tz_name=config.STREAK_TIMEZONE,
             )
@@ -876,9 +875,8 @@ class MusicCog(commands.Cog):
         # Track skipped auto-queued songs for "ignored" memory
         current = queue.get_current()
         if current and current.was_auto_queued:
-            from database import mark_song_skipped
             from models.server_state import get_server_state
-            await mark_song_skipped(self.db, guild_id=str(interaction.guild.id), url=current.url)
+            await mark_song_skipped(self.bot.pool, guild_id=str(interaction.guild.id), url=current.url)
             if hasattr(self.bot, "server_states"):
                 state = get_server_state(self.bot.server_states, interaction.guild.id)
                 state.auto_queue_results["skipped"] += 1
@@ -1099,7 +1097,7 @@ class MusicCog(commands.Cog):
         All sends use allowed_mentions=none (T-03-14).
         """
         rows = await get_history_rows(
-            self.db,
+            self.bot.pool,
             guild_id=str(interaction.guild.id),
             limit=int(config.HISTORY_FETCH_LIMIT),
         )

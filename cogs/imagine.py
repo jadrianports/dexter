@@ -42,15 +42,15 @@ class ImagineCog(commands.Cog):
         return self.bot.gemini_service
 
     @property
-    def db(self):
-        return self.bot.db
+    def pool(self):
+        return self.bot.pool
 
     @app_commands.command(name="imagine", description="Generate an image")
     @app_commands.describe(prompt="What to generate")
     @app_commands.checks.cooldown(1, config.IMAGINE_COOLDOWN_SECONDS)
     async def imagine(self, interaction: discord.Interaction, prompt: str) -> None:
         # Check daily cap
-        images_today = await get_images_today(self.db, user_id=str(interaction.user.id))
+        images_today = await get_images_today(self.bot.pool, user_id=str(interaction.user.id))
         if images_today >= config.MAX_IMAGES_PER_USER_PER_DAY:
             return await interaction.response.send_message(
                 pick_random(IMAGE_CAP_MESSAGES), ephemeral=True
@@ -73,13 +73,13 @@ class ImagineCog(commands.Cog):
             await interaction.followup.send(content=caption, file=file)
 
             await log_image(
-                self.db,
+                self.bot.pool,
                 guild_id=str(interaction.guild.id),
                 user_id=str(interaction.user.id),
                 prompt=prompt,
             )
-            await increment_daily_stat(self.db, "total_images_generated")
-            await increment_daily_stat(self.db, "total_commands")
+            await increment_daily_stat(self.bot.pool, "total_images_generated")
+            await increment_daily_stat(self.bot.pool, "total_commands")
 
         except GeminiRateLimitError:
             await interaction.followup.send(pick_random(RATE_LIMIT_MESSAGES))
