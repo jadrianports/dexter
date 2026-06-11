@@ -5,12 +5,12 @@ milestone_name: milestone
 status: executing
 stopped_at: Phase 3 context gathered
 last_updated: "2026-06-11T04:40:14.580Z"
-last_activity: 2026-06-11 -- 03-04 complete; Gemini-first ambient roasts + reactions + seasonal
+last_activity: 2026-06-11 -- 03-05 complete; /lyrics + /history + repeat-song/milestone roasts
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 03 (alive) — EXECUTING
-Plan: 5 of 6 (03-04 complete; 03-05 next)
-Status: Wave 1 done (03-01, 03-02, 03-03 complete); Wave 2: 03-04 complete, 03-05/03-06 remaining
-Last activity: 2026-06-11 -- 03-04 complete; voice roasts (Gemini-first + template fallback), message reactions, seasonal expansion, 14 seasonal tests green
+Plan: 6 of 6 (03-05 complete; 03-06 next)
+Status: Wave 1 done (03-01/02/03 complete); Wave 2 done (03-04/05 complete); Wave 3: 03-06 remaining
+Last activity: 2026-06-11 -- 03-05 complete; /lyrics + /history (paginated) + repeat-song + milestone/streak roasts in _log_track
 
 Progress: [██████░░░░] 60% (3 of 5 phases complete)
 
@@ -91,5 +91,5 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-06-11
-Stopped at: 03-04 complete — voice roasts (Gemini-first priority-2 + template fallback), message reactions, seasonal expansion (9 branches total), 251 tests passing
-Resume file: .planning/phases/03-alive/03-05-PLAN.md
+Stopped at: 03-05 complete — /lyrics + /history commands with pagination; repeat-song + streak/milestone roasts wired in _log_track (PERS-04, PERS-09); 251 tests passing
+Resume file: .planning/phases/03-alive/03-06-PLAN.md
