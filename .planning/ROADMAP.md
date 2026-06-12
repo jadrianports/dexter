@@ -57,7 +57,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-03-PLAN.md — Consolidated ordered live-UAT runbook (21 checks A→B→C→D) + by-reference source-doc updates (DEPLOY-01/02/03/05/08)
+- [x] 05-03-PLAN.md — Consolidated ordered live-UAT runbook (21 checks A→B→C→D) + by-reference source-doc updates (DEPLOY-01/02/03/05/08)
 
 ### Phase 6: Speed & Caching
 
@@ -116,7 +116,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 2.5. Hardening | v1.0 | shipped (pre-GSD) | Complete | 2026-06-02 |
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
-| 5. Ship It Live | v1.1 | 2/3 | In Progress|  |
+| 5. Ship It Live | v1.1 | 3/3 | Awaiting Live UAT |  |
 | 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
 | 7. Player UX & Filters | v1.1 | 0/TBD | Not started | - |
 | 8. Social & Ops | v1.1 | 0/TBD | Not started | - |

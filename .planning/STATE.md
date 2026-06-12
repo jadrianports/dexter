@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: executing
-stopped_at: Completed 05-02-PLAN.md — deploy.sh + backup cadence + OCI lifecycle + seed/restore-verify (DEPLOY-01, DEPLOY-07)
-last_updated: "2026-06-12T10:44:54Z"
-last_activity: 2026-06-12 -- Phase 05 plan 02 complete
+status: awaiting-live-uat
+stopped_at: Completed 05-03-PLAN.md — consolidated live-UAT runbook (21 checks A→B→C→D) + source doc by-reference updates (D-07)
+last_updated: "2026-06-12T11:01:00Z"
+last_activity: 2026-06-12 -- Phase 05 plan 03 complete (all three plans done; awaiting Oracle A1 live UAT)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 05 (ship-it-live) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-06-12 -- Phase 05 plan 02 complete (helper scripts + restore-verify)
+Phase: 05 (ship-it-live) — ALL PLANS COMPLETE; awaiting live UAT on Oracle A1
+Plan: 3 of 3 (complete)
+Status: Awaiting user to run 05-UAT-RUNBOOK.md on Oracle A1 and report results via /gsd-verify-work
+Last activity: 2026-06-12 -- Phase 05 plan 03 complete (live-UAT runbook + source doc by-reference updates)
 
 ## Accumulated Context
 
@@ -46,6 +46,7 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase 05-02]: deploy.sh uses --build bot (not bare --build) — only bot image rebuilt; Postgres never rebuilt
 - [Phase 05-02]: pg_restore via docker compose exec (Option B) — version-matched with pg_dump server; avoids host client mismatch
 - [Phase 05-02]: build_seed_rows() pure/importable function pattern — separates testable logic from async IO in scripts
+- [Phase 05-03]: Strict A→B→C→D runbook ordering — destructive restore (D1) always last; source docs by-reference only, not maintained in parallel
 
 ### Pending Todos
 
@@ -77,9 +78,9 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-12T10:44:54Z
-Stopped at: Completed 05-02-PLAN.md — deploy.sh + backup cadence + OCI lifecycle policy + seed/restore-verify (DEPLOY-01, DEPLOY-07)
-Next: Execute 05-03-PLAN.md (live-UAT runbook consolidation).
+Last session: 2026-06-12T11:01:00Z
+Stopped at: Completed 05-03-PLAN.md — consolidated live-UAT runbook (21 checks) + three source docs updated by reference (DEPLOY-01, DEPLOY-02, DEPLOY-03, DEPLOY-05, DEPLOY-08)
+Next: User runs 05-UAT-RUNBOOK.md on Oracle A1 and reports results via /gsd-verify-work.
 
 ## Performance Metrics
 
@@ -87,3 +88,4 @@ Next: Execute 05-03-PLAN.md (live-UAT runbook consolidation).
 |-------|------|----------|-------|
 | Phase 05-ship-it-live P01 | 25 | 3 tasks | 5 files |
 | Phase 05-ship-it-live P02 | 6 | 2 tasks (3 commits incl. TDD RED) | 6 files |
+| Phase 05-ship-it-live P03 | 6 | 2 tasks | 4 files (1 created, 3 modified) |
