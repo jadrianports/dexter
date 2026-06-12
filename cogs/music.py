@@ -1203,7 +1203,10 @@ class MusicCog(commands.Cog):
                 except Exception as e:
                     log.error(f"Reconnect attempt {attempt + 1} failed: {e}")
 
+            queue._play_generation += 1  # invalidate stale after-callbacks (mirrors /stop template)
             queue.clear()
+            if hasattr(self.bot, "queue_persistence"):
+                await self.bot.queue_persistence.clear_persisted(member.guild.id)
             channel = self._get_text_channel(member.guild)
             if channel:
                 await channel.send(embed=embeds.error("Lost voice connection. Queue cleared."))

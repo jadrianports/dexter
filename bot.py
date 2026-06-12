@@ -394,9 +394,12 @@ async def idle_check():
 
             if vc._idle_seconds >= config.IDLE_TIMEOUT_SECONDS:
                 log.info(f"Idle timeout in guild {guild.id}, disconnecting")
+                queue._play_generation += 1  # invalidate stale after-callbacks (mirrors /stop template)
                 vc.stop()
                 await vc.disconnect()
                 queue.clear()
+                if hasattr(bot, "queue_persistence"):
+                    await bot.queue_persistence.clear_persisted(guild.id)
 
                 channel = music_cog._get_text_channel(guild)
                 if channel:
