@@ -1,0 +1,14 @@
+[
+  {
+    "name": "delete-old-backups",
+    "action": "DELETE",
+    "isEnabled": true,
+    "timeAmount": 14,
+    "timeUnit": "DAYS",
+    "objectNameFilter": {
+      "inclusionPrefixes": ["dexter_"],
+      "inclusionPatterns": [],
+      "exclusionPatterns": []
+    }
+  }
+]

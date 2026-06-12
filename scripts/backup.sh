@@ -8,8 +8,8 @@
 #
 # DEPLOYMENT:
 #   - Run on the Oracle VM host (outside Docker) via crontab.
-#   - Recommended crontab entry (every 30 minutes):
-#       */30 * * * * /opt/dexter/scripts/backup.sh
+#   - Recommended crontab entry (every 6 hours):
+#       0 */6 * * * /opt/dexter/scripts/backup.sh
 #   - Make executable on the host: chmod +x /opt/dexter/scripts/backup.sh
 #
 # PREREQUISITES:
@@ -29,7 +29,7 @@
 #          then: chmod 600 ~/.pgpass
 #       b) Set PGPASSWORD in the crontab environment:
 #            PGPASSWORD=your_password
-#            */30 * * * * /opt/dexter/scripts/backup.sh
+#            0 */6 * * * /opt/dexter/scripts/backup.sh
 #   - pg_dump --no-password ensures it fails fast rather than hanging for interactive input.
 #
 # NOTE: The Postgres container exposes its default port (5432) to localhost on the Oracle VM.
