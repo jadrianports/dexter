@@ -11,13 +11,14 @@ Read `dexter-architecture.md` for full context, personality samples, and rationa
 ## Tech Stack (do not deviate)
 
 - **Language:** Python 3.11+
-- **Discord:** discord.py (+ davey for DAVE voice encryption)
+- **Discord:** discord.py ≥2.3 (`AutoShardedBot`) + davey + PyNaCl for voice
 - **Music:** yt-dlp + FFmpeg (opus, 192kbps)
-- **AI Chat:** Google Gemini API (free tier, gemini-2.0-flash)
-- **Image Gen:** Imagen 3 via Gemini API (free tier)
-- **Database:** SQLite via aiosqlite
-- **Lyrics:** Genius API (primary), AZLyrics scrape (fallback)
-- **Hosting:** Oracle Cloud free tier (always-on ARM VM)
+- **AI Chat:** Google Gemini API via `google-genai` (free tier, `gemini-2.5-flash`)
+- **Image Gen:** `gemini-2.5-flash-image` via the Gemini API (free tier)
+- **Database:** PostgreSQL 16 via `asyncpg` 0.31.0 — migrated from SQLite in Phase 4
+- **Containerization:** Docker + Docker Compose (`postgres:16-alpine` + bot image)
+- **Lyrics:** Genius API via `lyricsgenius` (primary), AZLyrics scrape via `beautifulsoup4` (fallback)
+- **Hosting:** Oracle Cloud Always Free A1 ARM VM — deployed via Docker Compose (Phase 5)
 
 ---
 
@@ -25,9 +26,11 @@ Read `dexter-architecture.md` for full context, personality samples, and rationa
 
 ```
 dexter/
-├── bot.py                         # Entry point, bot init, cog loading
+├── bot.py                         # Entry point, AutoShardedBot init, cogs, background tasks
 ├── config.py                      # All settings (see Configuration section)
-├── database.py                    # SQLite init, schema, query helpers
+├── database.py                    # PostgreSQL (asyncpg) init, schema, query helpers, streak logic
+├── docker-compose.yml             # postgres:16-alpine + bot services; named volumes
+├── Dockerfile                     # bot image build
 ├── cogs/
 │   ├── music.py                   # All music slash commands
 │   ├── ai.py                      # /ask, AI auto-queue logic
@@ -38,9 +41,10 @@ dexter/
 │   ├── youtube.py                 # yt-dlp: search, download, metadata extraction
 │   ├── gemini.py                  # Gemini API: chat, music recs, image gen
 │   ├── lyrics.py                  # Genius + AZLyrics
+│   ├── queue_persistence.py       # Phase 4: persist/restore queues (guild_queues JSONB), smart-rejoin
 │   └── audio.py                   # FFmpeg audio source management
 ├── models/
-│   ├── queue.py                   # Per-server music queue
+│   ├── queue.py                   # Per-server queue (loop, shuffle, 500 cap, _play_generation counter)
 │   ├── user_profile.py            # User taste tracking
 │   ├── server_state.py            # Per-server runtime state
 │   └── message_buffer.py          # Rolling 10-message context per channel
@@ -52,66 +56,82 @@ dexter/
 ├── utils/
 │   ├── embeds.py                  # Discord embed builders
 │   ├── formatters.py              # Duration, progress bars, etc.
-│   ├── cooldowns.py               # Per-user cooldown tracking
 │   └── logger.py                  # File + Discord channel logging
-├── data/
-│   ├── dexter.db                  # SQLite (auto-created)
-│   └── cache/                     # Audio file cache
+├── scripts/                       # Phase 4/5 ops: deploy.sh, backup.sh, keepalive.sh,
+│                                  #   lifecycle-policy.json, seed_restore_test.py
+├── tests/                         # pytest suite (pure unit tests + live-DB integration tests)
+├── data/cache/                    # Audio cache (Postgres data lives in a Docker volume, not here)
 ├── requirements.txt
-├── .env                           # DISCORD_TOKEN, GEMINI_API_KEY, GENIUS_TOKEN
+├── .env                           # DISCORD_TOKEN, GEMINI_API_KEY, GENIUS_TOKEN, DATABASE_URL, OWNER_ID, …
 └── README.md
 ```
 
+> **Note:** cooldowns are enforced inline at the command layer; there is no `utils/cooldowns.py`.
+
 ---
 
-## Database Schema (SQLite)
+## Database Schema (PostgreSQL)
+
+Defined in `database.py` as `SCHEMA_SQL` (idempotent `CREATE TABLE IF NOT EXISTS`, applied by
+`init_db()` over an asyncpg pool). Migrated from SQLite in Phase 4 — Postgres types throughout
+(`TIMESTAMPTZ`, `BIGSERIAL`, `BOOLEAN`, `JSONB`, `now()`). Phase 3 added the streak columns;
+Phase 4 added the `guild_queues` table for queue persistence.
 
 ```sql
-CREATE TABLE user_profiles (
-    user_id TEXT PRIMARY KEY,
-    username TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id            TEXT PRIMARY KEY,
+    username           TEXT NOT NULL,
     total_songs_queued INTEGER DEFAULT 0,
-    first_seen_at TEXT DEFAULT (datetime('now')),
-    last_active_at TEXT DEFAULT (datetime('now'))
+    first_seen_at      TIMESTAMPTZ DEFAULT now(),
+    last_active_at     TIMESTAMPTZ DEFAULT now(),
+    current_streak     INTEGER DEFAULT 0,   -- Phase 3
+    longest_streak     INTEGER DEFAULT 0,   -- Phase 3
+    last_streak_date   TEXT                 -- Phase 3 (ISO date in STREAK_TIMEZONE)
 );
 
-CREATE TABLE song_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    artist TEXT,
-    url TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS song_history (
+    id               BIGSERIAL PRIMARY KEY,
+    guild_id         TEXT NOT NULL,
+    user_id          TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    artist           TEXT,
+    url              TEXT NOT NULL,
     duration_seconds INTEGER,
-    queued_at TEXT DEFAULT (datetime('now')),
-    was_skipped BOOLEAN DEFAULT 0,
-    was_auto_queued BOOLEAN DEFAULT 0
+    queued_at        TIMESTAMPTZ DEFAULT now(),
+    was_skipped      BOOLEAN DEFAULT false,
+    was_auto_queued  BOOLEAN DEFAULT false
 );
-CREATE INDEX idx_history_guild ON song_history(guild_id, queued_at DESC);
-CREATE INDEX idx_history_user ON song_history(user_id, queued_at DESC);
+CREATE INDEX IF NOT EXISTS idx_history_guild ON song_history(guild_id, queued_at DESC);
+CREATE INDEX IF NOT EXISTS idx_history_user  ON song_history(user_id,  queued_at DESC);
 
-CREATE TABLE user_artist_counts (
-    user_id TEXT NOT NULL,
-    artist TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS user_artist_counts (
+    user_id    TEXT NOT NULL,
+    artist     TEXT NOT NULL,
     play_count INTEGER DEFAULT 1,
     PRIMARY KEY (user_id, artist)
 );
 
-CREATE TABLE image_generation_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    prompt TEXT NOT NULL,
-    generated_at TEXT DEFAULT (datetime('now'))
+CREATE TABLE IF NOT EXISTS image_generation_log (
+    id           BIGSERIAL PRIMARY KEY,
+    guild_id     TEXT NOT NULL,
+    user_id      TEXT NOT NULL,
+    prompt       TEXT NOT NULL,
+    generated_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX idx_imagine_user_date ON image_generation_log(user_id, generated_at);
+CREATE INDEX IF NOT EXISTS idx_imagine_user_date ON image_generation_log(user_id, generated_at);
 
-CREATE TABLE bot_daily_stats (
-    date TEXT PRIMARY KEY,
-    total_commands INTEGER DEFAULT 0,
-    total_songs_played INTEGER DEFAULT 0,
-    total_ai_queries INTEGER DEFAULT 0,
+CREATE TABLE IF NOT EXISTS bot_daily_stats (
+    date                   TEXT PRIMARY KEY,
+    total_commands         INTEGER DEFAULT 0,
+    total_songs_played     INTEGER DEFAULT 0,
+    total_ai_queries       INTEGER DEFAULT 0,
     total_images_generated INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS guild_queues (    -- Phase 4: queue persistence
+    guild_id   TEXT PRIMARY KEY,
+    payload    JSONB NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 ```
 
@@ -119,7 +139,7 @@ CREATE TABLE bot_daily_stats (
 
 ## Configuration
 
-All in `config.py`. Single file, no database config. Only add settings when the feature is implemented.
+All in `config.py`. Single file. Phases 2–4 settings are now implemented — the block below shows the Phase 1 core; the full current set follows it.
 
 ```python
 # Paths
@@ -146,10 +166,44 @@ SKIP_COOLDOWN_SECONDS = 2
 HELP_COOLDOWN_SECONDS = 5
 
 # Bot
-OWNER_ID = int(os.getenv("OWNER_ID", "0"))
+OWNER_ID = int(os.getenv("OWNER_ID") or "0")
 ```
 
-> Phase 2/3 settings (AI, Image, Roasts, Mood, Designated Channel) will be added when those features are implemented.
+**Now implemented (Phases 2–4) — `config.py` is the authoritative list:**
+
+```python
+# AI (Phase 2)
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_RPM_LIMIT = 15                  # shared across ALL AI features
+MAX_AI_RESPONSE_LENGTH = 500
+ASK_COOLDOWN_SECONDS = 5
+
+# Image gen (Phase 2)
+IMAGEN_MODEL = "gemini-2.5-flash-image"
+IMAGINE_COOLDOWN_SECONDS = 30
+MAX_IMAGES_PER_USER_PER_DAY = 10
+
+# Mood + auto-queue (Phase 2)
+MOOD_NORMAL_THRESHOLD = 15; MOOD_TIRED_THRESHOLD = 30; MOOD_EXHAUSTED_THRESHOLD = 50
+AUTO_QUEUE_MAX_ROUNDS = 3; AUTO_QUEUE_SONGS_PER_ROUND = 3
+
+# Personality / roasts / status / lyrics (Phase 3)
+DEXTER_CHANNEL_ID, ERROR_LOG_CHANNEL_ID            # from env
+STREAK_TIMEZONE = "America/New_York"               # IANA tz for ALL community-time checks
+UNPROMPTED_ROAST_CHANCE = 0.30; LATE_NIGHT_ROAST_CHANCE = 0.50; LATE_NIGHT_HOURS = (1, 5)
+REPEAT_SONG_ROAST_THRESHOLD = 3
+MILESTONE_SONG_THRESHOLDS = [100, 250, 500, 1000]
+MILESTONE_STREAK_THRESHOLDS = [7, 14, 30, 60, 100]
+STATUS_ROTATION_INTERVAL_SECONDS = 300; IDLE_LONELINESS_THRESHOLD_SECONDS = 1800
+LYRICS_PAGE_SIZE = 1500; HISTORY_PAGE_SIZE = 10; HISTORY_FETCH_LIMIT = 50
+
+# Database / scale (Phase 4)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dexter:dexter@localhost:5432/dexter")
+DB_POOL_MIN = 2; DB_POOL_MAX = 10
+MAX_QUEUE_SIZE_PER_GUILD = 500                     # enforced in MusicQueue.add()
+MESSAGE_BUFFER_TTL_HOURS = 24
+HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "") # Healthchecks.io dead-man switch
+```
 
 ---
 
@@ -430,7 +484,7 @@ GENIUS_TOKEN=
 
 **Deferred to Phase 2/3:** Designated channel support, /history, /lyrics, deploy to Oracle Cloud
 
-### Phase 2 — Personality + AI
+### Phase 2 — Personality + AI ✅ COMPLETE
 1. /ask with Gemini + 10-message context
 2. Full personality system prompt
 3. User profile tracking in SQLite
@@ -443,7 +497,7 @@ GENIUS_TOKEN=
 10. /imagine with daily cap
 11. Discord error log channel
 
-### Phase 3 — Alive
+### Phase 3 — Alive ✅ COMPLETE
 1. Unprompted voice roasts (join/leave)
 2. Roast frequency + cooldowns
 3. Late night roasts
@@ -458,12 +512,24 @@ GENIUS_TOKEN=
 12. /history
 13. yt-dlp auto-update
 
-### Phase 4 — Scale
+### Phase 4 — Scale ✅ COMPLETE
 1. Multi-server hardening
-2. SQLite → PostgreSQL
+2. SQLite → PostgreSQL (asyncpg 0.31.0)
 3. AutoShardedBot
-4. Queue persistence
-5. Web config dashboard (maybe)
+4. Queue persistence (`guild_queues` JSONB + smart-rejoin on restart)
+5. Docker Compose (`postgres:16-alpine` + bot), healthcheck / keepalive
+6. ~~Web config dashboard~~ — dropped (never committed)
+
+### Phase 5 — Ship It Live ◆ CODE COMPLETE (awaiting live Oracle A1 UAT)
+1. Docker Compose standup on Oracle A1 ARM + reboot survival
+2. `clear_persisted()` gap closure on idle-leave / reconnect-failure (DEPLOY-06)
+3. Reconnect-race hardening + diagnostic logging (DEPLOY-04 — live `/gsd:debug` pending)
+4. TZ-correct late-night roast via `ZoneInfo(STREAK_TIMEZONE)` (D-06)
+5. Ops scripts: `deploy.sh`, `backup.sh` (6h cadence), OCI lifecycle policy, non-destructive seed/restore-verify
+6. Consolidated 20-check live-UAT runbook (`.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md`) — **the phase is verified when it passes live on Oracle, not when code lands**
+
+> **Milestone status:** v1.0 (Phases 1–4) shipped & archived. Now on v1.1 "Live & Lethal" (Phases 5–8).
+> Phases 6–8 (perf, player UX, social/leaderboard) live in `.planning/ROADMAP.md`.
 
 ---
 
@@ -482,9 +548,17 @@ GENIUS_TOKEN=
 
 ---
 
-## Implementation Gotchas (Discovered in Phase 1)
+## Implementation Gotchas
 
+**Phase 1 (music pipeline):**
 - **yt-dlp `extract_flat: True`** breaks search queries — only use for playlist extraction (PLAYLIST_OPTS), never for search (SEARCH_OPTS)
 - **yt-dlp search results:** use `entry.get("webpage_url")` not `entry.get("url")` — the latter is a stream URL that expires
 - **Never call `voice_client.stop()` before `_play_track()`** — the old after-callback fires before generation increments, causing double-play races. Let `_play_track` handle stopping internally.
 - **Slash command interactions must respond within 3s** — `defer()` or respond immediately, then do async work via `asyncio.create_task()`
+
+**Phases 4–5 (Postgres + deploy):**
+- **asyncpg multi-statement DDL** only works when there are no `$N` params — `SCHEMA_SQL` is plain DDL applied in one `conn.execute()` (Pitfall 1)
+- **`clear_persisted()` must mirror the `/stop` template** at every queue-teardown site (`_play_generation += 1` → `clear()` → `clear_persisted()`) or a ghost queue restores on restart (DEPLOY-06 / IN-02)
+- **Community-time checks use `ZoneInfo(config.STREAK_TIMEZONE)`**, never naive `datetime.now().hour` — the host VM runs UTC, so naive time fires roasts/streaks on the wrong calendar day (D-06 / D-17)
+- **`restore_queues` must `continue` per-guild, not `return`** — one guild's failed smart-rejoin must not abort restoration for the rest (CR-01)
+- **`pg_restore` runs via `docker compose exec` (version-matched)**, never the host client, to dodge a server/client version mismatch
