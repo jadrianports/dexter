@@ -64,6 +64,7 @@ def create_bot() -> DexterBot:
         activity=discord.Activity(
             type=discord.ActivityType.listening, name="music"
         ),
+        owner_id=config.OWNER_ID or None,  # wire configured owner so /sync auth works (WR-07)
     )
 
     return bot
@@ -353,7 +354,7 @@ async def on_app_command_error(
 @bot.tree.command(name="sync", description="Sync slash commands (owner only)")
 @app_commands.describe(guild_id="Guild ID to sync to (omit for global)")
 async def sync_commands(interaction: discord.Interaction, guild_id: str | None = None):
-    if interaction.user.id != bot.owner_id:
+    if not await bot.is_owner(interaction.user):
         return await interaction.response.send_message("Not authorized.", ephemeral=True)
 
     await interaction.response.defer(ephemeral=True)
