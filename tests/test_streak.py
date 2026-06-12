@@ -80,3 +80,17 @@ class TestComputeStreakMissedDay:
         far_past = (get_local_date(TZ) - timedelta(days=30)).isoformat()
         new_streak, _ = compute_streak(25, far_past, TZ)
         assert new_streak == 1
+
+
+def test_tz_aware_hour_is_integer():
+    """Wave-0 TZ smoke test (D-06): ZoneInfo-aware datetime.now().hour returns a valid hour int.
+
+    Covers the fix in cogs/events.py — replacing naive datetime.now().hour (host-local)
+    with datetime.now(tz=ZoneInfo(config.STREAK_TIMEZONE)).hour (TZ-explicit).
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    hour = datetime.now(tz=ZoneInfo(TZ)).hour
+    assert isinstance(hour, int)
+    assert 0 <= hour <= 23

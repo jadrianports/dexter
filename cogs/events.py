@@ -192,9 +192,10 @@ class EventsCog(commands.Cog):
         guild = member.guild
         hour = discord.utils.utcnow().hour  # Use UTC; late-night check uses local hour below
 
-        # Use the member's local guild time via Python's datetime
+        # Use the member's local guild time via Python's datetime (TZ-explicit via STREAK_TIMEZONE)
         import datetime as _dt
-        local_hour = _dt.datetime.now().hour  # local server time for late-night check
+        from zoneinfo import ZoneInfo as _ZoneInfo
+        local_hour = _dt.datetime.now(tz=_ZoneInfo(config.STREAK_TIMEZONE)).hour
 
         # JOIN: before.channel is None, after.channel is not None
         if before.channel is None and after.channel is not None:
