@@ -144,7 +144,11 @@ class QueuePersistenceService:
                 vc_channel = guild.get_channel(vc_id)
                 if vc_channel and any(not m.bot for m in vc_channel.members):
                     try:
-                        await vc_channel.connect()
+                        vc = await vc_channel.connect()
+                        log.info("smart-rejoin: connected=%s guild=%s", vc.is_connected(), guild_id)
+                        if not vc.is_connected():
+                            log.warning("Smart rejoin: vc not connected post-connect() guild=%s", guild_id)
+                            return
                         await music_cog._play_track(guild, current)
                     except Exception as exc:
                         log.warning(

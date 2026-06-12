@@ -343,6 +343,7 @@ class MusicCog(commands.Cog):
                 await channel.send(f"Skipped {len(_skipped)} unavailable tracks.")
 
         # Increment generation — any old after-callbacks will see a stale generation and bail
+        log.debug("gen=%d → %d in guild %d", queue._play_generation, queue._play_generation + 1, guild.id)
         queue._play_generation += 1
         current_gen = queue._play_generation
 
@@ -360,6 +361,7 @@ class MusicCog(commands.Cog):
         try:
             # Stop current playback (old after_callback will fire but see stale generation)
             if voice_client.is_playing() or voice_client.is_paused():
+                log.debug("stopping current playback gen=%d in guild %d", queue._play_generation, guild.id)
                 voice_client.stop()
 
             if not voice_client.is_connected():
@@ -368,6 +370,7 @@ class MusicCog(commands.Cog):
                 return
 
             voice_client.play(source, after=after_callback)
+            log.debug("play() called gen=%d connected=%s guild=%d", current_gen, voice_client.is_connected(), guild.id)
             log.info(f"Playing '{track.title}' in guild {guild.id}")
         except Exception:
             source.cleanup()
@@ -1193,8 +1196,10 @@ class MusicCog(commands.Cog):
 
             for attempt in range(3):
                 try:
+                    log.info("reconnect attempt %d/3 in guild %d", attempt + 1, member.guild.id)
                     await asyncio.sleep(1)
                     vc = await before.channel.connect()
+                    log.info("reconnect: vc.is_connected()=%s gen=%d guild=%d", vc.is_connected(), queue._play_generation, member.guild.id)
                     track = queue.get_current()
                     if track:
                         await self._play_track(member.guild, track)
