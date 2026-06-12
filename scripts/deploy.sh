@@ -41,8 +41,15 @@ set -euo pipefail
 REPO_DIR="/opt/dexter"
 cd "${REPO_DIR}"
 
-echo "[deploy.sh] Pulling latest changes from git..."
-git pull
+echo "[deploy.sh] Verifying clean working tree before deploy..."
+if [ -n "$(git status --porcelain)" ]; then
+  echo "[deploy.sh] Working tree is dirty — refusing to deploy. Commit or stash local changes first." >&2
+  exit 1
+fi
+
+echo "[deploy.sh] Pulling latest changes from git (fast-forward only)..."
+git fetch origin
+git pull --ff-only
 
 echo "[deploy.sh] Rebuilding bot image (--build bot only — Postgres image is pinned and never rebuilt)..."
 docker compose up -d --build bot
