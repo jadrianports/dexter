@@ -9,13 +9,13 @@
 
 ### Ship It Live (`DEPLOY`)
 
-- [ ] **DEPLOY-01**: Dexter runs 24/7 on Oracle A1 via Docker Compose (bot + Postgres), surviving a host reboot
+- [x] **DEPLOY-01**: Dexter runs 24/7 on Oracle A1 via Docker Compose (bot + Postgres), surviving a host reboot
 - [ ] **DEPLOY-02**: The standing live-UAT checklist (9 Phase-3 behavioral + 6 Phase-4 deploy checks) is executed and passing
 - [ ] **DEPLOY-03**: The 6 human-UAT scenarios (`04-HUMAN-UAT.md`) are executed and passing
 - [x] **DEPLOY-04**: Voice playback survives a reconnect under live concurrency (the parked race at `cogs/music.py:~609` is fixed)
 - [ ] **DEPLOY-05**: Queue + playback position survive a bot restart (persistence + smart-rejoin validated live)
 - [x] **DEPLOY-06**: `clear_persisted()` fires correctly on idle-leave and reconnect-failure paths (IN-02 resolved)
-- [ ] **DEPLOY-07**: Scheduled `pg_dump` backup runs and a restore is validated end-to-end
+- [x] **DEPLOY-07**: Scheduled `pg_dump` backup runs and a restore is validated end-to-end
 - [ ] **DEPLOY-08**: Keepalive / dead-man cron is confirmed firing in production
 
 ### Speed & Caching (`PERF`)
