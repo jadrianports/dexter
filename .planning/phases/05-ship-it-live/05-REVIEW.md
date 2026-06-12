@@ -20,7 +20,8 @@ findings:
   warning: 7
   info: 5
   total: 14
-status: issues_found
+status: remediated
+remediated: "7 of 14 fixed (CR-01, CR-02, WR-01, WR-02, WR-05, WR-06, WR-07); WR-03/WR-04 + IN-01..05 deferred as advisory"
 ---
 
 # Phase 5: Code Review Report
@@ -199,6 +200,30 @@ and/or compare directly: `if interaction.user.id != config.OWNER_ID:`.
 
 **File:** `scripts/lifecycle-policy.json:7`
 **Issue:** The lifecycle rule deletes objects older than 14 days matching prefix `dexter_`. With a 6-hour backup cadence that retains ~56 backups, which is reasonable. No defect, but note the `exclusionPatterns` is empty — there is no protection for a manually-pinned "known-good" backup; any object matching `dexter_` older than 14 days is deleted unconditionally, including a backup an operator might want to keep long-term. Consider an exclusion prefix (e.g. `dexter_keep_`) for pinned backups.
+
+---
+
+## Remediation (applied 2026-06-12, post-review)
+
+Fixed on branch `gsd/phase-5-ship-it-live` before phase verification:
+
+| Finding | Severity | Commit | Fix |
+|---------|----------|--------|-----|
+| CR-01 | Critical | `253713d` | `return` → `continue` in `restore_queues` loop — one guild's rejoin failure no longer abandons all remaining guilds |
+| CR-02 | Critical | `803815b` | `_cleanup_seed()` added + called in `main()` `finally`; seed rows now deleted from the live DB whether the proof passes or raises |
+| WR-01 | Warning | `32d0971` | `backup.sh` dumps to a temp file and size-checks (≥1 KB) before upload; corrupt/truncated dumps never reach the bucket |
+| WR-02 | Warning | `09cbd72` | `deploy.sh` refuses a dirty working tree and uses `git fetch` + `git pull --ff-only` |
+| WR-05 | Warning | `803815b` | dropped dead `result =` binding in `_docker_exec_stdin` |
+| WR-06 | Warning | `803815b` | `_get_pool` rewritten with `urlsplit`/`urlunsplit` to preserve query params (e.g. `?sslmode=require`) |
+| WR-07 | Warning | `795f5dd` | `owner_id=config.OWNER_ID or None` wired into the bot + `/sync` now gates on `await bot.is_owner(...)` |
+
+**Deferred (advisory — not fixed):**
+
+- **WR-03** (reconnect generation-counter race) — this is precisely the DEPLOY-04 live-`/gsd:debug` item; the diagnostic logging added this phase exists to diagnose it on Oracle under real concurrency. Patching the generation bump blind, without reproducing the race, risks a worse race. Tracked for the live debug session.
+- **WR-04** (restore path doesn't re-apply duration cap) — only bites if `MAX_SONG_DURATION_SECONDS` is tightened between sessions; low risk.
+- **IN-01..IN-05** — cosmetic / dedup / determinism nits; no behavioral impact.
+
+Verification (post-fix): `python -m py_compile` clean on all edited modules, `bash -n` clean on both scripts, 29 pure unit tests green.
 
 ---
 
