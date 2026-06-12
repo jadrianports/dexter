@@ -12,6 +12,8 @@ Non-destructive restore proof:
      — avoids the host pg_restore version-mismatch landmine, Pitfall 4).
   7. Connect to 'dexter_restore_test', assert row counts equal the seeded counts.
   8. Drop the throwaway DB.
+  9. Delete the seed rows from the LIVE 'dexter' DB so the proof leaves no trace
+     (runs in a finally — the live DB is cleaned even if an earlier step fails).
 
 This script is run ONCE manually by the user on Oracle (runbook check D1).
 It is NOT a cron job and is NOT executed on the dev machine.
@@ -19,6 +21,8 @@ It is NOT a cron job and is NOT executed on the dev machine.
 Security (T-05-05): restore/createdb/dropdb target ONLY 'dexter_restore_test'.
   The live 'dexter' DB is read (for seeding) but never passed to pg_restore,
   createdb, or dropdb. The dropdb call is guarded to the THROWAWAY_DB constant.
+  The seed rows written to the live DB are removed in step 9 (_cleanup_seed),
+  so the proof is fully non-destructive AND leaves no residue (CR-02).
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime
+from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
 
@@ -132,10 +137,11 @@ async def _get_pool(db_name: str) -> asyncpg.Pool:
         "DATABASE_URL",
         "postgresql://dexter:dexter@localhost:5432/dexter",
     )
-    # Replace the trailing DB name segment with db_name
-    # DSN format: postgresql://user:pass@host:port/dbname
-    prefix, _, _ = base_url.rpartition("/")
-    dsn = f"{prefix}/{db_name}"
+    # Swap ONLY the path (db name) component, preserving query params like
+    # ?sslmode=require — a naive rpartition("/") mangles those, so the throwaway
+    # pool would connect with different TLS/settings than the live pool (WR-06).
+    parts = urlsplit(base_url)
+    dsn = urlunsplit(parts._replace(path=f"/{db_name}"))
     return await asyncpg.create_pool(dsn)
 
 
@@ -180,6 +186,33 @@ async def _seed(pool: asyncpg.Pool, rows: dict) -> None:
     print(f"[seed_restore_test] Seeded {len(rows['user_profiles'])} user_profiles, "
           f"{len(rows['song_history'])} song_history, "
           f"{len(rows['user_artist_counts'])} user_artist_counts rows into live DB.")
+
+
+async def _cleanup_seed() -> None:
+    """Delete every seeded row from the LIVE 'dexter' DB (CR-02).
+
+    Rows are identified solely by SEED_USER_ID — a fake snowflake no real user can
+    own — so this can never touch genuine production data. Called from main()'s
+    finally block so the live DB is cleaned even if the backup/restore cycle raises.
+    Without this, the fake rows permanently corrupt /history, milestone counts, and
+    top-artist roast logic for real users.
+    """
+    pool = await _get_pool("dexter")
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "DELETE FROM song_history WHERE user_id = $1", SEED_USER_ID
+                )
+                await conn.execute(
+                    "DELETE FROM user_artist_counts WHERE user_id = $1", SEED_USER_ID
+                )
+                await conn.execute(
+                    "DELETE FROM user_profiles WHERE user_id = $1", SEED_USER_ID
+                )
+    finally:
+        await pool.close()
+    print(f"[seed_restore_test] Removed seed rows for user {SEED_USER_ID} from live DB.")
 
 
 async def _verify(pool: asyncpg.Pool, expected: dict) -> None:
@@ -290,7 +323,7 @@ def _docker_exec(*args: str) -> None:
 def _docker_exec_stdin(stdin_bytes: bytes, *args: str) -> None:
     """Run 'docker compose exec -T postgres <args>' with stdin piped from bytes."""
     cmd = ["docker", "compose", "exec", "-T", "postgres"] + list(args)
-    result = subprocess.run(cmd, input=stdin_bytes, check=True)
+    subprocess.run(cmd, input=stdin_bytes, check=True)
 
 
 def _createdb_throwaway() -> None:
@@ -332,7 +365,7 @@ def _dropdb_throwaway() -> None:
 
 
 async def main() -> None:
-    """End-to-end D-15 seed → backup → restore-verify → teardown."""
+    """End-to-end D-15 seed → backup → restore-verify → live-DB teardown."""
     rows = build_seed_rows()
     print("[seed_restore_test] Starting D-15 non-destructive restore proof.")
 
@@ -344,48 +377,57 @@ async def main() -> None:
     finally:
         await live_pool.close()
 
-    # 2. Run backup.sh to produce a fresh dump and upload to OCI
-    print("[seed_restore_test] Step 2: Running backup.sh...")
-    subprocess.run(["bash", "scripts/backup.sh"], check=True)
-
-    # 3. Download the newest dump from OCI
-    print("[seed_restore_test] Step 3: Downloading latest dump from OCI...")
-    namespace = _get_oci_namespace()
-    with tempfile.NamedTemporaryFile(
-        suffix=".dump", delete=False, prefix="dexter_restore_"
-    ) as tmp:
-        dump_path = tmp.name
-
+    # Everything after seeding runs inside a try whose finally ALWAYS removes the
+    # seed rows from the live DB — even if backup/download/restore raises (CR-02).
     try:
-        _download_latest_dump(namespace, dump_path)
+        # 2. Run backup.sh to produce a fresh dump and upload to OCI
+        print("[seed_restore_test] Step 2: Running backup.sh...")
+        subprocess.run(["bash", "scripts/backup.sh"], check=True)
 
-        # 4. Create the throwaway DB
-        print("[seed_restore_test] Step 4: Creating throwaway DB...")
-        _createdb_throwaway()
+        # 3. Download the newest dump from OCI
+        print("[seed_restore_test] Step 3: Downloading latest dump from OCI...")
+        namespace = _get_oci_namespace()
+        with tempfile.NamedTemporaryFile(
+            suffix=".dump", delete=False, prefix="dexter_restore_"
+        ) as tmp:
+            dump_path = tmp.name
 
         try:
-            # 5. Restore into throwaway DB
-            print("[seed_restore_test] Step 5: Restoring dump into throwaway DB...")
-            _restore_into_throwaway(dump_path)
+            _download_latest_dump(namespace, dump_path)
 
-            # 6. Verify row counts in the throwaway DB
-            print("[seed_restore_test] Step 6: Verifying row counts in throwaway DB...")
-            restore_pool = await _get_pool(THROWAWAY_DB)
+            # 4. Create the throwaway DB
+            print("[seed_restore_test] Step 4: Creating throwaway DB...")
+            _createdb_throwaway()
+
             try:
-                await _verify(restore_pool, rows)
+                # 5. Restore into throwaway DB
+                print("[seed_restore_test] Step 5: Restoring dump into throwaway DB...")
+                _restore_into_throwaway(dump_path)
+
+                # 6. Verify row counts in the throwaway DB
+                print("[seed_restore_test] Step 6: Verifying row counts in throwaway DB...")
+                restore_pool = await _get_pool(THROWAWAY_DB)
+                try:
+                    await _verify(restore_pool, rows)
+                finally:
+                    await restore_pool.close()
+
             finally:
-                await restore_pool.close()
+                # 7. Always drop the throwaway DB
+                print("[seed_restore_test] Step 7: Dropping throwaway DB...")
+                _dropdb_throwaway()
 
         finally:
-            # 7. Always drop the throwaway DB
-            print("[seed_restore_test] Step 7: Dropping throwaway DB...")
-            _dropdb_throwaway()
+            # Clean up temp dump file
+            if os.path.exists(dump_path):
+                os.unlink(dump_path)
+                print(f"[seed_restore_test] Cleaned up temp dump file: {dump_path}")
 
     finally:
-        # Clean up temp dump file
-        if os.path.exists(dump_path):
-            os.unlink(dump_path)
-            print(f"[seed_restore_test] Cleaned up temp dump file: {dump_path}")
+        # 8/9. ALWAYS remove the seed rows from the LIVE DB (CR-02) — runs whether
+        # the restore proof passed or raised, so the live DB never keeps fake rows.
+        print("[seed_restore_test] Step 9: Removing seed rows from live 'dexter' DB...")
+        await _cleanup_seed()
 
     print("[seed_restore_test] D-15 restore proof PASSED.")
 
