@@ -25,6 +25,8 @@ human_verification:
     why_human: "Requires live Oracle VM + oci-cli config + Object Storage bucket"
 ---
 
+> **Phase 5 consolidation:** The live-deploy checks in this document (HV-1 through HV-6) have been consolidated into the Phase 5 master runbook. Live execution and result capture now happens in `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md` (D-07). The automated verifications, anti-pattern notes (IN-02, WR-03), and human verification sections below remain as the authoritative provenance record.
+
 # Phase 4: Scale Verification Report
 
 **Phase Goal:** Dexter runs reliably across many servers on chosen 24/7 hosting with durable persistence

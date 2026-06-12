@@ -6,6 +6,8 @@ started: 2026-06-12
 updated: 2026-06-12
 ---
 
+> **Phase 5 consolidation:** These live checks have been merged into the Phase 5 master runbook. Live execution and result capture now happens in `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md` (D-07). The checks below remain as the provenance record and source-of-truth wording; their `result:` fields are not updated here.
+
 ## Current Test
 
 [awaiting human testing]

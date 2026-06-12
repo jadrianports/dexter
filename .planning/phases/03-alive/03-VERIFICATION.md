@@ -34,6 +34,8 @@ human_verification:
     why_human: "Requires live bot running for 30+ minutes with humans in voice and no commands"
 ---
 
+> **Phase 5 consolidation:** The 9 live-behavioral checks in this document (HV-1 through HV-9) have been consolidated into the Phase 5 master runbook. Live execution and result capture now happens in `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md` (D-07). The automated verifications, behavioral spot-checks, and human verification sections below remain as the authoritative provenance record.
+
 # Phase 3: Alive — Verification Report
 
 **Phase Goal:** "Dexter feels present — it reacts, roasts unprompted, tracks habits, and exposes lyrics and history."
