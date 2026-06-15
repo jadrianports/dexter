@@ -55,7 +55,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 **Wave 1** *(parallel — zero file overlap)*
 
 - [x] 05-01-PLAN.md — Neon DB wiring: `sanitize_database_url` + Wave-0 tests (K-05), asyncpg pool tuning (K-04), cache cap (K-07), minimal `/health` endpoint (K-02) — `config.py`, `tests/test_config.py`, `bot.py` (DEPLOY-01, DEPLOY-05) — COMPLETE 2026-06-15
-- [ ] 05-02-PLAN.md — Deploy packaging: yt-dlp/aiohttp pins (K-15), de-Oracle Dockerfile (K-11/12), stdout logging (K-16), archive Oracle scripts (K-08/09/11), `docs/DEPLOY-KOYEB.md` + `.env.example` (K-13) (DEPLOY-01, DEPLOY-08)
+- [x] 05-02-PLAN.md — Deploy packaging: yt-dlp/aiohttp pins (K-15), de-Oracle Dockerfile (K-11/12), stdout logging (K-16), archive Oracle scripts (K-08/09/11), `docs/DEPLOY-KOYEB.md` + `.env.example` (K-13) (DEPLOY-01, DEPLOY-08) — COMPLETE 2026-06-15
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -118,7 +118,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 2.5. Hardening | v1.0 | shipped (pre-GSD) | Complete | 2026-06-02 |
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
-| 5. Ship It Live | v1.1 | 1/3 (replanned Koyeb+Neon) | Executing (Plan 01 complete) | - |
+| 5. Ship It Live | v1.1 | 2/3 (replanned Koyeb+Neon) | Executing (Plans 01-02 complete) | - |
 | 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
 | 7. Player UX & Filters | v1.1 | 0/TBD | Not started | - |
 | 8. Social & Ops | v1.1 | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
 status: executing
-stopped_at: 05-01-PLAN.md complete (Neon DB wiring + health endpoint); ready for 05-02
-last_updated: "2026-06-15T08:09:44Z"
-last_activity: 2026-06-15 -- 05-01 executed (sanitize_database_url + pool tuning + /health)
+stopped_at: 05-02-PLAN.md complete (deploy packaging: yt-dlp/aiohttp pins, Dockerfile de-Oracle, stdout logging, archive Oracle scripts, DEPLOY-KOYEB.md); ready for 05-03
+last_updated: "2026-06-15T09:30:00Z"
+last_activity: 2026-06-15 -- 05-02 executed (Dockerfile de-Oracle, yt-dlp floor pin, stdout logger, script archive, deploy contract doc)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 33
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 ## Current Position
 
 Phase: 05 (ship-it-live) — EXECUTING
-Plan: 2 of 3
-Status: Executing Phase 05 (Plan 01 complete; Plan 02 next)
-Last activity: 2026-06-15 -- 05-01 executed (sanitize_database_url + pool tuning + /health)
+Plan: 3 of 3
+Status: Executing Phase 05 (Plans 01-02 complete; Plan 03 next)
+Last activity: 2026-06-15 -- 05-02 executed (Dockerfile de-Oracle, yt-dlp floor pin, stdout logger, script archive, deploy contract doc)
 
 ## Accumulated Context
 
@@ -83,17 +83,17 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-15T08:09:44Z
-Stopped at: 05-01-PLAN.md complete (Neon DB wiring + health endpoint)
+Last session: 2026-06-15T09:30:00Z
+Stopped at: 05-02-PLAN.md complete (deploy packaging done)
 Next:
 
-  1. Execute 05-02-PLAN.md (deploy packaging: yt-dlp/aiohttp pins, Dockerfile de-Oracle, stdout logging, archive Oracle scripts, DEPLOY-KOYEB.md).
-  2. Execute 05-03-PLAN.md (surgical UAT runbook re-target to Koyeb+Neon).
-  3. User runs 05-UAT-RUNBOOK.md live on Koyeb+Neon, reports via /gsd-verify-work 05.
-  4. User reviews + merges → main (user owns the merge).
+  1. Execute 05-03-PLAN.md (surgical UAT runbook re-target to Koyeb+Neon).
+  2. User runs 05-UAT-RUNBOOK.md live on Koyeb+Neon, reports via /gsd-verify-work 05.
+  3. User reviews + merges → main (user owns the merge).
 
 ## Performance Metrics
 
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
 | Phase 05-ship-it-live P01 (Koyeb+Neon re-planned) | ~8 min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
+| Phase 05-ship-it-live P02 (deploy packaging) | ~12 min | 2 tasks (2 commits) | 9 files (5 created/moved, 4 modified) |
