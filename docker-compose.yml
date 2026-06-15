@@ -8,7 +8,6 @@ services:
   # ── Postgres (colocated, D-11) ──────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    platform: linux/arm64
     environment:
       POSTGRES_DB: dexter
       POSTGRES_USER: dexter
@@ -29,8 +28,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      platforms:
-        - linux/arm64
+      # No platform pin — builds native for the host (amd64 on a PC, arm64 on a Pi/Oracle).
     # Load all env vars from .env (DISCORD_TOKEN, GEMINI_API_KEY, GENIUS_TOKEN, etc.)
     env_file: .env
     environment:
