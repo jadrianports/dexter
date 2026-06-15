@@ -177,6 +177,10 @@ def _pick_next_status() -> str:
 
 # ──────────────────────────── HEALTH ENDPOINT ────────────────────────────
 
+# Module-level handle for the single health-server task. Lets on_ready re-fires
+# skip a second launch (WR-02) and lets a done-callback surface failures (WR-01).
+_health_server_task = None
+
 
 async def _run_health_server() -> None:
     """Minimal HTTP health check endpoint for Koyeb WEB service.
@@ -196,12 +200,17 @@ async def _run_health_server() -> None:
     app.router.add_get('/health', health)
     runner = _aio_web.AppRunner(app)
     await runner.setup()
-    site = _aio_web.TCPSite(runner, '0.0.0.0', 8000)
-    await site.start()
-    log.info("Health endpoint listening on 0.0.0.0:8000/health")
-    # Keep the coroutine alive so the TCPSite is not torn down on return.
-    # Cancellable: asyncio.CancelledError propagates out of asyncio.Event.wait().
-    await asyncio.Event().wait()
+    try:
+        site = _aio_web.TCPSite(runner, '0.0.0.0', 8000)
+        await site.start()
+        log.info("Health endpoint listening on 0.0.0.0:8000/health")
+        # Keep the coroutine alive so the TCPSite is not torn down on return.
+        # Cancellable: asyncio.CancelledError propagates out of asyncio.Event.wait().
+        await asyncio.Event().wait()
+    finally:
+        # WR-03: release the bound port + aiohttp resources on cancel/shutdown.
+        # Latent leak only on in-process restart; harmless under Koyeb SIGTERM-exit.
+        await runner.cleanup()
 
 
 # ──────────────────────────── SERVICE WIRING ────────────────────────────
@@ -315,10 +324,26 @@ async def _initialize_once() -> None:
         status_rotation.start()
 
     # K-02: Minimal HTTP health endpoint for Koyeb WEB service.
-    # No before_loop guard — endpoint must be up before Discord connects so
-    # Koyeb's health check passes on first deploy.
-    asyncio.ensure_future(_run_health_server())
-    log.info("Health server task scheduled")
+    # No before_loop guard — endpoint must be up early so Koyeb's health check
+    # passes on first deploy.
+    # WR-02: on_ready can re-fire (per-shard / reconnect / init retry); launch
+    # the server only once — a second bind on :8000 would raise "address in use".
+    global _health_server_task
+    if _health_server_task is None or _health_server_task.done():
+        _health_server_task = asyncio.ensure_future(_run_health_server())
+
+        def _on_health_server_done(task) -> None:
+            # WR-01: surface a startup failure (e.g. port bind) to the error log;
+            # a bare ensure_future would swallow it and Koyeb's health check would
+            # just time out with no actionable cause in the logs.
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc is not None:
+                log.error("Health server task failed: %s", exc, exc_info=exc)
+
+        _health_server_task.add_done_callback(_on_health_server_done)
+        log.info("Health server task scheduled")
 
     log.info("Dexter is ready.")
 
