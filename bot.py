@@ -10,6 +10,7 @@ import sys
 
 import asyncpg
 import discord
+from aiohttp import web as _aio_web
 from discord import app_commands
 from discord.ext import commands, tasks
 
@@ -174,6 +175,35 @@ def _pick_next_status() -> str:
     return pool[_status_index % len(pool)]
 
 
+# ──────────────────────────── HEALTH ENDPOINT ────────────────────────────
+
+
+async def _run_health_server() -> None:
+    """Minimal HTTP health check endpoint for Koyeb WEB service.
+
+    Koyeb free tier requires a WEB service (not Worker) and performs HTTP
+    health checks. Also enables UptimeRobot pings to prevent 1-hour sleep.
+    Binds to 0.0.0.0 so Koyeb's health checker can reach it (not localhost).
+    Returns the minimal {"status":"ok"} — no internal state exposed (T-05-01).
+    """
+    async def health(request: _aio_web.Request) -> _aio_web.Response:
+        return _aio_web.Response(
+            text='{"status":"ok"}',
+            content_type='application/json',
+        )
+
+    app = _aio_web.Application()
+    app.router.add_get('/health', health)
+    runner = _aio_web.AppRunner(app)
+    await runner.setup()
+    site = _aio_web.TCPSite(runner, '0.0.0.0', 8000)
+    await site.start()
+    log.info("Health endpoint listening on 0.0.0.0:8000/health")
+    # Keep the coroutine alive so the TCPSite is not torn down on return.
+    # Cancellable: asyncio.CancelledError propagates out of asyncio.Event.wait().
+    await asyncio.Event().wait()
+
+
 # ──────────────────────────── SERVICE WIRING ────────────────────────────
 
 
@@ -221,10 +251,13 @@ async def _initialize_once() -> None:
     # SECURITY (T-04-05): DSN comes from config.DATABASE_URL (env, git-ignored);
     # the pool object and DSN string are never logged here.
     bot.pool = await asyncpg.create_pool(
-        dsn=config.DATABASE_URL,
+        dsn=config.sanitize_database_url(config.DATABASE_URL),
         min_size=config.DB_POOL_MIN,
-        max_size=config.DB_POOL_MAX,
+        max_size=config.DB_POOL_MAX,          # now 5 via K-04 constant update
         command_timeout=30,
+        ssl='require',                         # K-05: explicit ssl, not via DSN string
+        max_inactive_connection_lifetime=config.DB_MAX_INACTIVE_CONN_LIFETIME,  # K-04: 240s
+        statement_cache_size=config.DB_STATEMENT_CACHE_SIZE,                     # K-04: 0
     )
     await init_db(bot.pool)
 
@@ -280,6 +313,12 @@ async def _initialize_once() -> None:
         ytdlp_update.start()
     if not status_rotation.is_running():
         status_rotation.start()
+
+    # K-02: Minimal HTTP health endpoint for Koyeb WEB service.
+    # No before_loop guard — endpoint must be up before Discord connects so
+    # Koyeb's health check passes on first deploy.
+    asyncio.ensure_future(_run_health_server())
+    log.info("Health server task scheduled")
 
     log.info("Dexter is ready.")
 
