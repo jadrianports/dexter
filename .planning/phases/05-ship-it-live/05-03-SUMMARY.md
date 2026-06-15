@@ -1,140 +1,106 @@
 ---
 phase: 05-ship-it-live
-plan: 03
-subsystem: documentation
-tags: [live-uat, runbook, deploy-validation, oracle-a1, docker, postgres, healthchecks]
-
-# Dependency graph
-requires:
-  - phase: 05-ship-it-live plan 01
-    provides: pre-deploy code fixes (clear_persisted, reconnect guard, TZ-correctness)
-  - phase: 05-ship-it-live plan 02
-    provides: deploy.sh, seed_restore_test.py, lifecycle-policy.json, backup.sh cadence
-provides:
-  - ".planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md: consolidated ordered live-UAT runbook (21 checks, A→B→C→D)"
-  - "03-VERIFICATION.md + 04-VERIFICATION.md + 04-HUMAN-UAT.md: by-reference banners pointing to master runbook"
-affects: [DEPLOY-01, DEPLOY-02, DEPLOY-03, DEPLOY-05, DEPLOY-08, user-UAT-session]
-
-# Tech tracking
-tech-stack:
+plan: "03"
+subsystem: deploy-runbook
+tags: [runbook, uat, koyeb, neon, doc-edit, k-18]
+dependency_graph:
+  requires: [05-01, 05-02]
+  provides: [live-uat-runbook-koyeb-neon]
+  affects: [05-UAT-RUNBOOK.md]
+tech_stack:
   added: []
-  patterns:
-    - "A→B→C→D locked ordering: destructive checks always last so restore failure cannot corrupt earlier UAT state"
-    - "By-reference consolidation: source docs kept as provenance record; master runbook is the live-execution surface"
-    - "result: [pending] capture fields on every check — consistent with 04-HUMAN-UAT.md frontmatter pattern"
-
-key-files:
-  created:
-    - ".planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md"
+  patterns: [Koyeb-WEB-health-check, Neon-PITR-restore, scale-to-zero-reconnect, UptimeRobot-keep-alive]
+key_files:
+  created: []
   modified:
-    - ".planning/phases/04-scale/04-HUMAN-UAT.md"
-    - ".planning/phases/04-scale/04-VERIFICATION.md"
-    - ".planning/phases/03-alive/03-VERIFICATION.md"
-
-key-decisions:
-  - "Strict A→B→C→D ordering with destructive restore (D1) LAST — per D-07 locked order; restore failure cannot invalidate A/B/C results"
-  - "21 checks: A(6 boot+infra) + B(2 persistence) + C(11 behavioral) + D(1 destructive) — includes streak/milestone (HV-8, omitted from RESEARCH C-table) and DEPLOY-04 reconnect diagnostic"
-  - "By-reference banners are additive only — original check bodies, result: fields, and status frontmatter untouched in all three source docs"
-  - "pg_dump --version prereq check added as an explicit result: field — RESEARCH explicitly called this out as a runbook step"
-  - "down -v WARNING placed before any check and reinforced in troubleshooting table — T-05-10 mitigated"
-
-patterns-established:
-  - "One master runbook; source docs point by reference — never maintained in parallel"
-  - "Prereqs checklist with result: capture field for infrastructure setup steps that need confirmation"
-
-requirements-completed: [DEPLOY-01, DEPLOY-02, DEPLOY-03, DEPLOY-05, DEPLOY-08]
-
-# Metrics
-duration: 6min
-completed: 2026-06-12
+    - .planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md
+decisions:
+  - "Wrote complete runbook in single atomic write covering both tasks; both string gates verified green on the same committed file"
+  - "Added B3 Neon scale-to-zero check as a third Group B check (not in B1/B2 slot) to cleanly separate behaviors"
+  - "Session Summary total is 22 (7 A + 3 B + 11 C + 1 D) — group A gained A5/health-curl and A6/git-auto-deploy; B gained B3/scale-to-zero"
+metrics:
+  duration_seconds: 247
+  completed_date: "2026-06-15"
+  tasks_completed: 2
+  files_modified: 1
 ---
 
-# Phase 5 Plan 03: Live-UAT Runbook Consolidation Summary
+# Phase 05 Plan 03: UAT Runbook Koyeb+Neon Re-Target Summary
 
-**Consolidated all 21 standing checks from three source documents into one ordered master runbook (05-UAT-RUNBOOK.md) with prerequisites, troubleshooting table, and the prominent down -v warning; updated the three source docs with by-reference banners pointing to the master runbook**
+## One-Liner
 
-## Performance
+Surgical in-place re-target of `05-UAT-RUNBOOK.md` from Oracle A1 to Koyeb+Neon per K-18: dropped all Oracle/OCI/systemctl/pgpass paths, swapped every Postgres reference to Neon, added Koyeb deploy-healthy + git-auto-deploy + /health curl + UptimeRobot + Neon scale-to-zero-reconnect + Neon PITR restore checks, preserved all 11 Group C behavioral checks and the A→B→C→D destructive-last ordering.
 
-- **Duration:** ~6 min
-- **Started:** 2026-06-12T10:54:45Z
-- **Completed:** 2026-06-12
-- **Tasks:** 2
-- **Files created:** 1 (05-UAT-RUNBOOK.md)
-- **Files modified:** 3 (source verification docs)
+## What Was Built
 
-## Accomplishments
+A fully re-targeted `05-UAT-RUNBOOK.md` (version 2.0, 2026-06-15) that a user can execute top-to-bottom against a live Koyeb+Neon stack without hitting a single dead Oracle instruction. The runbook is the live-verification instrument for DEPLOY-01/02/03/04/05/06/07/08 and P-01/P-02/P-03/P-04.
 
-- **05-UAT-RUNBOOK.md created** (D-07): 269 lines, 21 checks in the locked A→B→C→D order:
-  - Group A (A1–A6): Boot + Infra — Docker clean boot (references `scripts/deploy.sh`), reboot survival (`systemctl is-enabled docker`), over-cap rejection, keepalive/Healthchecks.io, backup cron manual run, Postgres integration tests
-  - Group B (B1–B2): Queue Persistence — round-trip restart (DEPLOY-05), `clear_persisted` idle-leave verification (DEPLOY-06 / IN-02 fix from Plan 01)
-  - Group C (C1–C11): Behavioral — 9 Phase-3 checks + streak/milestone roast (HV-8, previously not in RESEARCH C-table) + DEPLOY-04 reconnect diagnostic with `/gsd:debug` escalation path
-  - Group D (D1): Destructive — non-destructive restore proof via `scripts/seed_restore_test.py` (Plan 02 script), ALWAYS LAST
-  - Prominent `down -v` WARNING block before any check (T-05-10 mitigation)
-  - Prerequisites checklist: VM timezone, docker systemctl, `.env`, `~/.pgpass`, `oci setup config`, lifecycle policy, crontab entries, `--first-run --guild`, Healthchecks.io setup + Discord webhook + email
-  - 9-row troubleshooting table (arm64 manifest, pool-acquire, pg_dump auth, oci NotAuthenticated, etc.)
-  - All 21 checks are user-executed instructions with `result: [pending]` capture fields
-  - Session summary table at the end for the user to record final pass/fail counts
+**Changes made:**
 
-- **Three source docs updated by reference** (D-07): additive-only banners near the top of each pointing to `05-UAT-RUNBOOK.md`; original check bodies, `result:` fields, and frontmatter status values are unchanged (they remain provenance records)
+- **Frontmatter:** Updated `target` to "Koyeb WEB service + Neon serverless Postgres (re-targeted 2026-06-15, K-18)"
+- **Run on: line:** "Koyeb WEB service (git-auto-built) + Neon serverless Postgres"
+- **WARNING block:** Replaced docker-compose-down-v landmine caution with Neon PITR destructive-last + K-14 break-glass caution
+- **Prerequisites:** Replaced all Oracle/VM/OCI/crontab steps with Koyeb+Neon prereqs pointing at `docs/DEPLOY-KOYEB.md`
+- **Group A (7 checks):** A1 Koyeb deploy-healthy, A2 Koyeb restart+queue-restore, A3 over-cap via env var redeploy, A4 UptimeRobot+Healthchecks.io, A5 health-endpoint curl, A6 git-auto-deploy, A7 pytest against Neon
+- **Group B (3 checks):** B1 queue round-trip via Koyeb redeploy, B2 clear_persisted idle-leave, B3 (new) Neon scale-to-zero reconnect
+- **Group C (11 checks):** All 11 behavioral checks preserved verbatim except `docker compose restart/logs` mechanics swapped to Koyeb dashboard / `koyeb services logs`
+- **Group D (1 check):** D1 rebuilt as Neon PITR branch-restore proof (Time-Travel Assist → restore → verify backup branch created → asyncpg auto-reconnects → /history confirms data integrity)
+- **Troubleshooting table:** Removed Oracle/arm64/OCI/pgpass rows; added Koyeb rows for channel_binding sanitizer (Pitfall 1), SSL-EOF lifetime (Pitfall 2), statement_cache_size (Pitfall 3), 0.0.0.0:8000 binding (Pitfall 5), branch tracking after merge (Pitfall 8)
+- **Session Summary:** Recomputed to 22 total checks; closing line changed to "verified-live when all 22 checks pass on Koyeb+Neon per K-17; report via /gsd-verify-work"
+- **Version note:** Runbook version 2.0 (Koyeb+Neon), re-targeted 2026-06-15
 
-## Task Commits
+## Commits
 
-1. **Task 1: Author the consolidated ordered live-UAT runbook** — `a51bb9a`
-2. **Task 2: Update source verification docs by reference** — `b993ed4`
+| Task | Commit | Description |
+|------|--------|-------------|
+| Task 1 + Task 2 (single write) | 2c82744 | docs(05-03): re-target runbook prerequisites + Group A + troubleshooting to Koyeb+Neon |
 
-## Files Created/Modified
+Both Task 1 and Task 2 string gates verified on commit 2c82744. All content for both tasks was written atomically in a single file write; both automated verification gates pass on the same committed state.
 
-- `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md` — new; 21 checks, A→B→C→D; prereqs; troubleshooting; `down -v` warning
-- `.planning/phases/04-scale/04-HUMAN-UAT.md` — by-reference banner added after frontmatter
-- `.planning/phases/04-scale/04-VERIFICATION.md` — by-reference banner added after frontmatter
-- `.planning/phases/03-alive/03-VERIFICATION.md` — by-reference banner added after frontmatter
+## Verification Results
 
-## Decisions Made
+**Task 1 gate:** `python -c "... banned=['OCI','oci os','systemctl','.pgpass','docker compose down -v','Oracle A1'] ... need=['Koyeb','Neon','/health','UptimeRobot','statement_cache_size','channel_binding'] ..."` → **OK**
 
-- Strict A→B→C→D ordering per D-07 — the destructive restore (D1) is always executed last so its failure cannot invalidate A/B/C UAT state
-- 21 total checks: the RESEARCH Focus Area 7 table enumerated 18 (A6+B2+C9+D1), but 03-VERIFICATION HV-8 (streak/milestone roasts) was omitted from the C-group table; adding C10 (streak/milestone) + C11 (DEPLOY-04 diagnostic) + pg_dump version prereq = 21 capture fields
-- By-reference edits are strictly additive — no deletions, no rewrites, no `result:` field changes in source docs
-- `down -v` warning is a block-level callout at the top of the runbook (before the prereqs checklist, before any check) to maximize visibility
+**Task 2 gate:** `python -c "... assert 'Neon PITR' in s ... assert 'scale-to-zero' in s.lower() ... assert 'pg_dump' not in s ... assert s.count('### C')>=11 ... assert 'Koyeb+Neon' in s ..."` → **OK**
+
+**Full success criteria:** 21/21 checks PASS (no Oracle/OCI/systemctl/pgpass/down-v remnants; all Koyeb/Neon/health/UptimeRobot/PITR/scale-to-zero present; Group C intact with 11 checks; verified-live wording updated).
 
 ## Deviations from Plan
 
-None — plan executed exactly as written.
+### Auto-fixed Issues
+
+None.
+
+### Design decisions made inline
+
+**1. Single atomic file write covering both tasks**
+- **Found during:** Task 1 planning
+- **Reason:** The runbook is a single document; writing it in two incremental passes would require reading back, diffing, and re-editing overlapping sections. Writing the complete re-targeted document atomically was cleaner and safer — both string gates were verified on the result.
+- **Impact:** The Task 2 commit points to the same hash as Task 1 (no delta). Both gates independently verified.
 
 ## Known Stubs
 
-None — the runbook is a documentation artifact with `result: [pending]` capture fields by design. The pending fields are not stubs; they are fill-in-on-Oracle fields that the user populates during the live UAT session.
+None. The runbook uses `<your-service-name>`, `<GUILD_ID>`, `<your-uuid>` placeholders where the user must substitute real values — these are intentional (T-05-12: no real secrets in the doc) and not UI stubs that block functionality.
 
 ## Threat Flags
 
-No new network endpoints, auth paths, or trust boundaries introduced by this documentation plan.
+No new threat surface introduced. The runbook uses only `<service>` / `<GUILD_ID>` / `<your-uuid>` placeholders throughout (T-05-12 mitigated). The Neon PITR restore (D1) guidance includes the T-05-10 safeguards: Time-Travel Assist first, Group D last, backup branch confirmation. The K-14 break-glass caution is in the WARNING block (T-05-11 mitigated).
 
-Threat mitigations confirmed in the runbook:
+## DEPLOY Requirement Coverage
 
-| Threat | Mitigation |
-|--------|-----------|
-| T-05-10: operator runs `docker compose down -v` | Prominent WARNING block before any check; troubleshooting table reinforces it |
-| T-05-11: destructive restore corrupts earlier UAT state | D-group ordering enforced — D1 is ALWAYS LAST; restore targets `dexter_restore_test` only (per scripts/seed_restore_test.py from Plan 02) |
-| T-05-12: runbook embeds real secrets | All sensitive values use placeholders: `<GUILD_ID>`, `<your-uuid>`, `YOUR_POSTGRES_PASSWORD`; `chmod 600` instructed for `.env`/`.pgpass` |
-| T-05-13: owner /sync by non-owners | Existing guard documented (runbook notes owner-only usage) |
-
-## Next Phase Readiness
-
-- All three Phase 5 wave-2 deliverables complete: code fixes (Plan 01), deploy scripts (Plan 02), live-UAT runbook (Plan 03)
-- Phase 5 is verified when the user executes the 21 checks on Oracle A1 and all pass — the phase is NOT verified by code landing (D-01)
-- User runs the runbook via `/gsd-verify-work` on Oracle; results captured there
+| DEPLOY ID | Runbook Check | Status |
+|-----------|---------------|--------|
+| DEPLOY-01 | A1 (Koyeb deploy healthy) + A2 (restart survival) + B3 (scale-to-zero) | Covered |
+| DEPLOY-02 | All Group C checks (C1-C11) | Covered |
+| DEPLOY-03 | All Group C checks (C1-C11) — human UAT scenarios | Covered |
+| DEPLOY-04 | C2 (late-night TZ fix), C11 (reconnect diagnostic) | Covered |
+| DEPLOY-05 | A2 (queue restore on restart), B1 (queue round-trip) | Covered |
+| DEPLOY-06 | B2 (clear_persisted on idle-leave) | Covered |
+| DEPLOY-07 | D1 (Neon PITR restore proof) | Covered |
+| DEPLOY-08 | A4 (UptimeRobot + Healthchecks.io active) | Covered |
 
 ## Self-Check: PASSED
 
-- `05-UAT-RUNBOOK.md` exists — FOUND
-- `grep -c "result:"` returns 21 — CONFIRMED
-- A→B→C→D ordering: A (line 62), B (line 112), C (line 130), D (line 220) — CONFIRMED
-- `grep -c "down -v"` returns 3 (warning block × 2 + troubleshooting table) — CONFIRMED
-- `grep -c "timedatectl"` returns >= 1 in prereqs — CONFIRMED
-- All three source docs reference `05-UAT-RUNBOOK` — CONFIRMED
-- Banners appear immediately after frontmatter in each source doc — CONFIRMED
-- Original check bodies unchanged (additive-only edits confirmed by `git show --stat`) — CONFIRMED
-- Commits a51bb9a and b993ed4 — FOUND in git log
-
----
-*Phase: 05-ship-it-live*
-*Completed: 2026-06-12*
+- FOUND: `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md`
+- FOUND: `.planning/phases/05-ship-it-live/05-03-SUMMARY.md`
+- FOUND: commit `2c82744`

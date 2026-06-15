@@ -59,7 +59,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-03-PLAN.md — Surgical re-target of `05-UAT-RUNBOOK.md` to Koyeb+Neon in place (K-18): drop OCI/host-cron, swap Postgres→Neon, add Koyeb-deploy/git-deploy/health/UptimeRobot/Neon-scale-to-zero/Neon-PITR checks, keep A→B→C→D + behavioral checks (DEPLOY-01…08; P-01…P-04 live-verify)
+- [x] 05-03-PLAN.md — Surgical re-target of `05-UAT-RUNBOOK.md` to Koyeb+Neon in place (K-18): drop OCI/host-cron, swap Postgres→Neon, add Koyeb-deploy/git-deploy/health/UptimeRobot/Neon-scale-to-zero/Neon-PITR checks, keep A→B→C→D + behavioral checks (DEPLOY-01…08; P-01…P-04 live-verify) — COMPLETE 2026-06-15
 
 ### Phase 6: Speed & Caching
 
@@ -118,7 +118,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 2.5. Hardening | v1.0 | shipped (pre-GSD) | Complete | 2026-06-02 |
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
-| 5. Ship It Live | v1.1 | 2/3 (replanned Koyeb+Neon) | Executing (Plans 01-02 complete) | - |
+| 5. Ship It Live | v1.1 | 3/3 (replanned Koyeb+Neon) | Code complete — awaiting live UAT | - |
 | 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
 | 7. Player UX & Filters | v1.1 | 0/TBD | Not started | - |
 | 8. Social & Ops | v1.1 | 0/TBD | Not started | - |
