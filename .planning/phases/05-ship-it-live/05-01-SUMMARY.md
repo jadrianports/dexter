@@ -1,122 +1,133 @@
 ---
-phase: 05-ship-it-live
-plan: 01
-subsystem: reliability
-tags: [postgresql, asyncio, discord.py, zoneinfo, queue-persistence, reconnect]
-
-# Dependency graph
-requires:
-  - phase: 04-scale
-    provides: "queue_persistence service with clear_persisted(), PostgreSQL guild_queues table, smart-rejoin restore logic"
-provides:
-  - "clear_persisted() called on idle-leave path (bot.py) — ghost-queue-on-restart bug closed"
-  - "clear_persisted() called on reconnect-failure path (cogs/music.py) — dead session no longer persists"
-  - "is_connected() guard in smart-rejoin (services/queue_persistence.py) — race-defensive post-connect check"
-  - "Diagnostic INFO logs on reconnect path, DEBUG logs in _play_track for /gsd:debug trail"
-  - "TZ-explicit late-night hour via ZoneInfo(config.STREAK_TIMEZONE) in cogs/events.py"
-  - "Wave-0 TZ smoke test in tests/test_streak.py"
-affects: [05-02, 05-03, deploy-runbook]
-
-# Tech tracking
-tech-stack:
+phase: "05"
+plan: "01"
+subsystem: database-layer / health-endpoint
+tags: [neon, asyncpg, koyeb, pool-tuning, health-endpoint, tdd]
+dependency_graph:
+  requires: []
+  provides:
+    - config.sanitize_database_url
+    - config.DB_MAX_INACTIVE_CONN_LIFETIME
+    - config.DB_STATEMENT_CACHE_SIZE
+    - bot._run_health_server
+    - tuned-asyncpg-create_pool
+  affects:
+    - bot.py (create_pool call site, health endpoint task)
+    - config.py (constants + pure sanitizer function)
+    - tests/test_config.py (Wave-0 unit tests)
+tech_stack:
   added: []
   patterns:
-    - "clear_persisted() call template: queue._play_generation += 1 → queue.clear() → hasattr guard → await clear_persisted()"
-    - "is_connected() post-connect paranoia guard before _play_track in async voice code"
-    - "DEBUG for hot per-play logs, INFO for low-frequency reconnect path — log-level discipline"
-    - "ZoneInfo(config.STREAK_TIMEZONE) for all community-time hour calculations"
-
-key-files:
+    - "pure function in config.py with import inside body (minimal-import convention)"
+    - "asyncio.ensure_future for one-shot background coroutine"
+    - "aiohttp.web.Application with AppRunner + TCPSite for minimal HTTP server"
+    - "TDD RED→GREEN cycle for pure-function unit test"
+key_files:
   created:
-    - "tests/test_streak.py (test_tz_aware_hour_is_integer function added)"
+    - tests/test_config.py
   modified:
-    - "bot.py — idle-leave clear_persisted() gap closed at ~396"
-    - "cogs/music.py — reconnect-failure clear_persisted() gap closed at ~1206; _play_track DEBUG logs added"
-    - "services/queue_persistence.py — smart-rejoin is_connected() guard + INFO log"
-    - "cogs/events.py — naive datetime.now().hour replaced with ZoneInfo-aware read"
-
-key-decisions:
-  - "Mirror the /stop template exactly at both gap sites (generation increment → clear → hasattr guard → clear_persisted) — no divergence from established pattern"
-  - "Use bot (not self.bot) in bot.py idle-leave — module-level task, not a cog method"
-  - "DEBUG level for _play_track logs (hot per-play path); INFO for reconnect loop (low-frequency) — per D-03 log-level rule"
-  - "bot.py:467 yt-dlp loop tzinfo left unchanged (deferred per D-06 Claude's discretion — low-stakes)"
-
-patterns-established:
-  - "clear_persisted template: always use queue._play_generation += 1 before clear() and hasattr() guard before await"
-  - "Post-connect vc.is_connected() paranoia guard required before any _play_track call from outside a cog"
-
-requirements-completed: [DEPLOY-04, DEPLOY-06]
-
-# Metrics
-duration: 25min
-completed: 2026-06-12
+    - config.py
+    - bot.py
+decisions:
+  - "DB_POOL_MAX lowered 10->5 for Neon free single-worker (K-04)"
+  - "AUDIO_CACHE_MAX_MB lowered 2048->512 for Koyeb 2GB ephemeral disk (K-07)"
+  - "sanitize_database_url strips entire query string with re.sub — simpler and safe; all Neon query params are SSL/auth hints asyncpg handles via ssl= kwarg (K-05)"
+  - "_run_health_server uses asyncio.Event().wait() to stay alive and remain cancellable (K-02 amendment)"
+  - "No before_loop guard on health server — must be reachable before Discord connects so Koyeb's health check passes on first deploy"
+  - "Flat-name alias functions added at module level in test_config.py for 05-VALIDATION.md automated command compatibility"
+metrics:
+  duration: "~8 minutes"
+  completed: "2026-06-15T08:09:44Z"
+  tasks: 2
+  commits: 3
+  files_created: 1
+  files_modified: 2
 ---
 
-# Phase 5 Plan 01: Pre-Deploy Bug Fixes Summary
+# Phase 05 Plan 01: Neon DB Layer + Koyeb Health Endpoint Summary
 
-**Ghost-queue-on-restart bug closed (clear_persisted at idle-leave + reconnect-failure), smart-rejoin race-hardened with is_connected() guard, late-night roast hour TZ-corrected via ZoneInfo(config.STREAK_TIMEZONE)**
+**One-liner:** Neon-tuned asyncpg pool (ssl='require', 240s lifetime, statement_cache_size=0) + sanitize_database_url pure function + minimal aiohttp /health on 0.0.0.0:8000 for Koyeb WEB service.
 
-## Performance
+---
 
-- **Duration:** ~25 min
-- **Started:** 2026-06-12T00:00:00Z
-- **Completed:** 2026-06-12
-- **Tasks:** 3
-- **Files modified:** 5
+## What Was Built
 
-## Accomplishments
+This plan wired Dexter's database layer and HTTP liveness for the Koyeb + Neon substrate:
 
-- DEPLOY-06 / IN-02 closed: `clear_persisted()` now fires on both the idle-leave path (bot.py) and the reconnect-failure path (cogs/music.py), exactly mirroring the authoritative `/stop` template — a cleared queue can no longer resurrect on next boot
-- DEPLOY-04 / WR-03 hardened: smart-rejoin in `services/queue_persistence.py` now captures `vc = await connect()` and guards with `vc.is_connected()` before calling `_play_track`; reconnect loop logs at INFO level and `_play_track` logs at DEBUG level for a live `/gsd:debug` trail
-- D-06 fixed: `cogs/events.py` late-night hour computed via `ZoneInfo(config.STREAK_TIMEZONE)` instead of naive `datetime.now().hour` (host-local); Wave-0 TZ smoke test `test_tz_aware_hour_is_integer` added and passing
+1. **`config.sanitize_database_url(dsn)`** — pure function that strips the entire query string from a Neon console connection string (`?sslmode=require&channel_binding=require`) before asyncpg ever sees it. asyncpg treats unrecognized DSN params as Postgres GUCs; `channel_binding` would cause `unrecognized configuration parameter` errors. Stripping the query string is simpler and safe because SSL is handled via explicit `ssl='require'` kwarg.
 
-## Task Commits
+2. **New config constants (K-04/K-07):**
+   - `DB_MAX_INACTIVE_CONN_LIFETIME = 240` — recycles connections before Neon's 5-min scale-to-zero
+   - `DB_STATEMENT_CACHE_SIZE = 0` — disables prepared statement caching for PgBouncer transaction mode
+   - `DB_POOL_MAX = 5` (was 10) — trimmed for Neon free single-worker
+   - `AUDIO_CACHE_MAX_MB = 512` (was 2048) — safe for Koyeb's 2GB ephemeral disk
 
-1. **Task 1: Close the clear_persisted() gaps (DEPLOY-06 / IN-02)** - `571821d` (fix)
-2. **Task 2: Reconnect-race defensive guard + diagnostic instrumentation (DEPLOY-04)** - `5afa18c` (fix)
-3. **Task 3: Timezone-correct late-night hour + Wave-0 TZ smoke test (D-06)** - `e1a1d3a` (fix)
+3. **Tuned `asyncpg.create_pool` call** in `bot.py._initialize_once()` — added `ssl='require'`, `max_inactive_connection_lifetime=config.DB_MAX_INACTIVE_CONN_LIFETIME`, `statement_cache_size=config.DB_STATEMENT_CACHE_SIZE`, and `dsn=config.sanitize_database_url(config.DATABASE_URL)`.
 
-## Files Created/Modified
+4. **`_run_health_server()` background coroutine** — minimal aiohttp GET /health returning `{"status":"ok"}` bound to `0.0.0.0:8000` (not localhost, per Pitfall 5). Launched via `asyncio.ensure_future()` inside `_initialize_once()` after background tasks start, before `restore_queues`. Stays alive via `asyncio.Event().wait()` and is cancellable.
 
-- `bot.py` — idle-leave path: `queue._play_generation += 1` before `vc.stop()`, then `await bot.queue_persistence.clear_persisted(guild.id)` after `queue.clear()`
-- `cogs/music.py` — reconnect-failure path: same generation increment + `clear_persisted` added; reconnect loop gets two INFO log calls; `_play_track` gets three DEBUG log calls (gen transition, stop, play)
-- `services/queue_persistence.py` — smart-rejoin: captures `vc = await connect()`, logs connected state at INFO, guards with `if not vc.is_connected(): return` before `_play_track`
-- `cogs/events.py` — replaces `import datetime as _dt; local_hour = _dt.datetime.now().hour` with `from zoneinfo import ZoneInfo as _ZoneInfo; local_hour = _dt.datetime.now(tz=_ZoneInfo(config.STREAK_TIMEZONE)).hour`
-- `tests/test_streak.py` — adds `test_tz_aware_hour_is_integer()` as module-level function
+5. **`tests/test_config.py`** — Wave-0 unit tests (TDD RED→GREEN): 3 class-based tests in `TestSanitizeDatabaseUrl` + 3 flat-name aliases for VALIDATION.md automated command compatibility. All 6 pass.
 
-## Decisions Made
+---
 
-- Mirror the `/stop` template exactly at both gap sites — no creative variation, just copy the established pattern with the correct `bot` vs `self.bot` distinction
-- `bot.py:467` (yt-dlp loop tzinfo) left unchanged per D-06 Claude's discretion — deferred as low-stakes
-- DEBUG (not INFO) for `_play_track` logs — per-track path fires on every song, INFO would flood production logs; reconnect path is low-frequency so INFO is appropriate
+## Commits
+
+| Hash | Type | Description |
+|------|------|-------------|
+| `fb32826` | test | TDD RED — failing Wave-0 tests for sanitize_database_url |
+| `93d3ff5` | feat | TDD GREEN — sanitize_database_url + Neon constants in config.py |
+| `0fc4f6e` | feat | Tuned create_pool + _run_health_server() in bot.py |
+
+---
+
+## Verification Status
+
+| Check | Status |
+|-------|--------|
+| `pytest tests/test_config.py -x -q` | PASSED (6 tests) |
+| `pytest tests/test_streak.py -q` | PASSED (12 tests, no regression) |
+| `python -c "import ast; ast.parse(open('bot.py').read())"` | PASSED |
+| AST acceptance check (health server + ssl kwarg + stmt_cache + 0.0.0.0) | PASSED |
+| `python -c "import config; print(config.sanitize_database_url('...'))"` | PASSED |
+| Local boot + `curl localhost:8000/health` | **PENDING** (human-check; requires local Postgres via docker compose break-glass) |
+| Full suite (`pytest tests/ -q`) | Pre-existing failures only (google/yt_dlp modules not installed on Windows host; test_database_phase4 requires live Postgres connection — ConnectionRefusedError since Docker not running). Zero new failures introduced. |
+
+---
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+None — plan executed exactly as written.
 
-## Issues Encountered
+The test_database_phase4.py and google/yt_dlp test failures observed during full-suite run are pre-existing (require Docker+Postgres and google-genai/yt-dlp packages not installed on the Windows dev host). Confirmed pre-existing by checking the same test suite at the prior commit.
 
-- Full pure-unit suite (`python -m pytest tests/ -q --ignore=tests/test_database_phase4.py`) hits import errors for `google.genai` and `yt_dlp` — these packages are not installed in the Windows dev environment (they live on the Oracle Cloud VM). This is pre-existing, not introduced by these changes. The directly-relevant test files (`test_queue.py` 26 tests, `test_streak.py` 12 tests) all pass.
+---
 
-## User Setup Required
+## Known Stubs
 
-None - no external service configuration required. All changes are pure code fixes verified by py_compile and unit tests.
+None. All wired with real config constants.
 
-## Next Phase Readiness
+---
 
-- All three pre-deploy code blockers resolved: ghost-queue resurrection (DEPLOY-06), reconnect race hardening (DEPLOY-04), TZ personality correctness (D-06)
-- Ready for Plan 05-02 (deploy infrastructure setup / Oracle A1 + Docker + Postgres standup)
-- Live behavioral confirmation of these fixes (runbook checks B2/DEPLOY-06, DEPLOY-04, DEPLOY-02 C2) requires the Oracle A1 VM to be running — deferred to Plan 05-03 runbook
+## Threat Flags
+
+No new threat surface beyond what the plan's threat model already covers. The `/health` endpoint returns only `{"status":"ok"}` with no internal state exposed (T-05-01 mitigated). SSL is forced via explicit kwarg (T-05-03 mitigated). DSN not logged (T-05-02 mitigated).
+
+---
+
+## Pending Human Check
+
+The plan's `<human-check>` for Task 2 — boot the bot locally against local Postgres (docker compose break-glass) and run `curl localhost:8000/health` to confirm `{"status":"ok"}` with HTTP 200 — is not an autonomous task. The live Koyeb+Neon verification (scale-to-zero reconnect, deploy-healthy) is captured in `05-UAT-RUNBOOK.md` (Plan 03) and executed by the user.
+
+---
 
 ## Self-Check: PASSED
 
-- `bot.py`: contains `clear_persisted` in idle-leave block, `queue._play_generation += 1` before `vc.stop()` — FOUND
-- `cogs/music.py`: `grep -c "clear_persisted"` returns 2 (existing /stop site + new reconnect-failure site) — FOUND
-- `services/queue_persistence.py`: `is_connected()` guard in smart-rejoin try block, `vc = await connect()` captured — FOUND
-- `cogs/events.py`: `ZoneInfo` present, naive `datetime.now().hour` absent — FOUND
-- `tests/test_streak.py`: `test_tz_aware_hour_is_integer` function present, passes — FOUND
-- Commits 571821d, 5afa18c, e1a1d3a: all verified in `git log` — FOUND
-
----
-*Phase: 05-ship-it-live*
-*Completed: 2026-06-12*
+- `tests/test_config.py` — FOUND
+- `config.py` contains `def sanitize_database_url(` — FOUND
+- `config.py` contains `DB_MAX_INACTIVE_CONN_LIFETIME = 240` — FOUND
+- `config.py` contains `DB_STATEMENT_CACHE_SIZE = 0` — FOUND
+- `config.py` contains `DB_POOL_MAX = 5` — FOUND
+- `config.py` contains `AUDIO_CACHE_MAX_MB = 512` — FOUND
+- `bot.py` contains `_run_health_server` — FOUND
+- `bot.py` contains `ssl='require'` — FOUND
+- Commits fb32826, 93d3ff5, 0fc4f6e — FOUND in git log

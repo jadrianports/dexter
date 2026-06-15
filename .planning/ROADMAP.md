@@ -29,7 +29,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 ### v1.1 Live & Lethal (Phases 5–8)
 
-- [ ] **Phase 5: Ship It Live** — Oracle A1 + Docker standup, full live-UAT checklist, reconnect race fix, backup/restore validated
+- [ ] **Phase 5: Ship It Live** — Koyeb WEB service + Neon serverless Postgres standup (re-targeted from Oracle), full live-UAT checklist, reconnect race fix, Neon PITR restore validated
 - [ ] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock
 - [ ] **Phase 7: Player UX & Filters** — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects
 - [ ] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility
@@ -38,26 +38,28 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 ### Phase 5: Ship It Live
 
-**Goal**: Dexter is running 24/7 on Oracle A1 and every v1.0 behavioral and deploy check has been validated in production
-**Depends on**: Phase 4 (code-complete bot, Docker Compose stack, Postgres schema, keepalive/backup scripts — all done)
+> **Re-targeted 2026-06-15 (Oracle A1 → Koyeb + Neon).** The substrate changed; the Phase-5 goal (take Dexter live 24/7 with every v1.0 behavior + deploy/restore validated in production) did not. Original Oracle plans archived under `oracle-attempt/`. See 05-CONTEXT.md (K-01…K-18) for the pivot rationale.
+
+**Goal**: Dexter is running 24/7 on a free Koyeb WEB service backed by Neon serverless Postgres, and every v1.0 behavioral and deploy check has been validated live (K-17)
+**Depends on**: Phase 4 (code-complete bot, Docker image, Postgres schema — all done); the 3 substrate-agnostic code fixes (P-01…P-03) + per-guild sync (P-04) already committed on `gsd/phase-5-ship-it-live`
 **Requirements**: DEPLOY-01, DEPLOY-02, DEPLOY-03, DEPLOY-04, DEPLOY-05, DEPLOY-06, DEPLOY-07, DEPLOY-08
 **Success Criteria** (what must be TRUE):
 
-  1. `docker compose up` on the Oracle A1 VM brings up Postgres + bot; the bot posts its startup message to Discord and stays connected through at least one host reboot
+  1. The bot deploys as a Koyeb WEB service (git-auto-built from the Dockerfile), serves `GET /health` → `{"status":"ok"}` on `0.0.0.0:8000`, and holds the Discord gateway 24/7 with an UptimeRobot ping defeating Koyeb free's 1-hour scale-to-zero; a Koyeb restart/redeploy auto-reconnects and restores the queue from Neon
   2. All 9 Phase-3 behavioral checks (voice roasts, startup message, status rotation, /lyrics, /history, reactions, repeat-song roast, streak milestones, idle loneliness) are confirmed firing in a live Discord session
-  3. All 6 Phase-4 deploy checks (Docker clean-boot, queue persistence round-trip, over-cap rejection, Postgres integration tests, keepalive cron, backup cron) pass on the Oracle host
-  4. Voice playback survives a live reconnect event without the race at `cogs/music.py:~609` causing a double-play or silent failure, and `clear_persisted()` fires correctly on idle-leave and reconnect-failure paths
-  5. A `pg_dump` backup is produced, uploaded to OCI Object Storage, and restored end-to-end on the Oracle host
+  3. All Phase-4 deploy-equivalent checks pass on Koyeb+Neon (Koyeb clean deploy-healthy, queue persistence round-trip via redeploy, over-cap rejection, Postgres integration tests against Neon, UptimeRobot + Healthchecks.io ping confirmed)
+  4. Voice playback survives a live reconnect event without the race at `cogs/music.py:~609` causing a double-play or silent failure (P-01), and `clear_persisted()` fires correctly on idle-leave and reconnect-failure paths (P-02)
+  5. The asyncpg pool survives Neon's 5-minute idle scale-to-zero with no SSL-EOF / channel_binding / prepared-statement crash, and a Neon PITR branch-restore is confirmed end-to-end within the 6-hour window
 
-**Plans**: 3 plansPlans:
-**Wave 1**
+**Plans**: 3 plans (replanned 2026-06-15 for Koyeb + Neon)
+**Wave 1** *(parallel — zero file overlap)*
 
-- [x] 05-01-PLAN.md — Three code fixes: clear_persisted gaps (DEPLOY-06), reconnect-race guard + instrumentation (DEPLOY-04), TZ-correct late-night hour + Wave-0 TZ test (D-06)
-- [x] 05-02-PLAN.md — Helper scripts: deploy.sh + 6h backup cadence + OCI lifecycle (DEPLOY-01), non-destructive seed/restore-verify + pure seed test (DEPLOY-07)
+- [x] 05-01-PLAN.md — Neon DB wiring: `sanitize_database_url` + Wave-0 tests (K-05), asyncpg pool tuning (K-04), cache cap (K-07), minimal `/health` endpoint (K-02) — `config.py`, `tests/test_config.py`, `bot.py` (DEPLOY-01, DEPLOY-05) — COMPLETE 2026-06-15
+- [ ] 05-02-PLAN.md — Deploy packaging: yt-dlp/aiohttp pins (K-15), de-Oracle Dockerfile (K-11/12), stdout logging (K-16), archive Oracle scripts (K-08/09/11), `docs/DEPLOY-KOYEB.md` + `.env.example` (K-13) (DEPLOY-01, DEPLOY-08)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [x] 05-03-PLAN.md — Consolidated ordered live-UAT runbook (21 checks A→B→C→D) + by-reference source-doc updates (DEPLOY-01/02/03/05/08)
+- [ ] 05-03-PLAN.md — Surgical re-target of `05-UAT-RUNBOOK.md` to Koyeb+Neon in place (K-18): drop OCI/host-cron, swap Postgres→Neon, add Koyeb-deploy/git-deploy/health/UptimeRobot/Neon-scale-to-zero/Neon-PITR checks, keep A→B→C→D + behavioral checks (DEPLOY-01…08; P-01…P-04 live-verify)
 
 ### Phase 6: Speed & Caching
 
@@ -116,7 +118,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 2.5. Hardening | v1.0 | shipped (pre-GSD) | Complete | 2026-06-02 |
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
-| 5. Ship It Live | v1.1 | 3/3 | Awaiting Live UAT |  |
+| 5. Ship It Live | v1.1 | 1/3 (replanned Koyeb+Neon) | Executing (Plan 01 complete) | - |
 | 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
 | 7. Player UX & Filters | v1.1 | 0/TBD | Not started | - |
 | 8. Social & Ops | v1.1 | 0/TBD | Not started | - |

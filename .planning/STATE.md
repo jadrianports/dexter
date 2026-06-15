@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: awaiting-live-uat
-stopped_at: Phase 05 executed (3/3 plans) + code review (7 findings fixed) + verification human_needed — awaiting Oracle A1 live UAT
-last_updated: "2026-06-12T11:27:55Z"
-last_activity: 2026-06-12 -- Phase 05 executed, reviewed (2 critical + 5 warning fixed), verified human_needed; CLAUDE.md docs-update pending
+status: executing
+stopped_at: 05-01-PLAN.md complete (Neon DB wiring + health endpoint); ready for 05-02
+last_updated: "2026-06-15T08:09:44Z"
+last_activity: 2026-06-15 -- 05-01 executed (sanitize_database_url + pool tuning + /health)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 3
-  percent: 75
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 05 (ship-it-live) — ALL PLANS COMPLETE; awaiting live UAT on Oracle A1
-Plan: 3 of 3 (complete)
-Status: Awaiting user to run 05-UAT-RUNBOOK.md on Oracle A1 and report results via /gsd-verify-work
-Last activity: 2026-06-12 -- Phase 05 plan 03 complete (live-UAT runbook + source doc by-reference updates)
+Phase: 05 (ship-it-live) — EXECUTING
+Plan: 2 of 3
+Status: Executing Phase 05 (Plan 01 complete; Plan 02 next)
+Last activity: 2026-06-15 -- 05-01 executed (sanitize_database_url + pool tuning + /health)
 
 ## Accumulated Context
 
@@ -48,6 +48,9 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase 05-02]: build_seed_rows() pure/importable function pattern — separates testable logic from async IO in scripts
 - [Phase 05-03]: Strict A→B→C→D runbook ordering — destructive restore (D1) always last; source docs by-reference only, not maintained in parallel
 - [Phase 05 review]: 7 of 14 review findings fixed pre-verification (CR-01 restore-loop continue; CR-02 seed-row live-DB teardown; WR-01 backup temp+size-guard; WR-02 deploy dirty-tree/ff-only; WR-05/06 seed-test cleanup; WR-07 /sync owner_id wiring). WR-03 deferred to DEPLOY-04 live debug; WR-04 + 5 Info advisory
+- [Phase 05-01]: sanitize_database_url strips entire query string (not per-param) — simpler + safe; SSL handled via ssl='require' kwarg (K-05)
+- [Phase 05-01]: DB_POOL_MAX=5, AUDIO_CACHE_MAX_MB=512, DB_MAX_INACTIVE_CONN_LIFETIME=240, DB_STATEMENT_CACHE_SIZE=0 (K-04/K-07)
+- [Phase 05-01]: _run_health_server uses asyncio.Event().wait() for cancellable keep-alive on 0.0.0.0:8000 (K-02 amendment)
 
 ### Pending Todos
 
@@ -55,8 +58,9 @@ None.
 
 ### Blockers/Concerns
 
-- [Production risk] Oracle Cloud Always Free carries reclamation/termination risk (idle reclaim, inactivity, A1 capacity) — monitor once running 24/7.
-- [Parked] Live-concurrency reconnect race (`cogs/music.py:~609`) needs a live `/gsd:debug` session — cannot be verified by local boot. Assigned to Phase 5 (DEPLOY-04).
+- [Production risk] Koyeb free WEB service sleep-after-1h requires UptimeRobot keep-alive; K-10 runner swap (HeavenCloud/Wispbyte) is the contingency if pings prove ineffective (K-02 amended).
+- [Parked] Live-concurrency reconnect race (`cogs/music.py:~609`) needs a live `/gsd:debug` session — cannot be verified by local boot. Assigned to Phase 5 (DEPLOY-04 / P-01).
+- [Human-check pending] Local boot + `curl localhost:8000/health` not yet verified (requires docker compose break-glass with local Postgres).
 
 ## Deferred Items
 
@@ -79,17 +83,17 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-12T11:27:55Z
-Stopped at: Phase 05 fully executed on branch gsd/phase-5-ship-it-live — 3/3 plans, code review (7 fixed), verification human_needed (5/5 code-side, 20 live checks pending in 05-HUMAN-UAT.md).
+Last session: 2026-06-15T08:09:44Z
+Stopped at: 05-01-PLAN.md complete (Neon DB wiring + health endpoint)
 Next:
-  1. CLAUDE.md docs-update (Phases 2→5 drift fix — user-agreed, verified against codebase) — IN PROGRESS this session.
-  2. User runs 05-UAT-RUNBOOK.md on Oracle A1, reports via /gsd-verify-work 05.
-  3. User reviews + merges branch gsd/phase-5-ship-it-live → main (user owns the merge).
+
+  1. Execute 05-02-PLAN.md (deploy packaging: yt-dlp/aiohttp pins, Dockerfile de-Oracle, stdout logging, archive Oracle scripts, DEPLOY-KOYEB.md).
+  2. Execute 05-03-PLAN.md (surgical UAT runbook re-target to Koyeb+Neon).
+  3. User runs 05-UAT-RUNBOOK.md live on Koyeb+Neon, reports via /gsd-verify-work 05.
+  4. User reviews + merges → main (user owns the merge).
 
 ## Performance Metrics
 
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
-| Phase 05-ship-it-live P01 | 25 | 3 tasks | 5 files |
-| Phase 05-ship-it-live P02 | 6 | 2 tasks (3 commits incl. TDD RED) | 6 files |
-| Phase 05-ship-it-live P03 | 6 | 2 tasks | 4 files (1 created, 3 modified) |
+| Phase 05-ship-it-live P01 (Koyeb+Neon re-planned) | ~8 min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
