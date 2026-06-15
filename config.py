@@ -19,7 +19,7 @@ LOG_DIR = BASE_DIR / "logs"
 MAX_SONG_DURATION_SECONDS = 900       # 15 min
 MAX_PLAYLIST_IMPORT = 50
 AUDIO_QUALITY = "192"                 # kbps opus
-AUDIO_CACHE_MAX_MB = 2048            # 2GB
+AUDIO_CACHE_MAX_MB = 512             # Koyeb 2GB ephemeral disk (K-07)
 IDLE_TIMEOUT_SECONDS = 600           # 10 min before auto-leave
 DOWNLOAD_TIMEOUT_SECONDS = 10
 SEARCH_RESULTS_COUNT = 5
@@ -88,7 +88,7 @@ OWNER_ID = int(os.getenv("OWNER_ID") or "0")
 # --- Phase 4: Database (Postgres) ---
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dexter:dexter@localhost:5432/dexter")
 DB_POOL_MIN = 2
-DB_POOL_MAX = 10
+DB_POOL_MAX = 5
 
 # --- Phase 4: Queue persistence ---
 MAX_QUEUE_SIZE_PER_GUILD = 500
@@ -98,3 +98,22 @@ MESSAGE_BUFFER_TTL_HOURS = 24
 
 # --- Phase 4: Keep-alive / down-detection ---
 HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "")
+
+# --- Phase 5: Neon pool tuning (K-04) ---
+DB_MAX_INACTIVE_CONN_LIFETIME = 240      # recycle before Neon 5-min scale-to-zero (K-04)
+DB_STATEMENT_CACHE_SIZE = 0             # disable prepared stmts for PgBouncer tx-mode (K-04)
+
+
+def sanitize_database_url(dsn: str) -> str:
+    """Strip asyncpg-incompatible query params from a Neon connection string.
+
+    Neon's console DSN includes ?sslmode=require&channel_binding=require.
+    asyncpg does not recognize channel_binding and may treat it as a Postgres
+    GUC, causing an error. sslmode is handled via explicit ssl= kwarg in
+    create_pool. Strips the entire query string; safe for non-Neon DSNs
+    (no-op if no ? present).
+
+    Pure function — fully unit-testable (K-05).
+    """
+    import re
+    return re.sub(r'\?.*$', '', dsn)
