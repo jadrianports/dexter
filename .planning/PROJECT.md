@@ -8,6 +8,23 @@ Dexter is a sarcastic, personality-driven Discord bot. It plays music from YouTu
 
 A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
 
+## Current Milestone: v1.1 "Live & Lethal"
+
+**Goal:** Take Dexter from code-complete-on-a-laptop to running 24/7 — fast, polished, and genuinely fun — by deploying it for real, killing playback latency, and surfacing the control, filter, and roast features that make it a joy to use.
+
+**Target features (deploy-first sequencing):**
+
+1. **Ship it live** — Oracle A1 + Postgres + Docker standup, the standing live-UAT checklist (15 behavioral + 6 human scenarios), the parked voice-reconnect race fix (`cogs/music.py:~609`), queue-restore validation across restart, validated `pg_dump` backups + dead-man cron.
+2. **Speed & caching** — prefetch the next track (kill the inter-song silence gap), opus-copy instead of opus→opus re-encode, query→video_id resolution cache, wire the dead `DOWNLOAD_TIMEOUT_SECONDS`, least-played eviction (don't depend on `atime` on a `noatime` mount), pipeline timing instrumentation, SponsorBlock segment-skip.
+3. **Player UX & filters** — interactive control buttons on the now-playing embed, `/seek`, `/previous`, `/jump`, saveable favorites/personal playlists, `/filter` audio effects (bassboost / nightcore / slowed+reverb / 8d).
+4. **Social & personality** — `/roast @user` and `/leaderboard`, built off the existing `user_profiles` / `user_artist_counts` / streak data.
+5. **Ops & observability** — `/stats` owner dashboard, health endpoint for the dead-man switch, Gemini/Oracle quota visibility, optional web config dashboard.
+
+**Key context:**
+- **Deploy + instrument first** so every speed gain is measured against live numbers, not laptop guesses.
+- **One tradeoff to resolve in the roadmap:** `/filter` forces a re-encode, mutually exclusive with opus-copy → opus-copy by default, transcode only when a filter is active per-track.
+- **Shelved for a future milestone (v1.2/v2.0):** RAG long-term semantic memory, Vision/multimodal roasting. Considered and deliberately deferred, not rejected.
+
 ## Current State
 
 **Shipped: v1.0 MVP (2026-06-12)** — Phases 1, 2, 2.5, 3, 4 complete; all 45 v1 requirements satisfied at the code/structural level. ~7,139 Python LOC across 49 modules, 20 test files, 71 commits.
@@ -33,9 +50,13 @@ The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Po
 
 ### Active
 
-<!-- Current scope. Building toward these. No active milestone — populate via /gsd-new-milestone. -->
+<!-- Current scope (v1.1 "Live & Lethal"). High-level streams; detailed REQ-IDs live in REQUIREMENTS.md. -->
 
-- (none — v1.0 shipped; next milestone not yet started)
+- [ ] Deploy + live-validate on Oracle A1 (Postgres, Docker, UAT checklist, reconnect race, restart-safe queue restore, backups/cron)
+- [ ] Playback speed & caching (prefetch, opus-copy, resolution cache, download timeout, least-played eviction, instrumentation, SponsorBlock)
+- [ ] Player UX & filters (control buttons, `/seek`, `/previous`, `/jump`, favorites/playlists, `/filter` effects)
+- [ ] Social commands (`/roast @user`, `/leaderboard`)
+- [ ] Ops & observability (`/stats` dashboard, health endpoint, quota visibility)
 
 ### Out of Scope
 
@@ -81,5 +102,22 @@ The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Po
 | Queue cap enforced in `MusicQueue.add()` (Phase 4) | Guard at the source covers the playlist loop and every add path automatically | ✓ Good |
 | Gemini-first personality output with guaranteed template fallback (Phase 3) | Never let rate limits or API errors block a roast/response | ✓ Good |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-06-12 after v1.0 milestone*
+*Last updated: 2026-06-12 after v1.1 "Live & Lethal" milestone kickoff*

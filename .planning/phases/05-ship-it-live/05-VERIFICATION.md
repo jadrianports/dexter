@@ -1,209 +1,309 @@
 ---
 phase: 05-ship-it-live
-verified: 2026-06-12T00:00:00Z
+verified: 2026-06-15T00:00:00Z
 status: human_needed
-score: 5/5 code-side must-haves verified (live UAT pending)
+score: 7/7 code-level must-haves verified
 overrides_applied: 0
 human_verification:
-  - test: "A1. Docker clean boot on Oracle A1"
-    expected: "docker compose up -d brings up Postgres (healthcheck healthy) and bot; bot posts startup message to Discord; bash scripts/deploy.sh works for subsequent updates"
-    why_human: "Requires live Oracle A1 ARM VM with Docker, arm64 image pull, and a valid DISCORD_TOKEN"
-  - test: "A2. Reboot survival"
-    expected: "systemctl is-enabled docker returns enabled; after sudo reboot the bot posts its startup message automatically within ~90 seconds, no SSH intervention needed"
-    why_human: "Requires live VM reboot; not testable on dev machine"
-  - test: "A3. Over-cap /play rejection"
-    expected: "With MAX_QUEUE_SIZE_PER_GUILD=1, a second /play returns the personality cap rejection message; queue stays at 1 track"
-    why_human: "Requires live Discord bot invocation"
-  - test: "A4. Keepalive cron and Healthchecks.io"
-    expected: "After crontab installs HEALTHCHECK_URL, the Healthchecks.io dashboard shows the check green with a ping within 10 minutes; Discord error-log channel receives the UP notification"
-    why_human: "Requires live Oracle VM crontab + Healthchecks.io account + Discord webhook"
-  - test: "A5. Backup cron manual run"
-    expected: "bash scripts/backup.sh exits 0; a new dexter_YYYYMMDD_HHMMSS.dump object appears in the dexter-backups OCI bucket"
-    why_human: "Requires live Oracle VM with oci-cli config, ~/.pgpass, and a running Postgres container"
-  - test: "A6. Postgres integration tests"
-    expected: "pytest tests/test_database_phase4.py -x exits 0 with 18 tests green against a live dexter_test Postgres"
-    why_human: "Requires CREATE DATABASE dexter_test; no Postgres available on this dev machine"
-  - test: "B1. Queue persistence round-trip"
-    expected: "After /play + docker compose restart bot, /queue shows the restored track; smart-rejoin connects voice and resumes only when a non-bot human is still present"
-    why_human: "Requires live Discord + Postgres; asyncpg integration tests pass but not verified against a live DB here"
-  - test: "B2. clear_persisted on idle-leave (DEPLOY-06 live check)"
-    expected: "Bot idles alone 10+ minutes, auto-leaves, then after docker compose restart bot, /queue is empty (not restored from guild_queues)"
-    why_human: "Requires live Oracle VM; confirms the bot.py clear_persisted fix applied at runtime"
-  - test: "C1. Voice join roast"
-    expected: "Joining voice 4-5 times produces at least one roast in the bot channel; Gemini-personalized when API key live, VOICE_JOIN_ROASTS fallback on rate-limit"
-    why_human: "Probabilistic event (30% chance) + Discord gateway + voice state required"
-  - test: "C2. Late-night roast TZ fix (DEPLOY-04 C2)"
-    expected: "Joining voice between 1-5am America/New_York fires a late-night roast at ~50% chance, NOT between 1-5am UTC (which would be 8-10pm ET). Confirms events.py ZoneInfo fix is live."
-    why_human: "Requires live bot at specific wall-clock time; or temporary is_late_night patch on Oracle"
-  - test: "C3. Startup message"
-    expected: "docker compose restart bot causes a personality startup line to post to DEXTER_CHANNEL_ID within ~30 seconds"
-    why_human: "Requires live Discord gateway"
-  - test: "C4. Status rotation"
-    expected: "Over 10-15 minutes, bot presence cycles through: current song (if playing), server-count line, random STATUS_LINES entry, seasonal line"
-    why_human: "Requires live bot observation over time"
-  - test: "C5. /lyrics command"
-    expected: "After /play on a song with known Genius lyrics, /lyrics returns a paginated embed with Previous/Next buttons; buttons disable after 3-minute timeout"
-    why_human: "Requires live bot + voice + playing song + GENIUS_TOKEN"
-  - test: "C6. /history command"
-    expected: "/history returns a paginated embed showing recently queued songs with title, artist, requester, date"
-    why_human: "Requires live bot + prior song history in Postgres"
-  - test: "C7. Message reactions"
-    expected: "YouTube URL in chat -> bot reacts 👀; 'gn'/'goodnight' -> bot reacts 🫡; bare bot mention -> bot reacts 😐; mentioning bot with 'thanks' -> deflecting text reply"
-    why_human: "Requires live Discord gateway and real message events"
-  - test: "C8. Repeat-song roast"
-    expected: "Queuing the same song 3 times in one day always fires a roast unconditionally"
-    why_human: "Requires live bot + repeated play tracking in Postgres"
-  - test: "C9. Idle loneliness"
-    expected: "After 30+ minutes in voice with no commands, bot posts one IDLE_LONELINESS_MESSAGES line; does not repeat until new activity"
-    why_human: "Requires live bot observation over 30+ minutes in a voice session"
-  - test: "C10. Streak and milestone roasts"
-    expected: "Using the bot on consecutive days triggers streak roasts at milestones (7/14/30/60/100 days); reaching song-count milestones (100/250/500/1000) triggers song-count roasts"
-    why_human: "Requires live bot + real usage data accumulation in Postgres; threshold lowering may be needed for quick test"
-  - test: "C11. DEPLOY-04 reconnect diagnostic (WR-03 deferred live check)"
-    expected: "After a live voice disconnect/reconnect, docker compose logs bot shows: 'reconnect attempt X/3 in guild Y' and 'reconnect: vc.is_connected()=True gen=Z guild=Y'. Playback resumes normally. If playback silently fails with is_connected()=True, escalate to /gsd:debug session."
-    why_human: "Requires a live network disruption or bot channel move on Oracle; the generation-counter race (WR-03) is deferred to this session for diagnosis"
-  - test: "D1. End-to-end restore proof (DEPLOY-07)"
-    expected: "python scripts/seed_restore_test.py on Oracle exits 0 with 'D-15 restore proof PASSED'; row counts match seeded values; dexter_restore_test dropped; seed rows removed from live DB"
-    why_human: "Requires live Oracle VM with running Postgres container, OCI Object Storage access, and oci-cli config"
+  - test: "A1 — Koyeb deploy healthy"
+    expected: "Koyeb dashboard shows service Healthy; Koyeb logs show 'Dexter is ready.' and startup personality message posts to DEXTER_CHANNEL_ID"
+    why_human: "Requires creating Koyeb account, pasting secrets, and triggering a live deploy — cannot be run from dev host"
+  - test: "A2 — Koyeb restart + queue-restore-from-Neon survival"
+    expected: "Service auto-restarts after manual restart/redeploy; /queue shows queue restored from Neon guild_queues (K-17 #2)"
+    why_human: "Requires live Koyeb service and live Neon DB"
+  - test: "A3 — Over-cap /play rejection"
+    expected: "With MAX_QUEUE_SIZE_PER_GUILD=1 set via Koyeb env var + redeploy, second /play returns personality cap rejection"
+    why_human: "Requires live Koyeb service and Discord interaction"
+  - test: "A4 — UptimeRobot + Healthchecks.io confirmed active"
+    expected: "UptimeRobot shows Dexter health monitor green; Healthchecks.io shows Dexter Keepalive green within its window (DEPLOY-08)"
+    why_human: "Requires live service accounts and external HTTP monitors"
+  - test: "A5 — Health endpoint alive (curl)"
+    expected: "curl https://<service>.koyeb.app/health returns HTTP 200 with body {\"status\":\"ok\"}"
+    why_human: "Requires live Koyeb public URL — endpoint is coded and verified structurally but cannot be curled from dev host"
+  - test: "A6 — Git auto-deploy"
+    expected: "Push a trivial commit to gsd/phase-5-ship-it-live; Koyeb detects push, builds, returns Healthy with no manual step (K-11)"
+    why_human: "Requires live Koyeb service tracking the branch"
+  - test: "A7 — Postgres integration tests against Neon"
+    expected: "pytest tests/test_database_phase4.py -x exits 0 (18 tests) with DATABASE_URL pointed at a Neon branch/throwaway DB"
+    why_human: "Requires live Neon endpoint; test_database_phase4.py errors on Windows dev host (no live Postgres)"
+  - test: "B1 — Queue persistence round-trip (Koyeb redeploy)"
+    expected: "After /play + Koyeb redeploy, /queue shows queue restored from Neon guild_queues; smart-rejoin reconnects only when non-bot human is present (DEPLOY-05)"
+    why_human: "Requires live Koyeb + Neon + Discord"
+  - test: "B2 — clear_persisted on idle-leave (DEPLOY-06 / P-02)"
+    expected: "Bot idles alone 10+ min, auto-leaves, Koyeb restart yields empty /queue (not restored) — confirming P-02 fix at runtime"
+    why_human: "Requires 10+ min live Discord/Koyeb session"
+  - test: "B3 — Neon scale-to-zero reconnect (K-17 #3)"
+    expected: "After 6+ min idle (Neon suspends), /history or /play succeeds with no SSL-EOF/08006/channel_binding error in Koyeb logs"
+    why_human: "Requires live Neon scale-to-zero to trigger (5+ min idle) and live Koyeb log inspection"
+  - test: "C1 — Voice join roast"
+    expected: "Join voice 4-5 times; at least one Gemini-personalized roast appears; template fallback on rate-limit"
+    why_human: "Discord live session required"
+  - test: "C2 — Late-night roast TZ fix (P-03 live observation)"
+    expected: "Late-night roast fires 1-5am America/New_York (not UTC), confirming ZoneInfo fix from P-03 is live"
+    why_human: "Requires live Discord at late-night ET hours (or events.py patch)"
+  - test: "C3 — Startup message"
+    expected: "Koyeb restart/redeploy posts a personality startup message to DEXTER_CHANNEL_ID within ~30s"
+    why_human: "Requires live Koyeb service and Discord"
+  - test: "C4 — Status rotation"
+    expected: "Bot presence cycles through current song / server-count / random line / seasonal over 10-15 min"
+    why_human: "Requires 10-15 min live Discord observation"
+  - test: "C5 — /lyrics command"
+    expected: "After /play on a song with Genius lyrics, /lyrics returns paginated embed; Prev/Next buttons work; disable after 3 min timeout"
+    why_human: "Requires live Discord session with GENIUS_TOKEN set"
+  - test: "C6 — /history command"
+    expected: "/history returns paginated embed of recent songs (title, artist, requester, date); Prev/Next buttons work"
+    why_human: "Requires live Discord session with queued songs"
+  - test: "C7 — Message reactions"
+    expected: "YouTube URL -> 👀; gn/goodnight -> 🫡; bare bot mention -> 😐; mention + 'thanks' -> deflecting text reply"
+    why_human: "Requires live Discord message events"
+  - test: "C8 — Repeat-song roast"
+    expected: "Queuing same song 3 times in one day unconditionally fires a roast"
+    why_human: "Requires live Discord session across song plays"
+  - test: "C9 — Idle loneliness"
+    expected: "After 30+ min no commands with humans in voice, bot posts exactly one idle loneliness message"
+    why_human: "Requires 30+ min live Discord session"
+  - test: "C10 — Streak and milestone roasts"
+    expected: "Streak milestones (7/14/30/60/100 days) and song-count milestones (100/250/500/1000) fire correctly"
+    why_human: "Requires consecutive live sessions or threshold manipulation"
+  - test: "C11 — DEPLOY-04 reconnect race (live observation)"
+    expected: "Live reconnect event shows INFO diagnostic log trail in Koyeb logs; playback resumes if P-01 fix is effective"
+    why_human: "Requires live voice disconnect/reconnect and Koyeb log inspection"
+  - test: "D1 — Neon PITR restore proof (DEPLOY-07 / K-17 #5)"
+    expected: "PITR restore via Neon console succeeds; backup branch auto-created; asyncpg pool reconnects automatically; /history confirms data integrity post-restore"
+    why_human: "Requires live Neon console, destructive operation — run LAST after A/B/C pass"
 ---
 
-# Phase 5: Ship It Live Verification Report
+# Phase 5: Ship It Live — Verification Report
 
-**Phase Goal:** Dexter is running 24/7 on Oracle A1 and every v1.0 behavioral and deploy check has been validated in production
-**Verified:** 2026-06-12
+**Phase Goal:** Dexter is running 24/7 on a free Koyeb WEB service backed by Neon serverless Postgres, and every v1.0 behavioral and deploy check has been validated live (K-17)
+**Verified:** 2026-06-15
 **Status:** human_needed
 **Re-verification:** No — initial verification
 
 ---
 
+## Summary
+
+All **7 code-level must-haves** from Plans 01-03 are VERIFIED. The code deliverables are complete and correct:
+
+- Neon DB wiring (sanitizer + pool tuning + health endpoint) — Plan 01
+- Deploy packaging (pins, Dockerfile, stdout logging, Oracle scripts archived, deploy doc) — Plan 02
+- UAT runbook re-targeted to Koyeb+Neon in place — Plan 03
+- Pre-existing code fixes P-01..P-04 confirmed present in codebase
+
+The phase cannot be PASSED from this dev host because **K-17 requires live execution** of the 22-check `05-UAT-RUNBOOK.md` on the actual Koyeb+Neon deployment. Those 22 checks — all of which involve live Discord, live Koyeb, and/or live Neon operations — are listed in the Human Verification Required section below.
+
+---
+
 ## Goal Achievement
-
-The phase goal has two components:
-
-1. **Code-side (dev-machine verifiable):** All pre-deploy code fixes, deploy scripts, and the consolidated runbook land correctly and structurally. **Verified — all 5 code-side must-haves pass.**
-2. **Live UAT (Oracle-side):** Every v1.0 behavioral and deploy check passes in production on Oracle A1. **Pending — 21 runbook checks require the live VM.**
-
-This is the expected and correct verdict for a deploy phase. The phase is not failed; it is waiting on the user to execute the runbook on Oracle.
 
 ### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | clear_persisted() fires on idle-leave path (bot.py) so a ghost queue cannot resurrect on next boot | VERIFIED | `bot.py:398-403`: `queue._play_generation += 1` before `vc.stop()`, then `await bot.queue_persistence.clear_persisted(guild.id)` after `queue.clear()` — mirrors `/stop` template exactly |
-| 2 | clear_persisted() fires on reconnect-failure path (cogs/music.py) so a dead session does not persist | VERIFIED | `cogs/music.py:1211-1214`: same generation increment + `await self.bot.queue_persistence.clear_persisted(member.guild.id)` after 3 failed reconnect attempts |
-| 3 | Smart-rejoin guards is_connected() after connect() before calling _play_track (defensive race fix) | VERIFIED | `services/queue_persistence.py:147-151`: `vc = await vc_channel.connect()` captured, INFO log emitted, `if not vc.is_connected(): continue` guard before `_play_track` call; `continue` (not `return`) confirmed — CR-01 fix applied |
-| 4 | Late-night roast hour is computed in STREAK_TIMEZONE, not naive host-local time | VERIFIED | `cogs/events.py:197-198`: `from zoneinfo import ZoneInfo as _ZoneInfo` + `local_hour = _dt.datetime.now(tz=_ZoneInfo(config.STREAK_TIMEZONE)).hour`; `datetime.now().hour` (naive) is absent |
-| 5 | All deploy scripts and runbook are present, structurally correct, and ready for Oracle execution | VERIFIED | `scripts/deploy.sh` (syntax-clean, `--build bot`, dirty-tree guard, `--ff-only`, `down -v` warning); `scripts/backup.sh` (6h cadence, temp-file dump with size check); `scripts/lifecycle-policy.json` (valid JSON, 14-day DELETE rule for `dexter_` prefix); `scripts/seed_restore_test.py` (CR-02 fix: `_cleanup_seed()` in `finally`; throwaway DB only; `urlsplit` DSN fix); `05-UAT-RUNBOOK.md` (21 checks, A→B→C→D order, `down -v` warning, prereqs, troubleshooting table) |
+| 1 | sanitize_database_url strips Neon query string (channel_binding/sslmode) before asyncpg sees it (K-05) | VERIFIED | `config.py:107-119` — pure function; `tests/test_config.py` 6/6 pass (3 class methods + 3 flat aliases); `python -c "import config; print(config.sanitize_database_url(...))"` returns bare DSN |
+| 2 | create_pool runs with ssl='require', max_inactive_connection_lifetime=240, statement_cache_size=0, max_size=5 (K-04) | VERIFIED | `bot.py:253-261` — all 4 kwargs present at create_pool call site, each referencing its config constant; AST check passes |
+| 3 | Minimal GET /health endpoint answers on 0.0.0.0:8000 (K-02 amended) | VERIFIED | `bot.py:181-204` — `_run_health_server()` defined; binds `'0.0.0.0'` port 8000; returns `{"status":"ok"}`; launched via `asyncio.ensure_future` after background tasks in `_initialize_once` (`bot.py:320`) |
+| 4 | init_db() creates schema on fresh Neon with no migration (K-06) | VERIFIED | Schema unchanged (SCHEMA_SQL in database.py); init_db(pool) is the existing idempotent DDL runner — no code change needed and none made |
+| 5 | AUDIO_CACHE_MAX_MB is 512 (K-07); yt-dlp floor-pinned; aiohttp explicit dep; stdout logging; Dockerfile de-Oracle'd; Oracle scripts archived | VERIFIED | `config.py:22` = 512; `requirements.txt` has `yt-dlp>=2026.06.09` and `aiohttp>=3.9.0`; `utils/logger.py:42` = `StreamHandler(sys.stdout)`; Dockerfile header = Koyeb comment, no arm64v8/Oracle A1; `scripts/archive/` contains backup.sh, keepalive.sh, deploy.sh, lifecycle-policy.json; `scripts/backup.sh` absent from scripts/ root |
+| 6 | UAT runbook re-targeted: no Oracle/OCI/systemctl/pg_dump remnants; Koyeb+Neon+UptimeRobot+PITR+scale-to-zero checks added; Group C 11 behavioral checks preserved; verified-live bar updated (K-18) | VERIFIED | All automated string-gate checks pass (banned terms absent; required terms present; Group C count ≥11; session summary updated to 22 checks on Koyeb+Neon per K-17) |
+| 7 | P-01..P-04 code fixes present: reconnect-race guard (music.py), clear_persisted at idle-leave (bot.py:441) and reconnect-failure (music.py:1214), ZoneInfo TZ fix (events.py:197), /sync command | VERIFIED | `cogs/music.py:1199-1214` reconnect retry with _play_generation guard and clear_persisted; `bot.py:441` idle_check fires clear_persisted; `cogs/events.py:197-198` uses ZoneInfo(STREAK_TIMEZONE); `bot.py:393-410` /sync owner command |
 
-**Score: 5/5 code-side truths verified**
+**Score:** 7/7 code-level truths verified
+
+---
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `bot.py` | clear_persisted on idle-leave | VERIFIED | Line 403: `await bot.queue_persistence.clear_persisted(guild.id)` present in idle-leave block; generation increment at line 398 before `vc.stop()` |
-| `cogs/music.py` | clear_persisted on reconnect-failure + reconnect diagnostic logging + unchanged _play_track stop order | VERIFIED | 2 clear_persisted calls confirmed (`grep -c` = 2); reconnect loop has 2 INFO log calls (attempt + is_connected); `_play_track` has 3 DEBUG log calls; generation increment (347) before stop (365) before play (372) unchanged |
-| `cogs/events.py` | TZ-explicit late-night hour via ZoneInfo(config.STREAK_TIMEZONE) | VERIFIED | ZoneInfo import + `_dt.datetime.now(tz=...)` present; naive `datetime.now().hour` absent; `config.STREAK_TIMEZONE` used (not hardcoded) |
-| `services/queue_persistence.py` | is_connected() guard after connect() in smart-rejoin | VERIFIED | Guard at line 149-151 uses `continue` (not `return`) — CR-01 fix confirmed; `vc = await connect()` result is captured |
-| `tests/test_streak.py` | test_tz_aware_hour_is_integer covering the TZ pattern | VERIFIED | Function present at line 85; 29 total pure tests (test_streak.py + test_seed_restore.py) run and pass in 0.03s |
-| `scripts/deploy.sh` | D-13 workflow with down -v guard | VERIFIED | `up -d --build bot` present; `git pull --ff-only` present; dirty-tree guard present; 2x `down -v` warning echoes present; no hardcoded secrets |
-| `scripts/backup.sh` | 6-hour cadence + temp-file dump with size guard | VERIFIED | `0 */6 * * *` appears twice; `*/30` absent; temp-file dump pattern with `MIN_DUMP_SIZE_BYTES=1024` guard (WR-01 fix) |
-| `scripts/lifecycle-policy.json` | OCI 14-day DELETE rule for dexter_ prefix | VERIFIED | `timeAmount: 14`, `timeUnit: DAYS`, `inclusionPrefixes: ["dexter_"]` all present; valid JSON |
-| `scripts/seed_restore_test.py` | D-15 non-destructive restore-verify with cleanup | VERIFIED | `_cleanup_seed()` in `finally` block (CR-02 fix); `THROWAWAY_DB = "dexter_restore_test"` constant; `urlsplit`/`urlunsplit` DSN fix (WR-06); `--no-owner --no-acl` in pg_restore call; `build_seed_rows()` pure/importable |
-| `tests/test_seed_restore.py` | Pure seed-shape tests (no asyncpg) | VERIFIED | 15 tests in `TestSeedData` + 2 in `TestTzAwareHour`; no `import asyncpg`; no `pytest.mark.asyncio`; imports `build_seed_rows` from `scripts.seed_restore_test` |
-| `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md` | Consolidated ordered runbook (21 checks + prereqs + troubleshooting + warning) | VERIFIED | File exists, 270 lines; `grep -c "result:"` = 21; A→B→C→D order confirmed; `grep -c "down -v"` = 3; prereqs contain `timedatectl`, `~/.pgpass`, `lifecycle-policy.json`, `--first-run --guild`, `HEALTHCHECK_URL`; troubleshooting table contains `arm64`, `pool-acquire`, `pg_dump` |
+| `config.py` | sanitize_database_url() + Neon pool constants + cache cap | VERIFIED | `def sanitize_database_url` at line 107; `DB_MAX_INACTIVE_CONN_LIFETIME=240`, `DB_STATEMENT_CACHE_SIZE=0` at lines 103-104; `DB_POOL_MAX=5` at line 91; `AUDIO_CACHE_MAX_MB=512` at line 22 |
+| `tests/test_config.py` | Wave-0 unit tests for sanitize_database_url (3+3 cases) | VERIFIED | 6 tests pass (3 class methods + 3 flat-name aliases); imports `from config import sanitize_database_url` |
+| `bot.py` | Tuned create_pool call + _run_health_server() background task | VERIFIED | create_pool at lines 253-261 with all 4 Neon kwargs; `_run_health_server` at lines 181-204; launched at line 320 |
+| `requirements.txt` | yt-dlp floor pin + explicit aiohttp | VERIFIED | `yt-dlp>=2026.06.09` (line 2); `aiohttp>=3.9.0` (line 13); `asyncpg==0.31.0` intact |
+| `Dockerfile` | De-Oracle'd header; Koyeb-targeted; unchanged build steps | VERIFIED | Header comment says "Koyeb builds this Dockerfile directly"; no arm64v8 or Oracle A1 references; `FROM python:3.11-slim-bookworm` (1 occurrence); build steps unchanged |
+| `utils/logger.py` | stdout StreamHandler | VERIFIED | `import sys` at line 5; `StreamHandler(sys.stdout)` at line 42 |
+| `docs/DEPLOY-KOYEB.md` | Koyeb+Neon+UptimeRobot deploy contract | VERIFIED | Contains Neon, WEB service, /health, UptimeRobot, us-east-2, wdc1, K-14 break-glass, K-10 runner-swap |
+| `.env.example` | K-13 secrets contract (both environments; no real secrets) | VERIFIED | All 9 required vars present; DATABASE_URL references Neon for Koyeb; no real secrets in file |
+| `scripts/archive/backup.sh` | Retired Oracle script preserved in git | VERIFIED | File exists at scripts/archive/backup.sh; absent from scripts/ root |
+| `scripts/archive/keepalive.sh` | Retired Oracle script preserved | VERIFIED | Present in archive |
+| `scripts/archive/deploy.sh` | Retired Oracle script preserved | VERIFIED | Present in archive |
+| `scripts/archive/lifecycle-policy.json` | Retired OCI lifecycle rule preserved | VERIFIED | Present in archive |
+| `scripts/seed_restore_test.py` | Kept in place (optional Neon PITR roast-fuel) | VERIFIED | File exists at scripts/seed_restore_test.py |
+| `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md` | Re-targeted Koyeb+Neon live-UAT runbook | VERIFIED | Contains "Neon PITR", "scale-to-zero", "Koyeb", no Oracle remnants; 22 total checks; version 2.0 (Koyeb+Neon) |
+
+---
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| bot.py idle-leave | queue_persistence.clear_persisted | `await` after `queue.clear()` | WIRED | Line 402-403: `hasattr` guard + `await bot.queue_persistence.clear_persisted(guild.id)` |
-| cogs/music.py reconnect-failure | queue_persistence.clear_persisted | `await` after 3-attempt failure loop | WIRED | Lines 1213-1214: `hasattr` guard + `await self.bot.queue_persistence.clear_persisted(member.guild.id)` |
-| services/queue_persistence.py smart-rejoin | music_cog._play_track | guarded by `vc.is_connected()` after connect() | WIRED | Lines 147-152: `vc = await connect()`, INFO log, `if not vc.is_connected(): continue`, then `_play_track` |
-| 05-UAT-RUNBOOK.md group A1 | scripts/deploy.sh + docker-compose.yml | deploy/boot commands reference deploy.sh and `docker compose` | WIRED | Line 69: `bash scripts/deploy.sh` and `docker compose up -d` both present in A1 |
-| 05-UAT-RUNBOOK.md group D1 | scripts/seed_restore_test.py | `python scripts/seed_restore_test.py` instruction | WIRED | Line 229: explicit invocation of the Plan-02 script |
-| 04-HUMAN-UAT.md / 04-VERIFICATION.md / 03-VERIFICATION.md | 05-UAT-RUNBOOK.md | by-reference banner (D-07) | WIRED | All three source docs contain the Phase 5 consolidation pointer within the first 15 lines after frontmatter; original check bodies preserved |
+| bot.py create_pool | config.sanitize_database_url | dsn=config.sanitize_database_url(config.DATABASE_URL) | WIRED | bot.py:254 |
+| bot.py create_pool | config.DB_MAX_INACTIVE_CONN_LIFETIME | max_inactive_connection_lifetime=config.DB_MAX_INACTIVE_CONN_LIFETIME | WIRED | bot.py:259 |
+| bot.py create_pool | config.DB_STATEMENT_CACHE_SIZE | statement_cache_size=config.DB_STATEMENT_CACHE_SIZE | WIRED | bot.py:260 |
+| bot.py _initialize_once | _run_health_server | asyncio.ensure_future(_run_health_server()) | WIRED | bot.py:320 |
+| docs/DEPLOY-KOYEB.md | bot.py /health endpoint | references path /health port 8000 | WIRED | DEPLOY-KOYEB.md Section 3 |
+| 05-UAT-RUNBOOK.md health check | bot.py /health endpoint | curl https://<service>.koyeb.app/health | WIRED | Runbook A5 |
+| 05-UAT-RUNBOOK.md prerequisites | docs/DEPLOY-KOYEB.md | "See docs/DEPLOY-KOYEB.md for full deploy contract" | WIRED | Runbook Prerequisites section |
+| Dockerfile | requirements.txt | pip install -r requirements.txt | WIRED | Dockerfile line 15 |
 
-### Data-Flow Trace (Level 4)
-
-Not applicable. Phase 5 delivers code fixes, shell scripts, and a documentation runbook. No new dynamic-data-rendering component was added. The `build_seed_rows()` pure function has its data shape verified by 15 unit tests.
+---
 
 ### Behavioral Spot-Checks
 
+Step 7b: Runnable checks on this dev host (no live services required):
+
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| 29 pure unit tests pass | `python -m pytest tests/test_streak.py tests/test_seed_restore.py -q` | 29 passed, 0 failed in 0.03s | PASS |
-| All modified Python modules compile clean | `python -m py_compile bot.py cogs/music.py cogs/events.py services/queue_persistence.py scripts/seed_restore_test.py` | exit 0 | PASS |
-| Shell scripts syntax-clean | `bash -n scripts/deploy.sh && bash -n scripts/backup.sh` | exit 0 | PASS |
-| lifecycle-policy.json is valid JSON | `python -c "import json; json.load(open('scripts/lifecycle-policy.json'))"` | exit 0 | PASS |
-| clear_persisted count in cogs/music.py | `grep -c "clear_persisted" cogs/music.py` | 2 (existing /stop site + new reconnect-failure site) | PASS |
-| Naive datetime.now().hour removed from events.py | `grep -n "datetime.now().hour" cogs/events.py` | no output | PASS |
-| CR-01 fix: `continue` in restore_queues loop | `grep -n "continue" services/queue_persistence.py` | line 151: `continue  # skip THIS guild only` | PASS |
-| 21 result: capture fields in runbook | `grep -c "result:" 05-UAT-RUNBOOK.md` | 21 | PASS |
-| down -v warning present in runbook | `grep -c "down -v" 05-UAT-RUNBOOK.md` | 3 | PASS |
+| sanitize_database_url strips Neon params | `python -c "import config; print(config.sanitize_database_url('postgresql://u:p@h/d?sslmode=require&channel_binding=require'))"` | `postgresql://u:p@h/d` | PASS |
+| config constants have correct Neon values | `python -c "import config; print(config.DB_MAX_INACTIVE_CONN_LIFETIME, config.DB_STATEMENT_CACHE_SIZE, config.DB_POOL_MAX, config.AUDIO_CACHE_MAX_MB)"` | `240 0 5 512` | PASS |
+| bot.py parses (no syntax error) | `python -c "import ast; ast.parse(open('bot.py').read()); print('OK')"` | `bot.py parses OK` | PASS |
+| Wave-0 unit tests pass | `python -m pytest tests/test_config.py tests/test_streak.py -q` | `18 passed, 1 warning in 0.07s` | PASS |
+| bot.py structural assertions (health server + ssl + stmt_cache + 0.0.0.0 + ensure_future) | AST + source grep check | All assertions pass | PASS |
+| Packaging assertions (yt-dlp pin, aiohttp, Dockerfile, stdout handler) | Source content check | All assertions pass | PASS |
+| Oracle scripts archived | Filesystem checks | All 4 in archive/, none in scripts/ root | PASS |
+| UAT runbook Oracle-ban assertions | String search | No Oracle/OCI/systemctl/.pgpass/pg_dump remnants | PASS |
+
+Step 7b live-service checks: SKIPPED — cannot boot bot, hit Neon, or curl Koyeb from Windows dev host. These are captured in the human verification list.
+
+---
 
 ### Probe Execution
 
-No phase-declared probe scripts. Phase 5 explicitly defers all live execution to the Oracle UAT session via the runbook. `python -m pytest tests/test_streak.py tests/test_seed_restore.py` serves as the dev-machine probe — 29 tests green (confirmed above).
+Step 7c: No probe-*.sh scripts declared or conventional. SKIPPED.
+
+---
 
 ### Requirements Coverage
 
-| Requirement | Source Plan | Description | Status | Evidence |
-|-------------|------------|-------------|--------|----------|
-| DEPLOY-01 | 05-02, 05-03 | Dexter runs 24/7 on Oracle A1 via Docker Compose, surviving a host reboot | NEEDS LIVE UAT | scripts/deploy.sh written and syntax-clean; runbook A1/A2 checks defined. Live execution pending. |
-| DEPLOY-02 | 05-03 | Standing live-UAT checklist (9 Phase-3 + 6 Phase-4 checks) executed and passing | NEEDS LIVE UAT | All 15 checks consolidated into 05-UAT-RUNBOOK.md C1-C11 + A-group. Execution pending on Oracle. |
-| DEPLOY-03 | 05-03 | 6 human-UAT scenarios (04-HUMAN-UAT.md) executed and passing | NEEDS LIVE UAT | De-duped into the consolidated runbook. Execution pending on Oracle. |
-| DEPLOY-04 | 05-01 | Voice playback survives a live reconnect without the race causing double-play or silent failure | CODE VERIFIED | `is_connected()` guard in smart-rejoin; diagnostic INFO logs in reconnect loop; 3 DEBUG logs in `_play_track`; test_queue.py confirms generation invariant unregressed. WR-03 (generation bump timing) deferred to live C11 debug session. |
-| DEPLOY-05 | 05-03 | Queue + playback position survive a bot restart | NEEDS LIVE UAT | Runbook check B1. restore_queues logic from Phase 4 unchanged; CR-01 (`continue` fix) ensures multi-guild restore is not aborted by one failure. Live validation pending. |
-| DEPLOY-06 | 05-01 | clear_persisted() fires correctly on idle-leave and reconnect-failure paths | CODE VERIFIED | Both gap sites confirmed in bot.py (line 403) and cogs/music.py (line 1214). Live confirmation deferred to runbook B2. |
-| DEPLOY-07 | 05-02, 05-03 | pg_dump backup runs and a restore is validated end-to-end | CODE VERIFIED (script ready), NEEDS LIVE UAT | scripts/backup.sh and scripts/seed_restore_test.py structurally verified. CR-02 (_cleanup_seed) and WR-06 (urlsplit) fixes confirmed. D1 live execution pending on Oracle. |
-| DEPLOY-08 | 05-03 | Keepalive / dead-man cron confirmed firing in production | NEEDS LIVE UAT | Runbook check A4 + prerequisites documented. Execution pending on Oracle with Healthchecks.io account. |
+| Requirement | Source Plan(s) | Description | Status | Evidence |
+|-------------|---------------|-------------|--------|----------|
+| DEPLOY-01 | 05-01, 05-02, 05-03 | Dexter runs 24/7 on Koyeb (re-targeted from Oracle A1) via Docker image, surviving a Koyeb restart | PARTIAL — code wired; live pending | Neon pool tuning + sanitizer + health endpoint coded (bot.py, config.py); UAT runbook A1/A2/A5/B3 carry live verification |
+| DEPLOY-02 | 05-03 | The 9 Phase-3 behavioral + Phase-4 deploy-equivalent checks executed and passing | DEFERRED TO LIVE UAT | UAT runbook Group A (infra) + Group C (C1-C11 behavioral) carry all checks |
+| DEPLOY-03 | 05-03 | The human-UAT scenarios executed and passing | DEFERRED TO LIVE UAT | UAT runbook Group A/B carries Phase-4 equivalent checks; Group C carries behavioral scenarios |
+| DEPLOY-04 | 05-01 (P-01 preserved) | Voice playback survives a reconnect without race/double-play | VERIFIED in code | cogs/music.py:1199-1214 — reconnect retry with _play_generation guard, diagnostic logging, clear_persisted on failure |
+| DEPLOY-05 | 05-03 | Queue + playback survive a bot restart (persistence + smart-rejoin live) | DEFERRED TO LIVE UAT | UAT runbook B1 — code exists (queue_persistence.py, restore_queues); live redeploy verification needed |
+| DEPLOY-06 | 05-01 (P-02 preserved) | clear_persisted fires on idle-leave and reconnect-failure | VERIFIED in code | bot.py:441 idle_check + music.py:1214 reconnect-failure both call clear_persisted() |
+| DEPLOY-07 | 05-03 | pg_dump backup runs + restore validated (re-targeted: Neon PITR restore confirmed) | DEFERRED TO LIVE UAT | UAT runbook D1 — Neon PITR console restore procedure, runs LAST |
+| DEPLOY-08 | 05-02, 05-03 | Keepalive / dead-man cron confirmed firing in production (re-targeted: UptimeRobot + Healthchecks.io) | DEFERRED TO LIVE UAT | UAT runbook A4 — UptimeRobot monitor green + Healthchecks.io dead-man ping confirmed |
+
+**Note on REQUIREMENTS.md Oracle wording:** REQUIREMENTS.md still uses Oracle A1 phrasing for DEPLOY-01 ("Oracle A1 via Docker Compose") and DEPLOY-07 ("pg_dump backup"). These are superseded by K-01 (Oracle→Koyeb+Neon pivot) documented in 05-CONTEXT.md. The re-targeted equivalents are verified above. REQUIREMENTS.md itself is not updated in this phase (PROJECT.md update deferred to phase/milestone transition per 05-CONTEXT.md canonical_refs note).
+
+---
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `cogs/music.py` | 58 | `placeholder="Pick a song..."` | INFO | Discord select menu placeholder text — not a code stub; this is a UI label for the search-result dropdown. Non-issue. |
+| — | — | No TBD/FIXME/XXX markers found in phase-05 modified files | — | None |
 
-No `TBD`, `FIXME`, or `XXX` markers found in any Phase 5 modified files. No unresolved debt markers.
-
-### Code Review Remediation Status
-
-All critical and warning findings from 05-REVIEW.md were resolved before this verification:
-
-| Finding | Severity | Fix Confirmed |
-|---------|----------|---------------|
-| CR-01: `return` in restore_queues abandoned all remaining guilds | Critical | `continue` at services/queue_persistence.py:151 — confirmed |
-| CR-02: seed_restore_test permanently polluted live DB | Critical | `_cleanup_seed()` in `finally` at scripts/seed_restore_test.py:426-430 — confirmed |
-| WR-01: backup.sh pipe masked pg_dump failure | Warning | Temp-file dump + size guard (1 KB minimum) at scripts/backup.sh:55-70 — confirmed |
-| WR-02: deploy.sh git pull with no clean-tree guard | Warning | Dirty-tree check + `--ff-only` at scripts/deploy.sh:44-52 — confirmed |
-| WR-05: dead `result =` binding in _docker_exec_stdin | Warning | `subprocess.run(cmd, input=stdin_bytes, check=True)` — binding removed, confirmed |
-| WR-06: _get_pool DSN rewrite broke query params | Warning | `urlsplit`/`urlunsplit` at scripts/seed_restore_test.py:143-144 — confirmed |
-| WR-07: bot.owner_id unset; /sync unusable for actual owner | Warning | `owner_id=config.OWNER_ID or None` at bot.py:67; `/sync` uses `await bot.is_owner(interaction.user)` at bot.py:357 — confirmed |
-
-**Deferred (advisory, not blocking):**
-- WR-03: Reconnect generation-counter race — intentionally deferred to live C11 debug session; diagnostic logging from Plan 01 provides the trail
-- WR-04: Restore path does not re-apply duration cap on persisted tracks — low risk; only bites if config is tightened between sessions
-- IN-01 through IN-05: Cosmetic / dedup / determinism nits; no behavioral impact
-
-### Human Verification Required
-
-The 21 runbook checks below require execution on the live Oracle A1 VM. They are enumerated above in the frontmatter `human_verification` list and in `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md`.
-
-**Execution instructions:** SSH to Oracle A1, complete the prerequisites checklist in the runbook, then run checks A1 → A6 → B1 → B2 → C1-C11 → D1 in the locked order. Record each `result:` field in the runbook. Phase 5 is verified when all 21 pass.
-
-**Key checks to watch for:**
-- **B2** (DEPLOY-06 live): confirms `clear_persisted()` fired on idle-leave at runtime — the most critical Phase 5 bug fix
-- **C11** (DEPLOY-04): the reconnect race diagnostic — if WR-03 still fires under real concurrency, the new INFO log trail enables a targeted `/gsd:debug` session
-- **D1** (DEPLOY-07): the non-destructive restore proof via `scripts/seed_restore_test.py` — validates the entire backup/restore pipeline end-to-end
-
-### Gaps Summary
-
-No code-side gaps found. All Phase 5 code deliverables are structurally complete, syntax-clean, test-verified, and code-review-remediated.
-
-The only open items are the 21 live Oracle UAT checks — which are by design human-executed and cannot be verified on a Windows dev machine. The `status: human_needed` verdict reflects this correctly: automated checks passed; awaiting human verification.
+Scan covered: `config.py`, `bot.py`, `utils/logger.py`, `requirements.txt`, `Dockerfile`, `.env.example`, `docs/DEPLOY-KOYEB.md`, `tests/test_config.py`.
 
 ---
 
-*Verified: 2026-06-12*
+### Human Verification Required
+
+The phase's definition of done is K-17: the bot must hold a 24/7 Koyeb worker, survive a redeploy with queue-restore from Neon, survive Neon's 5-min idle scale-to-zero, pass all behavioral UAT, and confirm a Neon PITR restore. All 22 checks in `05-UAT-RUNBOOK.md` (version 2.0, Koyeb+Neon) require live accounts and live Discord interaction.
+
+**Run `.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md` in order (A → B → C → D). Complete Prerequisites Checklist first.**
+
+#### Setup (Prerequisites)
+
+**Test:** Create Neon project (us-east-2, pooled connection string), Koyeb WEB service (Dockerfile build, gsd/phase-5-ship-it-live branch, wdc1, /health:8000), encrypted secrets + plain env vars per K-13, UptimeRobot monitor, Healthchecks.io dead-man check
+**Expected:** All services created and live; Koyeb service builds from git and shows Healthy
+**Why human:** Requires creating accounts, pasting secrets, and triggering a live deploy
+
+#### 1. A1 — Koyeb deploy healthy
+
+**Test:** Confirm Koyeb dashboard shows Healthy after first deploy; bot posts startup message to DEXTER_CHANNEL_ID
+**Expected:** Service Healthy; "Dexter is ready." in Koyeb logs; personality startup message in Discord
+**Why human:** Live Koyeb deploy required
+
+#### 2. A2 — Koyeb restart + queue-restore-from-Neon (DEPLOY-05)
+
+**Test:** Trigger a Koyeb restart/redeploy; after service returns Healthy, run /queue
+**Expected:** Queue restored from Neon guild_queues; smart-rejoin reconnects voice only when a non-bot human remains
+**Why human:** Live Koyeb + Neon + Discord required
+
+#### 3. A3 — Over-cap /play rejection
+
+**Test:** Add MAX_QUEUE_SIZE_PER_GUILD=1 in Koyeb env vars + redeploy; try /play twice
+**Expected:** Second /play returns personality cap rejection; restore to 500 after
+**Why human:** Live Koyeb env var and Discord interaction required
+
+#### 4. A4 — UptimeRobot + Healthchecks.io active (DEPLOY-08)
+
+**Test:** Check UptimeRobot dashboard for Dexter health monitor; check Healthchecks.io for Dexter Keepalive check
+**Expected:** Both monitors show green with recent timestamps; Discord error-log channel shows UP notification from Healthchecks.io
+**Why human:** Requires live external monitoring services running for at least one interval
+
+#### 5. A5 — Health endpoint alive (curl)
+
+**Test:** `curl https://<service>.koyeb.app/health`
+**Expected:** HTTP 200; body `{"status":"ok"}`
+**Why human:** Requires live Koyeb public URL; endpoint is structurally verified in code but cannot be curled from dev host
+
+#### 6. A6 — Git auto-deploy (K-11)
+
+**Test:** Push a trivial commit to gsd/phase-5-ship-it-live; observe Koyeb dashboard
+**Expected:** Koyeb auto-builds and returns Healthy with no manual deploy step
+**Why human:** Requires live Koyeb service with git-auto-build configured
+
+#### 7. A7 — Postgres integration tests against Neon
+
+**Test:** With DATABASE_URL set to a Neon branch or throwaway DB, run `pytest tests/test_database_phase4.py -x`
+**Expected:** 18 tests pass (TestPostgresSchema, TestBatchTransaction, TestHelpers); confirms K-04/K-05 pool tuning against live Neon
+**Why human:** Requires live Neon endpoint
+
+#### 8. B1 — Queue persistence round-trip (DEPLOY-05)
+
+**Test:** /play a song; trigger Koyeb redeploy; run /queue after service returns
+**Expected:** Queue restored from Neon; smart-rejoin reconnects voice if human present
+**Why human:** Live Koyeb + Neon + Discord session required
+
+#### 9. B2 — clear_persisted on idle-leave (DEPLOY-06, P-02 runtime confirmation)
+
+**Test:** Bot idles alone 10+ min; auto-leaves; trigger Koyeb restart; run /queue
+**Expected:** /queue is EMPTY (not restored) — confirms P-02 clear_persisted fired at runtime
+**Why human:** Requires 10+ min live Discord session
+
+#### 10. B3 — Neon scale-to-zero reconnect (K-17 #3)
+
+**Test:** Leave bot idle 6+ min (no Discord commands); then run /history or /play
+**Expected:** DB query succeeds; no SSL-EOF/08006/channel_binding error in Koyeb logs; confirms K-04/K-05 pool config live
+**Why human:** Requires live Neon scale-to-zero to trigger and Koyeb log inspection
+
+#### 11-21. C1-C11 — Behavioral checks (Group C)
+
+**Tests:** Voice join roast (C1), late-night TZ roast at 1-5am ET not UTC (C2/P-03), startup message (C3), status rotation over 10-15 min (C4), /lyrics pagination (C5), /history pagination (C6), message reactions (C7), repeat-song roast (C8), idle loneliness after 30 min (C9), streak/milestone roasts (C10), reconnect race diagnostic log trail (C11/P-01)
+**Expected:** All 11 behavioral checks fire as designed; P-03 TZ fix confirms 1-5am ET (not UTC); P-01 reconnect logs visible
+**Why human:** All require live Discord session; C2 requires specific time-of-day or code patch; C11 requires intentional disconnect/reconnect
+
+#### 22. D1 — Neon PITR restore proof (DEPLOY-07, K-17 #5) — RUN LAST
+
+**Test:** Seed rows (optional: python scripts/seed_restore_test.py); note timestamp; Neon console PITR restore to a point within the 6-hour window; verify backup branch auto-created; verify asyncpg reconnects; /history shows data consistent with restore point
+**Expected:** Restore succeeds; Neon creates {branch}_old_{ts} backup branch; bot DB queries work post-restore; /history data matches restore timestamp
+**Why human:** Live Neon console operation; destructive — run only after A/B/C pass
+
+---
+
+### Gaps Summary
+
+No code-level gaps. All 7 code-level must-haves from Plans 01-03 are verified as CORRECT and WIRED.
+
+The only remaining work is the live-UAT gate (K-17): 22 checks in `05-UAT-RUNBOOK.md` that require live Koyeb + Neon + Discord. These are user-only steps by design (K-17, phase asymmetry documented in 05-CONTEXT.md).
+
+**DEPLOY-01 partial note:** The requirement's wording in REQUIREMENTS.md ("Oracle A1 via Docker Compose") is superseded by the K-01 pivot (Koyeb + Neon). The Koyeb-targeted code wiring is complete. The "runs 24/7 surviving restart" clause requires live UAT (A1/A2).
+
+**DEPLOY-07 partial note:** The requirement's wording ("pg_dump backup + restore validated") is superseded by K-08 (Neon-managed PITR). The Neon PITR restore proof is D1 in the runbook, pending live execution.
+
+---
+
+## REQUIREMENTS.md Traceability Note
+
+The REQUIREMENTS.md traceability table marks DEPLOY-01/02/03/05/07/08 as "Pending" and DEPLOY-04/06 as "Complete." This matches the current state: DEPLOY-04 (reconnect race) and DEPLOY-06 (clear_persisted) are code-complete and verified; the remaining six require live UAT execution. Once the user completes `05-UAT-RUNBOOK.md` and reports via `/gsd-verify-work`, those requirements can be marked complete.
+
+---
+
+*Verified: 2026-06-15*
 *Verifier: Claude (gsd-verifier)*
