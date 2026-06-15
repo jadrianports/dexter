@@ -201,9 +201,13 @@ async def _run_health_server() -> None:
     runner = _aio_web.AppRunner(app)
     await runner.setup()
     try:
-        site = _aio_web.TCPSite(runner, '0.0.0.0', 8000)
+        # Render injects $PORT and routes its public URL to it; default 8000 keeps
+        # Railway / PC / local working unchanged. The /health route + an external
+        # pinger (UptimeRobot) is what keeps a Render free web service from sleeping.
+        _health_port = int(os.environ.get("PORT", "8000"))
+        site = _aio_web.TCPSite(runner, '0.0.0.0', _health_port)
         await site.start()
-        log.info("Health endpoint listening on 0.0.0.0:8000/health")
+        log.info("Health endpoint listening on 0.0.0.0:%s/health", _health_port)
         # Keep the coroutine alive so the TCPSite is not torn down on return.
         # Cancellable: asyncio.CancelledError propagates out of asyncio.Event.wait().
         await asyncio.Event().wait()
