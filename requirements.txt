@@ -1,5 +1,5 @@
 discord.py>=2.3.0
-yt-dlp
+yt-dlp>=2026.06.09
 asyncpg==0.31.0
 python-dotenv
 PyNaCl
@@ -10,4 +10,4 @@ pytest-asyncio
 tzdata
 lyricsgenius
 beautifulsoup4
-aiohttp
+aiohttp>=3.9.0
