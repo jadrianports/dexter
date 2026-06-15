@@ -2,6 +2,7 @@
 status: partial
 phase: 05-ship-it-live
 source: [05-CONTEXT.md, 05-RESEARCH.md, 04-VERIFICATION.md, 03-VERIFICATION.md, 04-HUMAN-UAT.md]
+target: Koyeb WEB service + Neon serverless Postgres (re-targeted 2026-06-15, K-18)
 started: [fill on execution]
 updated: [fill on execution]
 ---
@@ -10,7 +11,7 @@ updated: [fill on execution]
 
 **Consolidated from:** 03-VERIFICATION.md (9 behavioral checks), 04-VERIFICATION.md (6 deploy checks), 04-HUMAN-UAT.md (6 human scenarios — de-duped with 04-VERIFICATION)
 
-**Run on:** Oracle A1 ARM VM via SSH
+**Run on:** Koyeb WEB service (git-auto-built) + Neon serverless Postgres
 
 **Session flow:** A (boot/infra) → B (queue persistence) → C (behavioral/Discord) → D (destructive/restore, ALWAYS LAST)
 
@@ -18,63 +19,46 @@ updated: [fill on execution]
 
 > **WARNING — CRITICAL**
 >
-> **NEVER run `docker compose down -v` in production.**
+> **Group D (Neon PITR restore) is DESTRUCTIVE and runs LAST.** Never run Group D until Groups A, B, and C have all passed.
 >
-> This wipes the `postgres_data`, `audio_cache`, and `logs` named volumes — complete database loss with no recovery unless a very recent OCI backup exists. The word "volumes" is the landmine.
+> The Neon PITR restore in D1 temporarily interrupts the asyncpg pool's connections and overwrites the live Neon branch history within the restore window. Before clicking "Restore" in the Neon console, always confirm the timestamp and verify the restore point via Time-Travel Assist first.
 >
-> Safe operations:
-> - `docker compose restart bot` — restarts bot container only; DB unaffected; volumes intact
-> - `docker compose up -d --build bot` — rebuilds and restarts bot only; DB unaffected; volumes intact
-> - `docker compose down` (no `-v`) — stops containers; volumes survive; `docker compose up -d` brings them back
+> **Never point `pg_restore` or `dropdb` at the live Neon branch.** The PITR restore is a Neon console UI operation, not a local database command.
 >
-> `deploy.sh` never calls `down -v`. Do not add it. If someone asks "should I run `docker compose down -v`?" — the answer is NO.
+> **K-14 break-glass rule:** Never run the local PC `docker compose` stack and the Koyeb service simultaneously on the same Discord token. Two instances on one token cause a gateway conflict loop. Stop PC compose before Koyeb goes live; start it only when Koyeb is confirmed down.
 
 ---
 
 ## Prerequisites Checklist
 
-Complete every item before running check A1. These are one-time setup steps on the Oracle A1 VM.
+Complete every item before running check A1. These are one-time setup steps for the Koyeb+Neon deployment. See `docs/DEPLOY-KOYEB.md` for the full deploy contract.
 
-- [ ] **VM timezone:** `sudo timedatectl set-timezone America/New_York && timedatectl` — verify "America/New_York"
-- [ ] **Docker enabled for reboot:** `systemctl is-enabled docker` — should print `enabled`; if not: `sudo systemctl enable docker`
-- [ ] **Environment file:** `cp .env.example .env` → fill in `DISCORD_TOKEN`, `GEMINI_API_KEY`, `GENIUS_TOKEN`, `POSTGRES_PASSWORD`, `OWNER_ID`, `DEXTER_CHANNEL_ID`, `STREAK_TIMEZONE=America/New_York`; then `chmod 600 .env`
-- [ ] **pg_dump auth:** `echo "localhost:5432:dexter:dexter:YOUR_POSTGRES_PASSWORD" >> ~/.pgpass && chmod 600 ~/.pgpass` — verify with `cat ~/.pgpass`
-- [ ] **OCI CLI config:** `oci setup config` (interactive; creates `~/.oci/config`) — test with `oci iam region list`
-- [ ] **OCI lifecycle policy applied:** `NAMESPACE=$(oci os ns get --query 'data' --raw-output) && oci os object-lifecycle-policy put --namespace-name "${NAMESPACE}" --bucket-name dexter-backups --items file://scripts/lifecycle-policy.json`
-- [ ] **Crontab entries installed:**
-
-  ```crontab
-  HEALTHCHECK_URL=https://hc-ping.com/<your-uuid>
-  */5 * * * * /opt/dexter/scripts/keepalive.sh >> /var/log/dexter/keepalive.log 2>&1
-  0 */6 * * * /opt/dexter/scripts/backup.sh >> /var/log/dexter/backup.log 2>&1
-  ```
-
-  Install with `crontab -e`; verify with `crontab -l`
-
-- [ ] **Host pg_dump version check:** `pg_dump --version` — should print `pg_dump (PostgreSQL) 16.x`; if version is below 16, install: `sudo apt-get install -y postgresql-client-16`. Version parity prevents dump/restore format divergence. (The restore in D1 bypasses this via `docker compose exec`, but host pg_dump produces the backup in A5/D1.)
-  result: [pending]
-
-- [ ] **Per-guild command sync (first deploy only):** `python bot.py --first-run --guild <GUILD_ID>` — slash commands appear in Discord within seconds; subsequent syncs via owner `/sync <guild_id>`
+- [ ] **Neon project created:** Sign up at https://neon.com (no credit card). Create a new project in region `us-east-2`. In Connection Details, select the **Pooled connection** (hostname contains `-pooler`). Copy the full connection string — it looks like `postgresql://user:pass@ep-<id>-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require`.
+- [ ] **Koyeb WEB service created:** Sign up at https://koyeb.com (no credit card). Create Service → GitHub → connect the repo. Configuration: Branch `gsd/phase-5-ship-it-live`, Build method Dockerfile, Region Washington D.C. (`wdc1`), Instance type Free (512 MB / 0.1 vCPU / 2 GB SSD), Health check HTTP path `/health` port `8000`. See `docs/DEPLOY-KOYEB.md` §3 for step-by-step.
+- [ ] **Koyeb secrets + env vars set (K-13):** Four encrypted Koyeb Secrets: `DISCORD_TOKEN`, `GEMINI_API_KEY`, `GENIUS_TOKEN`, `DATABASE_URL` (use the Neon pooled connection string — the bot's `sanitize_database_url()` strips the `channel_binding` query param automatically). Plain env vars: `DEXTER_CHANNEL_ID`, `ERROR_LOG_CHANNEL_ID`, `OWNER_ID`, `HEALTHCHECK_URL`, `STREAK_TIMEZONE=America/New_York`. See `docs/DEPLOY-KOYEB.md` §4.
+- [ ] **UptimeRobot HTTP monitor set up:** Sign up at https://uptimerobot.com (free tier, no credit card). Add New Monitor: Type `HTTP(s)`, URL `https://<your-service-name>.koyeb.app/health`, Interval 5 minutes. This prevents Koyeb's 1-hour scale-to-zero sleep. See `docs/DEPLOY-KOYEB.md` §5.
 - [ ] **Healthchecks.io check created:**
   - Sign in to healthchecks.io → New Project ("Dexter Monitoring") → Add Check → Name: "Dexter Keepalive" → Period: 10 min, Grace: 10 min → Save → copy ping URL (format: `https://hc-ping.com/<36-char-uuid>`)
   - Discord integration: error-log channel → Channel Settings → Integrations → New Webhook → copy URL → Healthchecks.io → Integrations → Add Integration → Discord → paste webhook URL → test it → toggle on for the check
   - Email integration: Healthchecks.io → Integrations → Add Integration → Email → enter email → toggle on for the check
+  - Set `HEALTHCHECK_URL` to the ping URL in Koyeb plain env vars (K-09, DEPLOY-08).
+- [ ] **Per-guild command sync (first deploy only):** `python bot.py --first-run --guild <GUILD_ID>` — slash commands appear in Discord within seconds; subsequent syncs via owner `/sync <guild_id>` (P-04).
 
 ---
 
 ## Group A: Boot + Infra
 
-### A1. Docker clean boot
+### A1. Koyeb deploy healthy
 
-expected: `cd /opt/dexter && docker compose up -d && docker compose logs -f bot` → Postgres healthcheck passes (`healthy`); bot logs `Dexter is ready.`; startup personality message posts to DEXTER_CHANNEL_ID in the guild. For ongoing updates use `bash scripts/deploy.sh` (git pull + `docker compose up -d --build bot`).
+expected: After clicking Deploy in the Koyeb console (or after the first push to the tracked branch triggers a build), the Koyeb dashboard shows the service status as **Healthy**. Koyeb logs (via the console log viewer or `koyeb services logs <service>`) show `Dexter is ready.` and the startup personality message (`i'm back. did you miss me. probably not.` or similar) posts to `DEXTER_CHANNEL_ID` in the guild.
 
 result: [pending]
 
 ---
 
-### A2. Reboot survival
+### A2. Koyeb restart + queue-restore-from-Neon survival
 
-expected: `systemctl is-enabled docker` returns `enabled`; then `sudo reboot`; wait ~90 seconds; check Discord — the bot posts its startup message automatically without any SSH intervention. Run `/queue` to confirm queue state is restored if a guild_queues row existed.
+expected: In the Koyeb service dashboard, trigger a manual restart or redeploy (Service → Redeploy / Restart). The service comes back up Healthy automatically with no manual intervention. The bot posts its startup personality message to `DEXTER_CHANNEL_ID`. Run `/queue` — if a `guild_queues` row existed for the guild (i.e. a queue was active before restart), the queue is restored from Neon. Smart-rejoin re-connects voice and resumes playback only when a non-bot human remains in the channel (DEPLOY-05, K-17 #2).
 
 result: [pending]
 
@@ -82,31 +66,39 @@ result: [pending]
 
 ### A3. Over-cap /play rejection
 
-expected: Set `MAX_QUEUE_SIZE_PER_GUILD=1` in `.env`, run `docker compose restart bot`, then `/play` two different songs. Second `/play` returns the personality cap rejection ("queue's full at 1 track. impressive dedication, wrong bot." or equivalent). Queue length stays at 1. Restore `MAX_QUEUE_SIZE_PER_GUILD` to 500 and restart when done.
+expected: In the Koyeb service dashboard → Environment, add `MAX_QUEUE_SIZE_PER_GUILD=1` as a plain env var and trigger a redeploy. Then `/play` two different songs. The second `/play` returns the personality cap rejection ("queue's full at 1 track. impressive dedication, wrong bot." or equivalent). Queue length stays at 1. Remove the override env var and redeploy to restore `MAX_QUEUE_SIZE_PER_GUILD` to 500 when done.
 
 result: [pending]
 
 ---
 
-### A4. Keepalive cron and Healthchecks.io
+### A4. UptimeRobot + Healthchecks.io confirmed active
 
-expected: After crontab is installed with `HEALTHCHECK_URL` set, wait 10–15 minutes and check the Healthchecks.io dashboard. The "Dexter Keepalive" check shows green with "Last ping: X minutes ago". The Discord error-log channel shows a "Bot Dexter Keepalive is UP" notification when the integration first fires.
-
-result: [pending]
-
----
-
-### A5. Backup cron (manual run)
-
-expected: `bash scripts/backup.sh` exits 0; a new `dexter_YYYYMMDD_HHMMSS.dump` object appears in the `dexter-backups` OCI bucket (verify with `oci os object list --bucket-name dexter-backups --namespace-name "$(oci os ns get --query 'data' --raw-output)"`).
+expected: (a) UptimeRobot dashboard shows the "Dexter health" monitor green with "Last check: X minutes ago" — confirms the external HTTP pinger is reaching `/health` and Koyeb is not sleeping (DEPLOY-08 / K-02 amendment). (b) Healthchecks.io dashboard shows the "Dexter Keepalive" check green with a last-ping timestamp within the expected period — confirms the bot-side outbound dead-man ping is firing (DEPLOY-08 / K-09). The Discord error-log channel receives a "Bot Dexter Keepalive is UP" notification when the integration first fires.
 
 result: [pending]
 
 ---
 
-### A6. Postgres integration tests
+### A5. Health endpoint alive
 
-expected: `pytest tests/test_database_phase4.py -x` against a live `dexter_test` Postgres database (`CREATE DATABASE dexter_test;` first) exits 0 with 18 tests green (TestPostgresSchema, TestBatchTransaction, TestHelpers).
+expected: `curl https://<your-service-name>.koyeb.app/health` returns HTTP 200 with body `{"status":"ok"}`. This confirms the Plan-01 minimal aiohttp endpoint is bound to `0.0.0.0:8000` and reachable through Koyeb's public domain (K-02 amendment).
+
+result: [pending]
+
+---
+
+### A6. Git auto-deploy
+
+expected: Push a trivial commit to the `gsd/phase-5-ship-it-live` branch (e.g. add a comment to `README.md`). Koyeb detects the push automatically, starts a new build, and the service returns to Healthy status. No manual deploy step is needed. This confirms the K-11 git-auto-build pipeline is wired (replaces the retired `scripts/deploy.sh`). After live UAT passes, update Koyeb's tracked branch to `main` before merging.
+
+result: [pending]
+
+---
+
+### A7. Postgres integration tests (Neon)
+
+expected: With `DATABASE_URL` pointed at a throwaway Neon database or branch (create a `dexter_test` branch in the Neon console, or use the main DB — `init_db()` is idempotent), run `pytest tests/test_database_phase4.py -x`. Exits 0 with 18 tests green (TestPostgresSchema, TestBatchTransaction, TestHelpers). This confirms asyncpg pool tuning (K-04: `max_inactive_connection_lifetime=240`, `statement_cache_size=0`) and the `sanitize_database_url` sanitizer (K-05) work against a live Neon endpoint.
 
 result: [pending]
 
@@ -116,15 +108,23 @@ result: [pending]
 
 ### B1. Queue persistence round-trip
 
-expected: `/play` a song in the guild (confirm it appears in `/queue`); `docker compose restart bot`; rejoin voice if a non-bot human was present; `/queue` after restart — the queue is restored from `guild_queues`; smart-rejoin connects voice and resumes playback only when a non-bot human is still in the channel.
+expected: `/play` a song in the guild (confirm it appears in `/queue`). Trigger a Koyeb service redeploy or restart (via the Koyeb dashboard — NOT `docker compose restart bot`). After the service returns Healthy, run `/queue` — the queue is restored from Neon `guild_queues`. Smart-rejoin re-connects voice and resumes playback only when a non-bot human is still in the channel (DEPLOY-05, K-17 #2). Inspect logs via the Koyeb console or `koyeb services logs <service>` for the restore log line.
 
 result: [pending]
 
 ---
 
-### B2. clear_persisted on idle-leave (DEPLOY-06 / IN-02 fix)
+### B2. clear_persisted on idle-leave (DEPLOY-06 / P-02 fix)
 
-expected: Join voice with the bot; let it sit alone for 10+ minutes (no commands, no other humans); bot auto-leaves and posts the idle-leave message; `docker compose restart bot`; `/queue` — queue is **empty** (not restored). This confirms `clear_persisted()` fired on idle-leave (the `bot.py:~396` fix from Plan 01). If the queue restores, the fix did not apply — inspect `docker compose logs bot` for `clear_persisted` calls.
+expected: Join voice with the bot; let it sit alone for 10+ minutes (no commands, no other humans); bot auto-leaves and posts the idle-leave message; trigger a Koyeb redeploy or restart; run `/queue` — queue is **empty** (not restored). This confirms `clear_persisted()` fired on idle-leave (the `bot.py:~399` fix from P-02). If the queue restores, the fix did not apply — inspect Koyeb logs (console or `koyeb services logs <service>`) for `clear_persisted` calls.
+
+result: [pending]
+
+---
+
+### B3. Neon scale-to-zero reconnect
+
+expected: Leave the bot idle for 6+ minutes with no Discord commands (so Neon's compute suspends after its 5-minute scale-to-zero). Then run `/history` or `/play`. The DB query succeeds with no crash and no SSL-EOF / `08006` / `channel_binding` error in the Koyeb logs. This confirms that `max_inactive_connection_lifetime=240` recycles stale pool connections before Neon terminates them, `statement_cache_size=0` avoids prepared-statement errors through PgBouncer, and the sanitizer strips `channel_binding` correctly (DEPLOY-01, K-17 #3, K-04/K-05).
 
 result: [pending]
 
@@ -140,9 +140,9 @@ result: [pending]
 
 ---
 
-### C2. Late-night roast (DEPLOY-04 TZ fix verification)
+### C2. Late-night roast (P-03 TZ fix verification)
 
-expected: Join voice between 1–5am America/New_York (or temporarily patch `cogs/events.py` `is_late_night` to always return `True` for a one-off test). A roast fires at ~50% chance with late-night flavor text. This also confirms the `cogs/events.py` `ZoneInfo(config.STREAK_TIMEZONE)` fix from Plan 01 fires at the correct community hour — not UTC. If it fires at 1–5am ET correctly, the TZ fix is live. If the bot fails to fire during late-night ET hours (fires only at 1–5am UTC = 8–10pm ET), the TZ fix did not apply; escalate to `/gsd:debug` for log inspection.
+expected: Join voice between 1–5am America/New_York (or temporarily patch `cogs/events.py` `is_late_night` to always return `True` for a one-off test). A roast fires at ~50% chance with late-night flavor text. This also confirms the `cogs/events.py` `ZoneInfo(config.STREAK_TIMEZONE)` fix from P-03 fires at the correct community hour — not UTC. If it fires at 1–5am ET correctly, the TZ fix is live. If the bot fails to fire during late-night ET hours (fires only at 1–5am UTC = 8–10pm ET), the TZ fix did not apply; escalate to `/gsd:debug` for log inspection.
 
 result: [pending]
 
@@ -150,7 +150,7 @@ result: [pending]
 
 ### C3. Startup message
 
-expected: `docker compose restart bot` → within ~30 seconds a personality startup message (from `personality/roasts.STARTUP_MESSAGES`, e.g. "i'm back. did you miss me. probably not.") posts to DEXTER_CHANNEL_ID.
+expected: Trigger a Koyeb restart or redeploy → within ~30 seconds a personality startup message (from `personality/roasts.STARTUP_MESSAGES`, e.g. "i'm back. did you miss me. probably not.") posts to DEXTER_CHANNEL_ID. Check Koyeb logs (console or `koyeb services logs <service>`) for `Dexter is ready.` to confirm the startup sequence completed.
 
 result: [pending]
 
@@ -214,7 +214,7 @@ result: [pending]
 
 ### C11. DEPLOY-04 diagnostic (reconnect race, live observation)
 
-expected: Trigger a live voice disconnect/reconnect (e.g. network blip, or move the bot to another channel and back). Inspect `docker compose logs bot` for the INFO-level reconnect trail: `reconnect attempt X/3 in guild Y` and `reconnect: vc.is_connected()=True gen=Z guild=Y`. If playback resumes after reconnect, the WR-03 defensive fix from Plan 01 is working. If playback silently fails after a reconnect but the log shows `vc.is_connected()=True`, escalate to a dedicated `/gsd:debug` session using the diagnostic log trail — per D-04.
+expected: Trigger a live voice disconnect/reconnect (e.g. network blip, or move the bot to another channel and back). Inspect Koyeb logs (console or `koyeb services logs <service>`) for the INFO-level reconnect trail: `reconnect attempt X/3 in guild Y` and `reconnect: vc.is_connected()=True gen=Z guild=Y`. If playback resumes after reconnect, the P-01 defensive fix is working. If playback silently fails after a reconnect but the log shows `vc.is_connected()=True`, escalate to a dedicated `/gsd:debug` session using the diagnostic log trail — per D-04.
 
 result: [pending]
 
@@ -222,11 +222,25 @@ result: [pending]
 
 ## Group D: Destructive (ALWAYS LAST)
 
-> Run this section only after Groups A, B, and C have passed. Group D uses a throwaway database and never touches the live `dexter` database, but a restore failure cannot corrupt earlier UAT results if it runs last.
+> Run this section only after Groups A, B, and C have passed. The Neon PITR restore in D1 temporarily interrupts connections and overwrites live branch history within the restore window — it cannot corrupt earlier UAT results if it runs last.
 
-### D1. End-to-end restore proof (DEPLOY-07 / D-15)
+### D1. Neon PITR restore proof (DEPLOY-07 / K-08 / K-17 #5)
 
-expected: `python scripts/seed_restore_test.py` from `/opt/dexter`. The script: (1) seeds known rows into the live `dexter` database (1 user_profiles, 3 song_history, 2 user_artist_counts); (2) runs `bash scripts/backup.sh` to produce a fresh dump in OCI; (3) downloads the newest dump from the `dexter-backups` bucket; (4) validates the dump file is larger than 1 KB; (5) creates `dexter_restore_test` via `docker compose exec postgres createdb -U dexter -T template0 dexter_restore_test`; (6) restores via `docker compose exec postgres pg_restore` (version-matched — avoids host pg_restore mismatch); (7) connects to `dexter_restore_test` and asserts row counts match the seeded counts; (8) drops the throwaway database. Script exits 0 with a "restore verified" summary. The live `dexter` database is never passed to `pg_restore` or `dropdb`.
+expected:
+
+1. **(Optional but recommended) Seed roast-fuel rows:** Run `python scripts/seed_restore_test.py` to insert known rows into the live Neon database (1 user_profiles, 3 song_history, 2 user_artist_counts), or alternatively queue real songs and run `/history` to confirm meaningful song_history rows exist. Note the current timestamp.
+
+2. **Confirm restore point:** In the Neon console → Project → Branches → select the main branch → "Backup & Restore". Click "Time Travel Assist" and run a read-only query against a timestamp 15–30 minutes in the past — confirm expected rows (e.g. recent song_history entries) are visible at that point.
+
+3. **Trigger the PITR restore:** Select restore mode "From history", choose a timestamp within the 6-hour PITR window (at least 15 minutes in the past so meaningful data is visible). Click "Next" → review the pending changes → click "Restore."
+
+4. **Verify the backup branch was created:** Neon automatically creates a `{branch_name}_old_{head_timestamp}` branch before overwriting. Confirm it appears in the Branches list.
+
+5. **Confirm automatic reconnect:** Connections to the branch temporarily interrupt during the restore. The asyncpg pool reconnects automatically on the next query (same hostname and port). No bot restart needed.
+
+6. **Verify data integrity post-restore:** Run `/history` in Discord — it should return song_history rows consistent with the restore timestamp (seed rows inserted after the restore point will be gone; rows that existed before it will be present). This confirms DEPLOY-07 and K-17 #5.
+
+The live Neon branch is the only target. Never run `pg_restore`, `dropdb`, or any destructive local command against the live Neon database.
 
 result: [pending]
 
@@ -236,15 +250,14 @@ result: [pending]
 
 | Symptom | Probable Cause | Fix |
 |---------|---------------|-----|
-| `docker compose up` fails: `no matching manifest for linux/arm64` | Image without arm64 variant | Confirm you are on Oracle A1 (`uname -m` → `aarch64`); if not, this is a dev machine — not the deploy target |
-| Bot container exits immediately (exit code 1) | Missing or malformed `.env` | `docker compose logs bot` — look for "DISCORD_TOKEN not set" or asyncpg DSN errors; verify `.env` has all required keys |
-| `healthcheck: starting` never becomes `healthy` | `pg_isready` failing inside Postgres container | `docker compose logs postgres` — check for storage permission errors or volume corruption; if audio_cache volume only is corrupted: `docker compose down; docker volume rm dexter_audio_cache; docker compose up -d` (NEVER `down -v`) |
-| `pool-acquire timeout` in bot logs | Bot started before Postgres finished init | Handled by `depends_on: service_healthy`; if it still occurs, run `docker compose restart bot` to let Postgres finish initializing; consider increasing `retries: 5` in the postgres healthcheck |
-| Volume permission errors in logs | Docker named volume created with wrong ownership | For non-postgres volumes only: `docker compose down; docker volume rm dexter_audio_cache; docker compose up -d`; for postgres_data permission issues, restore from OCI backup |
+| Koyeb service stuck "Unhealthy" or restarting in a loop | Health endpoint not binding to `0.0.0.0:8000` | Confirm `TCPSite(runner, '0.0.0.0', 8000)` in `bot.py` — binding to `'localhost'` is unreachable by Koyeb's health checker (Pitfall 5). Check Koyeb logs for startup errors. |
+| Bot goes offline after ~1 hour of Discord inactivity | UptimeRobot not pinging, or monitor not set up | Check UptimeRobot dashboard — monitor should show green. Confirm URL is `https://<service>.koyeb.app/health`. Koyeb free WEB services sleep after 1h without inbound HTTP traffic (Pitfall 4). |
+| `asyncpg.exceptions.PostgresError: unrecognized configuration parameter "channel_binding"` at startup | `sanitize_database_url()` not applied, or `channel_binding=require` reaching asyncpg | Verify `config.sanitize_database_url(config.DATABASE_URL)` is called before passing DSN to `create_pool`. The function strips the entire query string (Pitfall 1). |
+| Intermittent DB errors / SSL-EOF after quiet periods (5+ min idle) | `max_inactive_connection_lifetime` not set below 300s | Confirm `max_inactive_connection_lifetime=240` in the `create_pool` call in `bot.py`. Neon suspends after 5 min; the pool must evict at 4 min (Pitfall 2). |
+| `asyncpg.exceptions.InvalidSQLStatementNameError: prepared statement "..." does not exist` | `statement_cache_size` not set to 0 | Confirm `statement_cache_size=0` in `create_pool`. Neon's PgBouncer in transaction mode is incompatible with asyncpg's default prepared-statement caching (Pitfall 3). |
+| New commits to `main` not triggering Koyeb builds after merge | Koyeb still tracking the feature branch after merge | In Koyeb service settings, update the tracked branch from `gsd/phase-5-ship-it-live` to `main` after the merge (Pitfall 8). |
 | Slash commands not appearing in Discord | Command sync not run | `python bot.py --first-run --guild <GUILD_ID>`; then wait ~10 seconds |
-| `DISCORD_TOKEN` invalid / bot returns 401 | Stale or regenerated token | Discord Developer Portal → Bot → Reset Token → copy → update `.env`; `docker compose restart bot` |
-| `pg_dump` in `backup.sh` fails: `password authentication failed` | `~/.pgpass` not set or wrong permissions | `chmod 600 ~/.pgpass`; verify contents match `localhost:5432:dexter:dexter:<password>`; no trailing whitespace |
-| `oci os object put` fails: `NotAuthenticated` | `~/.oci/config` not set or expired key | `oci iam region list` to test; re-run `oci setup config`; if using instance principal, ensure IAM policy grants `manage objects in compartment` |
+| `DISCORD_TOKEN` invalid / bot returns 401 | Stale or regenerated token | Discord Developer Portal → Bot → Reset Token → copy → update Koyeb encrypted secret `DISCORD_TOKEN`; trigger a redeploy. |
 
 ---
 
@@ -254,16 +267,16 @@ Run this table at the end of the session.
 
 | Group | Checks | Passed | Failed | Notes |
 |-------|--------|--------|--------|-------|
-| A — Boot + Infra | A1, A2, A3, A4, A5, A6 | | | |
-| B — Queue Persistence | B1, B2 | | | |
+| A — Boot + Infra | A1, A2, A3, A4, A5, A6, A7 | | | |
+| B — Queue Persistence | B1, B2, B3 (scale-to-zero) | | | |
 | C — Behavioral | C1–C11 | | | |
-| D — Destructive | D1 | | | |
-| **Total** | **21** | | | |
+| D — Destructive | D1 (Neon PITR) | | | |
+| **Total** | **22** | | | |
 
-Phase 5 is verified when all 21 checks pass on Oracle A1. Report results via `/gsd-verify-work`.
+Phase 5 is verified-live when all 22 checks pass on Koyeb+Neon per K-17. Report results via `/gsd-verify-work`.
 
 ---
 
 *Phase: 05-ship-it-live*
-*Runbook version: 1.0 (2026-06-12)*
+*Runbook version: 2.0 (Koyeb+Neon) — re-targeted 2026-06-15 per K-18*
 *Source: Plan 05-03-PLAN.md*
