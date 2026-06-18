@@ -41,6 +41,18 @@ class DexterBot(commands.AutoShardedBot):
     the pool leaks a full set of Postgres connections on every restart cycle.
     """
 
+    async def setup_hook(self) -> None:
+        """Register persistent views so buttons survive a bot restart (D-03, PLAYER-01).
+
+        setup_hook is called once before on_ready. Registering NowPlayingView here
+        lets Discord route presses on pre-restart messages to the live handler.
+        Import is inside the method to avoid a circular import at module load time
+        (bot.py is imported by cogs; cogs import bot only via TYPE_CHECKING).
+        """
+        from cogs.music import NowPlayingView
+        self.add_view(NowPlayingView(self))
+        log.info("Registered persistent NowPlayingView")
+
     async def close(self) -> None:
         pool = getattr(self, "pool", None)
         if pool is not None:

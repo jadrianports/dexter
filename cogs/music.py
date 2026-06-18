@@ -272,6 +272,174 @@ class HistoryPageView(discord.ui.View):
                 pass
 
 
+class NowPlayingView(discord.ui.View):
+    """Persistent 5-button controller on the now-playing embed (D-01..D-06, PLAYER-01).
+
+    timeout=None  — buttons never expire so they survive a bot restart.
+    custom_ids are stable across restarts so Discord routes presses to
+    the registered instance (added via bot.add_view in setup_hook).
+
+    All callbacks:
+      1. Resolve guild + queue + voice_client from the interaction.
+      2. Guard the presser is in the bot's voice channel (D-02).
+      3. Call the matching _do_* helper from MusicCog.
+      4. Re-render the now-playing embed in-place via edit_message (D-04, silent).
+    """
+
+    def __init__(self, bot: commands.Bot) -> None:
+        super().__init__(timeout=None)
+        self.bot = bot
+
+    def _resolve_cog_queue_vc(
+        self, interaction: discord.Interaction
+    ) -> tuple["MusicCog | None", "MusicQueue | None", discord.VoiceClient | None]:
+        cog: MusicCog | None = self.bot.cogs.get("MusicCog")  # type: ignore[assignment]
+        if cog is None:
+            return None, None, None
+        guild = interaction.guild
+        if guild is None:
+            return cog, None, None
+        queue = cog.get_queue(guild.id)
+        vc = guild.voice_client
+        return cog, queue, vc
+
+    async def _guard_in_voice(self, interaction: discord.Interaction, vc: discord.VoiceClient | None) -> bool:
+        """Return True if the presser is in the bot's voice channel; send ephemeral refusal otherwise."""
+        if vc is None or not vc.is_connected():
+            await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
+            )
+            return False
+        member = interaction.user
+        if not hasattr(member, "voice") or member.voice is None or member.voice.channel != vc.channel:
+            await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOT_IN_VOICE)), ephemeral=True
+            )
+            return False
+        return True
+
+    @discord.ui.button(
+        label="⏸ Pause", style=discord.ButtonStyle.secondary, custom_id="dex:np:playpause"
+    )
+    async def playpause_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        cog, queue, vc = self._resolve_cog_queue_vc(interaction)
+        if cog is None or queue is None:
+            await interaction.response.send_message(
+                embed=embeds.error("bot isn't ready yet."), ephemeral=True
+            )
+            return
+        if not await self._guard_in_voice(interaction, vc):
+            return
+        track = queue.get_current()
+        if not track or not queue.is_playing and not queue.is_paused:
+            await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
+            )
+            return
+        result = cog._do_pause_toggle(queue, vc)
+        # Update button label to reflect new state
+        if result == "paused":
+            button.label = "▶ Resume"
+        else:
+            button.label = "⏸ Pause"
+        await interaction.response.edit_message(
+            embed=embeds.now_playing(track, queue), view=self
+        )
+
+    @discord.ui.button(
+        label="⏭ Skip", style=discord.ButtonStyle.secondary, custom_id="dex:np:skip"
+    )
+    async def skip_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        cog, queue, vc = self._resolve_cog_queue_vc(interaction)
+        if cog is None or queue is None:
+            await interaction.response.send_message(
+                embed=embeds.error("bot isn't ready yet."), ephemeral=True
+            )
+            return
+        if not await self._guard_in_voice(interaction, vc):
+            return
+        if not queue.is_playing and not queue.is_paused:
+            await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
+            )
+            return
+        # Ack first — skip starts a background task
+        await interaction.response.defer()
+        next_track = await cog._do_skip(interaction.guild, queue, vc)
+        if next_track:
+            await interaction.followup.send(f"skipped. now playing **{next_track.title}**.", ephemeral=True)
+        else:
+            await interaction.followup.send("end of queue.", ephemeral=True)
+
+    @discord.ui.button(
+        label="🔁 Loop: Off", style=discord.ButtonStyle.secondary, custom_id="dex:np:loop"
+    )
+    async def loop_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        cog, queue, vc = self._resolve_cog_queue_vc(interaction)
+        if cog is None or queue is None:
+            await interaction.response.send_message(
+                embed=embeds.error("bot isn't ready yet."), ephemeral=True
+            )
+            return
+        if not await self._guard_in_voice(interaction, vc):
+            return
+        track = queue.get_current()
+        new_mode = cog._do_loop_cycle(queue)
+        # Reflect new loop mode on the button label
+        mode_labels = {
+            LoopMode.OFF: "🔁 Loop: Off",
+            LoopMode.SINGLE: "🔂 Loop: Single",
+            LoopMode.QUEUE: "🔁 Loop: Queue",
+        }
+        button.label = mode_labels[new_mode]
+        embed = embeds.now_playing(track, queue) if track else embeds.error("nothing playing.")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(
+        label="🔀 Shuffle", style=discord.ButtonStyle.secondary, custom_id="dex:np:shuffle"
+    )
+    async def shuffle_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        cog, queue, vc = self._resolve_cog_queue_vc(interaction)
+        if cog is None or queue is None:
+            await interaction.response.send_message(
+                embed=embeds.error("bot isn't ready yet."), ephemeral=True
+            )
+            return
+        if not await self._guard_in_voice(interaction, vc):
+            return
+        track = queue.get_current()
+        count = cog._do_shuffle(queue)
+        embed = embeds.now_playing(track, queue) if track else embeds.error("nothing playing.")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(
+        label="⏹ Stop", style=discord.ButtonStyle.danger, custom_id="dex:np:stop"
+    )
+    async def stop_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        cog, queue, vc = self._resolve_cog_queue_vc(interaction)
+        if cog is None or queue is None:
+            await interaction.response.send_message(
+                embed=embeds.error("bot isn't ready yet."), ephemeral=True
+            )
+            return
+        if not await self._guard_in_voice(interaction, vc):
+            return
+        # Ack first before the async stop + disconnect
+        await interaction.response.defer()
+        await cog._do_stop(interaction.guild, queue, vc)
+        await interaction.followup.send("stopped and cleared the queue.", ephemeral=True)
+
+
 class MusicCog(commands.Cog):
     """All music slash commands and the playback engine."""
 
@@ -433,14 +601,15 @@ class MusicCog(commands.Cog):
             channel = self._get_text_channel(guild)
             if channel:
                 embed = embeds.now_playing(next_track, queue)
+                view = NowPlayingView(self.bot)
                 if queue._now_playing_message_id:
                     try:
                         msg = await channel.fetch_message(queue._now_playing_message_id)
-                        await msg.edit(embed=embed)
+                        await msg.edit(embed=embed, view=view)
                         return
                     except (discord.NotFound, discord.HTTPException) as edit_error:
                         log.debug(f"Now-playing edit failed, sending a new message: {edit_error}")
-                msg = await channel.send(embed=embed)
+                msg = await channel.send(embed=embed, view=view)
                 queue._now_playing_message_id = msg.id
         else:
             # Queue exhausted — try auto-queue before stopping
@@ -656,7 +825,8 @@ class MusicCog(commands.Cog):
             queue.current_index = len(queue.tracks) - 1
             await self._play_track(interaction.guild, track)
             embed = embeds.now_playing(track, queue)
-            msg = await interaction.followup.send(embed=embed, wait=True)
+            view = NowPlayingView(self.bot)
+            msg = await interaction.followup.send(embed=embed, view=view, wait=True)
             queue._now_playing_message_id = msg.id
         else:
             embed = embeds.song_queued(track, position)
@@ -990,7 +1160,8 @@ class MusicCog(commands.Cog):
                 queue.current_index = len(queue.tracks) - 1
                 await self._play_track(interaction.guild, track)
                 embed = embeds.now_playing(track, queue)
-                msg = await interaction.followup.send(embed=embed, wait=True)
+                view = NowPlayingView(self.bot)
+                msg = await interaction.followup.send(embed=embed, view=view, wait=True)
                 queue._now_playing_message_id = msg.id
             else:
                 embed = embeds.song_queued(track, position)
