@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
 status: executing
-stopped_at: Completed 07-01 foundations plan — 5 tasks, 79 tests green
-last_updated: "2026-06-18T23:19:18.400Z"
-last_activity: 2026-06-18 -- Phase 07 execution started
+stopped_at: Completed 07-02 player UX wire-up — 5 tasks, NowPlayingView + seek/previous/jump/filter
+last_updated: "2026-06-19T00:00:00Z"
+last_activity: 2026-06-19 -- Phase 07 Plan 02 complete
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
-  percent: 25
+  completed_plans: 5
+  percent: 28
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 ## Current Position
 
 Phase: 07 (player-ux-filters) — EXECUTING
-Plan: 2 of 4
-Status: Ready to execute
-Last activity: 2026-06-18 -- Phase 07 execution started
+Plan: 3 of 4
+Status: Plan 02 complete — ready for Plan 03
+Last activity: 2026-06-19 -- Phase 07 Plan 02 complete
 
 ## Accumulated Context
 
@@ -55,6 +55,9 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase ?]: clock-injectable elapsed tracking via now: float | None param — enables pure unit tests without real time.monotonic() calls
 - [Phase ?]: _build_ffmpeg_opts is module-level pure function so test_audio.py imports/tests it without mocking AudioService
 - [Phase ?]: get_source default path preserved: opus passthrough for no-seek no-filter playback (D-12)
+- [Phase 07-02]: NowPlayingView uses timeout=None + stable custom_ids registered in setup_hook (not on_ready) — correct discord.py persistent-view pattern
+- [Phase 07-02]: _do_* shared helper pattern — slash command + button both route through one code path, eliminating divergence risk
+- [Phase 07-02]: now_playing() derives elapsed from queue.elapsed_seconds() internally — callers don't need to pass it
 
 ### Pending Todos
 
@@ -105,3 +108,4 @@ Next:
 | Phase 05-ship-it-live P02 (deploy packaging) | ~12 min | 2 tasks (2 commits) | 9 files (5 created/moved, 4 modified) |
 | Phase 05-ship-it-live P03 (runbook re-target) | ~4 min | 2 tasks (1 commit) | 1 file modified |
 | Phase 07-player-ux-filters P01 | 9 min | 5 tasks | 9 files |
+| Phase 07-player-ux-filters P02 | ~25 min | 5 tasks (4 commits) | 4 files modified |
