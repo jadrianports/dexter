@@ -120,5 +120,5 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
 | 5. Ship It Live | v1.1 | 3/3 | Code complete — live deploy ⏸ PARKED (YT datacenter-IP block; resume on a Pi) | - |
 | 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
-| 7. Player UX & Filters | v1.1 | 2/4 | In Progress — Plan 02 complete (NowPlayingView, /seek, /previous, /jump, /filter) |  |
+| 7. Player UX & Filters | v1.1 | 3/4 | In Progress|  |
 | 8. Social & Ops | v1.1 | 0/TBD | Not started | - |

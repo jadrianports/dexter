@@ -34,7 +34,7 @@
 - [x] **PLAYER-02**: User can `/seek <time>` within the current track
 - [ ] **PLAYER-03**: User can `/previous` to replay the prior track
 - [x] **PLAYER-04**: User can `/jump <position>` to a specific queue slot
-- [ ] **PLAYER-05**: User can save and replay personal favorite songs
+- [x] **PLAYER-05**: User can save and replay personal favorite songs
 - [ ] **PLAYER-06**: User can save and load named playlists (queue snapshots)
 - [x] **PLAYER-07**: User can apply audio filters via `/filter <preset>` (bassboost / nightcore / slowed+reverb / 8d)
 - [x] **PLAYER-08**: User can clear filters back to normal playback
@@ -101,7 +101,7 @@ Which phases cover which requirements. Phase numbering continues from v1.0 (last
 | PLAYER-02 | Phase 7 | Complete |
 | PLAYER-03 | Phase 7 | Pending |
 | PLAYER-04 | Phase 7 | Complete |
-| PLAYER-05 | Phase 7 | Pending |
+| PLAYER-05 | Phase 7 | Complete |
 | PLAYER-06 | Phase 7 | Pending |
 | PLAYER-07 | Phase 7 | Complete |
 | PLAYER-08 | Phase 7 | Complete |

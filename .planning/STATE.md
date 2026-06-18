@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: executing
-stopped_at: Completed 07-02 player UX wire-up — 5 tasks, NowPlayingView + seek/previous/jump/filter
-last_updated: "2026-06-19T00:00:00Z"
+status: completed
+stopped_at: Completed 07-03 user_favorites + LibraryCog — 2 tasks (3 commits incl. TDD RED/GREEN), favorites table + pick-list UI
+last_updated: "2026-06-18T23:50:00.146Z"
 last_activity: 2026-06-19 -- Phase 07 Plan 02 complete
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
-  percent: 28
+  completed_plans: 6
+  percent: 25
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 ## Current Position
 
 Phase: 07 (player-ux-filters) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Plan 02 complete — ready for Plan 03
 Last activity: 2026-06-19 -- Phase 07 Plan 02 complete
 
@@ -58,6 +58,8 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase 07-02]: NowPlayingView uses timeout=None + stable custom_ids registered in setup_hook (not on_ready) — correct discord.py persistent-view pattern
 - [Phase 07-02]: _do_* shared helper pattern — slash command + button both route through one code path, eliminating divergence risk
 - [Phase 07-02]: now_playing() derives elapsed from queue.elapsed_seconds() internally — callers don't need to pass it
+- [Phase 07]: user_favorites uses count-before/count-after dedupe detection — avoids race window, keeps check atomic with insert
+- [Phase 07]: FavoritesView: Select + Queue + Remove 3-widget design — explicit intent selection before queuing or removing prevents accidental queue on remove-intent
 
 ### Pending Todos
 
@@ -90,8 +92,8 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-18T23:19:18.380Z
-Stopped at: Completed 07-01 foundations plan — 5 tasks, 79 tests green
+Last session: 2026-06-18T23:50:00.137Z
+Stopped at: Completed 07-03 user_favorites + LibraryCog — 2 tasks (3 commits incl. TDD RED/GREEN), favorites table + pick-list UI
 Next:
 
   1. User creates Neon project (us-east-2) + Koyeb WEB service (wdc1) + UptimeRobot monitor per `docs/DEPLOY-KOYEB.md`.
@@ -109,3 +111,4 @@ Next:
 | Phase 05-ship-it-live P03 (runbook re-target) | ~4 min | 2 tasks (1 commit) | 1 file modified |
 | Phase 07-player-ux-filters P01 | 9 min | 5 tasks | 9 files |
 | Phase 07-player-ux-filters P02 | ~25 min | 5 tasks (4 commits) | 4 files modified |
+| Phase 07 P03 | ~20 min | 2 tasks | 5 files |
