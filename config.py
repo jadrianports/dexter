@@ -104,6 +104,28 @@ DB_MAX_INACTIVE_CONN_LIFETIME = 240      # recycle before Neon 5-min scale-to-ze
 DB_STATEMENT_CACHE_SIZE = 0             # disable prepared stmts for PgBouncer tx-mode (K-04)
 
 
+# --- Phase 7: Player UX & Filters ---
+# Audio filter presets: name → FFmpeg -af chain string.
+# "off" is not a key — off means no filter (passthrough default, D-12).
+# 48000 = Discord opus sample rate.
+FFMPEG_FILTERS: dict[str, str] = {
+    "bassboost": "bass=g=8",
+    "nightcore": "asetrate=48000*1.25,aresample=48000",
+    "slowed+reverb": "asetrate=48000*0.85,aresample=48000,aecho=0.8:0.9:1000:0.3",
+    "8d": "apulsator=hz=0.09",
+}
+
+# Favorites / playlists caps (D-21, D-28) — 25 fits a single Discord select menu
+FAVORITES_MAX_PER_USER = 25
+PLAYLISTS_MAX_PER_USER = 25
+PLAYLIST_NAME_MAX_LENGTH = 60
+
+# Phase 7 cooldowns (seconds)
+SEEK_COOLDOWN_SECONDS = 2
+FILTER_COOLDOWN_SECONDS = 5
+FAVORITE_COOLDOWN_SECONDS = 2
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
