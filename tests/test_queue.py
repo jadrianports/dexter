@@ -217,6 +217,111 @@ class TestQueueCap:
             q.add(make_track(video_id="one_too_many"))
 
 
+class TestElapsedTracking:
+    """elapsed_seconds uses injected 'now' float so tests never call real time."""
+
+    def test_returns_zero_before_started(self):
+        q = MusicQueue(guild_id=1)
+        assert q.elapsed_seconds() == 0
+
+    def test_basic_elapsed(self):
+        q = MusicQueue(guild_id=1)
+        q.mark_started(offset_seconds=0, now=100.0)
+        assert q.elapsed_seconds(now=130.0) == 30
+
+    def test_offset_honored_at_start(self):
+        """mark_started with offset_seconds=45 means elapsed is 45 at the same now."""
+        q = MusicQueue(guild_id=1)
+        q.mark_started(offset_seconds=45, now=100.0)
+        assert q.elapsed_seconds(now=100.0) == 45
+
+    def test_frozen_while_paused(self):
+        q = MusicQueue(guild_id=1)
+        q.mark_started(offset_seconds=0, now=100.0)
+        q.mark_paused(now=130.0)
+        # even though 70 more seconds pass, elapsed stays at 30
+        assert q.elapsed_seconds(now=200.0) == 30
+
+    def test_resumed_excludes_pause_gap(self):
+        q = MusicQueue(guild_id=1)
+        q.mark_started(offset_seconds=0, now=100.0)
+        q.mark_paused(now=130.0)   # 30 s elapsed, then paused for 70 s
+        q.mark_resumed(now=200.0)
+        # 10 more seconds pass after resume → elapsed = 30 + 10 = 40
+        assert q.elapsed_seconds(now=210.0) == 40
+
+    def test_elapsed_clamped_to_zero(self):
+        """elapsed never goes below 0 (negative offset_seconds edge case)."""
+        q = MusicQueue(guild_id=1)
+        q.mark_started(offset_seconds=0, now=100.0)
+        # no real-clock time has passed (now == start)
+        assert q.elapsed_seconds(now=100.0) == 0
+
+    def test_elapsed_clamped_to_duration(self):
+        """elapsed is clamped to the current track's duration_seconds."""
+        q = MusicQueue(guild_id=1)
+        t = make_track(duration_seconds=200)
+        q.add(t)
+        q.mark_started(offset_seconds=0, now=0.0)
+        # 999 seconds have passed, but track is only 200 s long
+        assert q.elapsed_seconds(now=999.0) == 200
+
+
+class TestJumpTo:
+    def test_jump_to_valid_index(self):
+        q = MusicQueue(guild_id=1)
+        for vid in ["a", "b", "c", "d"]:
+            q.add(make_track(video_id=vid))
+        result = q.jump_to(2)
+        assert q.current_index == 2
+        assert result is not None
+        assert result.video_id == "c"
+
+    def test_jump_to_returns_track(self):
+        q = MusicQueue(guild_id=1)
+        for vid in ["x", "y", "z"]:
+            q.add(make_track(video_id=vid))
+        track = q.jump_to(0)
+        assert track is not None
+        assert track.video_id == "x"
+
+    def test_jump_to_out_of_bounds_high(self):
+        q = MusicQueue(guild_id=1)
+        q.add(make_track(video_id="a"))
+        q.add(make_track(video_id="b"))
+        original_index = q.current_index
+        result = q.jump_to(99)
+        assert result is None
+        assert q.current_index == original_index
+
+    def test_jump_to_negative_index(self):
+        q = MusicQueue(guild_id=1)
+        q.add(make_track(video_id="a"))
+        original_index = q.current_index
+        result = q.jump_to(-1)
+        assert result is None
+        assert q.current_index == original_index
+
+
+def test_clear_resets_filter_and_elapsed():
+    """clear() resets active_filter, elapsed stamps, but NOT auto_lyrics."""
+    q = MusicQueue(guild_id=1)
+    q.add(make_track())
+    q.auto_lyrics = True
+    q.lyrics_thread_id = 999
+    q.active_filter = "bassboost"
+    q.mark_started(offset_seconds=0, now=100.0)
+    q.mark_paused(now=130.0)
+    q.clear()
+    # playback state reset
+    assert q.active_filter == "off"
+    assert q.playback_started_at is None
+    assert q.paused_at is None
+    # server preference NOT reset
+    assert q.auto_lyrics is True
+    assert q.lyrics_thread_id == 999
+
+
 class TestTrackSerialization:
     def test_to_dict_round_trip(self):
         """Track.from_dict(t.to_dict()) == t — lossless round-trip."""

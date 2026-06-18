@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -77,6 +78,11 @@ class MusicQueue:
         # it's a server preference, not playback state. Resets only on restart.
         self.auto_lyrics: bool = False
         self.lyrics_thread_id: int | None = None  # reused "🎵 lyrics" thread id
+        # Elapsed-tracking state (Phase 7). These ARE playback state → reset by clear().
+        self.playback_started_at: float | None = None
+        self.paused_at: float | None = None
+        # Active audio filter preset (Phase 7). "off" = no filter.
+        self.active_filter: str = "off"
 
     def add(self, track: Track) -> int:
         """Add a track to the end of the queue. Returns its index.
@@ -144,6 +150,66 @@ class MusicQueue:
         random.shuffle(upcoming)
         self.tracks[start:] = upcoming
 
+    # ------------------------------------------------------------------
+    # Phase 7: Elapsed tracking (clock-injectable for tests)
+    # ------------------------------------------------------------------
+
+    def mark_started(self, offset_seconds: int = 0, now: float | None = None) -> None:
+        """Record that playback just started (or restarted with a seek offset).
+
+        offset_seconds — the position we're starting from (e.g. a seek target).
+        now — injectable monotonic timestamp; defaults to time.monotonic().
+        """
+        t = now if now is not None else time.monotonic()
+        self.playback_started_at = t - offset_seconds
+        self.paused_at = None
+
+    def mark_paused(self, now: float | None = None) -> None:
+        """Freeze the elapsed counter at the current position."""
+        self.paused_at = now if now is not None else time.monotonic()
+
+    def mark_resumed(self, now: float | None = None) -> None:
+        """Advance the virtual start-stamp so the pause gap is excluded."""
+        if self.playback_started_at is not None and self.paused_at is not None:
+            t = now if now is not None else time.monotonic()
+            self.playback_started_at += t - self.paused_at
+            self.paused_at = None
+
+    def elapsed_seconds(self, now: float | None = None) -> int:
+        """Return how many seconds of the current track have been played.
+
+        Returns 0 if playback has not started yet.  Result is clamped to
+        [0, track.duration_seconds] when a current track is available.
+
+        Pure function when `now` is supplied — fully clock-injectable for tests.
+        """
+        if self.playback_started_at is None:
+            return 0
+        ref = self.paused_at if self.paused_at is not None else (
+            now if now is not None else time.monotonic()
+        )
+        elapsed = int(ref - self.playback_started_at)
+        elapsed = max(0, elapsed)
+        track = self.get_current()
+        if track is not None:
+            elapsed = min(elapsed, track.duration_seconds)
+        return elapsed
+
+    # ------------------------------------------------------------------
+    # Phase 7: Jump navigation
+    # ------------------------------------------------------------------
+
+    def jump_to(self, index: int) -> Track | None:
+        """Set current_index to *index* and return that track.
+
+        Returns None (and leaves current_index unchanged) if the index is
+        out of bounds.  Reuses the no-pop current_index model.
+        """
+        if 0 <= index < len(self.tracks):
+            self.current_index = index
+            return self.get_current()
+        return None
+
     def clear(self) -> None:
         """Reset the queue to empty state."""
         self.tracks.clear()
@@ -153,6 +219,10 @@ class MusicQueue:
         self.loop_mode = LoopMode.OFF
         self._now_playing_message_id = None
         self._play_generation = 0
+        # Phase 7 playback state (NOT server preferences like auto_lyrics)
+        self.active_filter = "off"
+        self.playback_started_at = None
+        self.paused_at = None
 
     def upcoming(self) -> list[Track]:
         """Return tracks after the current one."""
