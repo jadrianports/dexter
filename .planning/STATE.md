@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
 status: completed
-stopped_at: Completed 07-03 user_favorites + LibraryCog — 2 tasks (3 commits incl. TDD RED/GREEN), favorites table + pick-list UI
-last_updated: "2026-06-18T23:50:00.146Z"
+stopped_at: Completed 07-04 user_playlists + /playlist group — 2 tasks (3 commits incl. TDD RED/GREEN), playlists table + save/load/list/delete commands
+last_updated: "2026-06-18T23:59:19.028Z"
 last_activity: 2026-06-19 -- Phase 07 Plan 02 complete
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
-  percent: 25
+  completed_plans: 7
+  percent: 50
 ---
 
 # Project State
@@ -60,6 +60,10 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase 07-02]: now_playing() derives elapsed from queue.elapsed_seconds() internally — callers don't need to pass it
 - [Phase 07]: user_favorites uses count-before/count-after dedupe detection — avoids race window, keeps check atomic with insert
 - [Phase 07]: FavoritesView: Select + Queue + Remove 3-widget design — explicit intent selection before queuing or removing prevents accidental queue on remove-intent
+- [Phase ?]: user_playlists upsert-exempt cap: count_playlists only blocks genuinely new names
+- [Phase ?]: delete_playlist returns bool via asyncpg execute() status string ('DELETE N') — no extra SELECT, avoids race window
+- [Phase ?]: list_playlists uses jsonb_array_length(snapshot) for track_count — eliminates a separate COUNT query, keeps metadata atomic
+- [Phase ?]: [Phase 07-04]: playlist load idle-start sets current_index to first newly added track before _play_track — mirrors queue_persistence restore pattern
 
 ### Pending Todos
 
@@ -92,8 +96,8 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-18T23:50:00.137Z
-Stopped at: Completed 07-03 user_favorites + LibraryCog — 2 tasks (3 commits incl. TDD RED/GREEN), favorites table + pick-list UI
+Last session: 2026-06-18T23:59:19.021Z
+Stopped at: Completed 07-04 user_playlists + /playlist group — 2 tasks (3 commits incl. TDD RED/GREEN), playlists table + save/load/list/delete commands
 Next:
 
   1. User creates Neon project (us-east-2) + Koyeb WEB service (wdc1) + UptimeRobot monitor per `docs/DEPLOY-KOYEB.md`.
@@ -112,3 +116,4 @@ Next:
 | Phase 07-player-ux-filters P01 | 9 min | 5 tasks | 9 files |
 | Phase 07-player-ux-filters P02 | ~25 min | 5 tasks (4 commits) | 4 files modified |
 | Phase 07 P03 | ~20 min | 2 tasks | 5 files |
+| Phase 07-player-ux-filters P04 | ~15 min | 2 tasks | 3 files |
