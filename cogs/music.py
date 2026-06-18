@@ -28,9 +28,17 @@ from personality.roasts import (
     MILESTONE_SONG_TEMPLATES,
     MILESTONE_STREAK_TEMPLATES,
 )
+from personality.responses import (
+    pick_random as pick_random_r,
+    FILTER_APPLIED,
+    FILTER_CLEARED,
+    NOT_IN_VOICE,
+    NOTHING_PLAYING,
+)
 from services.gemini import GeminiRateLimitError
 from services.lyrics import chunk_lyrics
 from utils import embeds
+from utils.formatters import parse_time, format_duration
 from utils.logger import log
 
 if TYPE_CHECKING:
@@ -302,10 +310,18 @@ class MusicCog(commands.Cog):
             voice_client = await user_channel.connect()
         return voice_client
 
-    async def _play_track(self, guild: discord.Guild, track: Track, _skipped: list | None = None) -> None:
+    async def _play_track(
+        self,
+        guild: discord.Guild,
+        track: Track,
+        _skipped: list | None = None,
+        offset_seconds: int = 0,
+    ) -> None:
         """Start playing a track through the voice client.
 
         Silently skips unavailable tracks, posting one summary message.
+
+        offset_seconds — seek to this position before starting (0 = beginning).
         """
         voice_client = guild.voice_client
         if not voice_client or not voice_client.is_connected():
@@ -318,8 +334,17 @@ class MusicCog(commands.Cog):
         if _skipped is None:
             _skipped = []
 
+        # Resolve the active audio filter chain (Phase 7, D-10, D-12)
+        ffmpeg_filter: str | None = None
+        if queue.active_filter != "off":
+            ffmpeg_filter = config.FFMPEG_FILTERS.get(queue.active_filter)
+
         try:
-            source = await self.audio.get_source(track)
+            source = await self.audio.get_source(
+                track,
+                seek_seconds=offset_seconds,
+                ffmpeg_filter=ffmpeg_filter,
+            )
         except Exception as e:
             log.warning(f"Skipping unavailable: '{track.title}'")
             _skipped.append(track.title)
@@ -368,6 +393,9 @@ class MusicCog(commands.Cog):
                 source.cleanup()
                 queue.is_playing = False
                 return
+
+            # Phase 7: record when this track started and from what offset (elapsed tracking)
+            queue.mark_started(offset_seconds)
 
             voice_client.play(source, after=after_callback)
             log.debug("play() called gen=%d connected=%s guild=%d", current_gen, voice_client.is_connected(), guild.id)
@@ -515,6 +543,71 @@ class MusicCog(commands.Cog):
         # D-20: capture live, not from model — voice channel may change per session
         vc_id = guild.voice_client.channel.id if guild.voice_client else None
         await self.bot.queue_persistence.persist(guild, queue, vc_id)
+
+    # ──────────────────────────── SHARED CONTROL HELPERS ────────────────────────────
+    # These are called by both slash commands AND NowPlayingView button callbacks
+    # so that logic lives in one place (Task 1 — plan 07-02).
+
+    async def _do_skip(self, guild: discord.Guild, queue: MusicQueue, voice_client: discord.VoiceClient) -> Track | None:
+        """Skip to the next track. Returns the new track, or None if queue exhausted."""
+        # Track skipped auto-queued songs for "ignored" memory
+        current = queue.get_current()
+        if current and current.was_auto_queued:
+            from models.server_state import get_server_state
+            await mark_song_skipped(self.pool, guild_id=str(guild.id), url=current.url)
+            if hasattr(self.bot, "server_states"):
+                state = get_server_state(self.bot.server_states, guild.id)
+                state.auto_queue_results["skipped"] += 1
+
+        next_track = queue.skip()
+        await self._persist_queue(guild, queue)
+        if next_track:
+            asyncio.create_task(self._play_track(guild, next_track))
+        else:
+            queue.is_playing = False
+            voice_client.stop()
+        return next_track
+
+    def _do_pause_toggle(self, queue: MusicQueue, voice_client: discord.VoiceClient) -> str:
+        """Toggle pause/resume. Returns 'paused' or 'resumed'."""
+        if voice_client.is_paused():
+            voice_client.resume()
+            queue.is_playing = True
+            queue.is_paused = False
+            queue.mark_resumed()
+            return "resumed"
+        else:
+            voice_client.pause()
+            queue.is_playing = False
+            queue.is_paused = True
+            queue.mark_paused()
+            return "paused"
+
+    def _do_loop_cycle(self, queue: MusicQueue) -> LoopMode:
+        """Cycle loop mode: off → single → queue → off. Returns new mode."""
+        cycle = {
+            LoopMode.OFF: LoopMode.SINGLE,
+            LoopMode.SINGLE: LoopMode.QUEUE,
+            LoopMode.QUEUE: LoopMode.OFF,
+        }
+        queue.loop_mode = cycle[queue.loop_mode]
+        return queue.loop_mode
+
+    def _do_shuffle(self, queue: MusicQueue) -> int:
+        """Shuffle upcoming tracks. Returns number of tracks shuffled."""
+        upcoming = queue.upcoming()
+        queue.shuffle()
+        return len(upcoming)
+
+    async def _do_stop(self, guild: discord.Guild, queue: MusicQueue, voice_client: discord.VoiceClient) -> None:
+        """Stop playback, clear queue, leave voice. Mirrors the /stop command."""
+        queue._play_generation += 1  # invalidate any pending after-callbacks
+        queue.clear()
+        if hasattr(self.bot, "queue_persistence"):
+            await self.bot.queue_persistence.clear_persisted(guild.id)
+        if voice_client:
+            voice_client.stop()
+            await voice_client.disconnect()
 
     async def _queue_from_selection(self, interaction: discord.Interaction, selected: dict) -> None:
         """Queue a song after the user picks from the select menu."""
@@ -955,6 +1048,7 @@ class MusicCog(commands.Cog):
         voice_client.pause()
         queue.is_playing = False
         queue.is_paused = True
+        queue.mark_paused()
         await interaction.response.send_message("Paused.")
 
     @app_commands.command(name="resume", description="Resume playback")
@@ -970,6 +1064,7 @@ class MusicCog(commands.Cog):
         voice_client.resume()
         queue.is_playing = True
         queue.is_paused = False
+        queue.mark_resumed()
         await interaction.response.send_message("Resumed.")
 
     @app_commands.command(name="stop", description="Stop playback, clear queue, leave voice")

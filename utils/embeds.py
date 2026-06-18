@@ -15,8 +15,14 @@ COLOR_ERROR = 0x7D3243         # dark pink
 COLOR_QUEUE_LIST = 0x40EC88    # light green
 
 
-def now_playing(track: Track, queue: MusicQueue, elapsed: int = 0) -> discord.Embed:
-    """Build the 'Now Playing' embed for the current track."""
+def now_playing(track: Track, queue: MusicQueue, elapsed: int | None = None) -> discord.Embed:
+    """Build the 'Now Playing' embed for the current track.
+
+    Phase 7: elapsed is now derived from queue.elapsed_seconds() when not
+    provided explicitly, so the embed always reflects live position.
+    The 'elapsed' parameter is kept for backward compat but ignored in favour
+    of the queue's own tracker.
+    """
     title_str = track.title
     if track.artist:
         title_str = f"{track.title} — {track.artist}"
@@ -27,13 +33,19 @@ def now_playing(track: Track, queue: MusicQueue, elapsed: int = 0) -> discord.Em
         color=COLOR_NOW_PLAYING,
     )
 
-    if elapsed > 0:
-        duration_str = progress_bar(elapsed, track.duration_seconds)
+    # Phase 7: always query the queue's clock-injectable elapsed tracker (D-13)
+    live_elapsed = queue.elapsed_seconds()
+    if live_elapsed > 0:
+        duration_str = progress_bar(live_elapsed, track.duration_seconds)
     else:
         duration_str = format_duration(track.duration_seconds)
     embed.add_field(name="Duration", value=duration_str, inline=False)
     embed.add_field(name="Requested by", value=f"<@{track.requested_by}>", inline=True)
     embed.add_field(name="Loop", value=queue.loop_mode.value.capitalize(), inline=True)
+
+    # Phase 7: show active filter when one is set (D-13)
+    if queue.active_filter != "off":
+        embed.add_field(name="🎛 Filter", value=queue.active_filter, inline=True)
 
     if track.thumbnail:
         embed.set_thumbnail(url=track.thumbnail)
