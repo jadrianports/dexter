@@ -31,13 +31,13 @@
 ### Player UX & Filters (`PLAYER`)
 
 - [ ] **PLAYER-01**: The now-playing embed has interactive control buttons (play/pause, skip, loop, shuffle, stop)
-- [ ] **PLAYER-02**: User can `/seek <time>` within the current track
+- [x] **PLAYER-02**: User can `/seek <time>` within the current track
 - [ ] **PLAYER-03**: User can `/previous` to replay the prior track
-- [ ] **PLAYER-04**: User can `/jump <position>` to a specific queue slot
+- [x] **PLAYER-04**: User can `/jump <position>` to a specific queue slot
 - [ ] **PLAYER-05**: User can save and replay personal favorite songs
 - [ ] **PLAYER-06**: User can save and load named playlists (queue snapshots)
-- [ ] **PLAYER-07**: User can apply audio filters via `/filter <preset>` (bassboost / nightcore / slowed+reverb / 8d)
-- [ ] **PLAYER-08**: User can clear filters back to normal playback
+- [x] **PLAYER-07**: User can apply audio filters via `/filter <preset>` (bassboost / nightcore / slowed+reverb / 8d)
+- [x] **PLAYER-08**: User can clear filters back to normal playback
 
 ### Social & Personality (`SOCIAL`)
 
@@ -98,13 +98,13 @@ Which phases cover which requirements. Phase numbering continues from v1.0 (last
 | PERF-06 | Phase 6 | Pending |
 | PERF-07 | Phase 6 | Pending |
 | PLAYER-01 | Phase 7 | Pending |
-| PLAYER-02 | Phase 7 | Pending |
+| PLAYER-02 | Phase 7 | Complete |
 | PLAYER-03 | Phase 7 | Pending |
-| PLAYER-04 | Phase 7 | Pending |
+| PLAYER-04 | Phase 7 | Complete |
 | PLAYER-05 | Phase 7 | Pending |
 | PLAYER-06 | Phase 7 | Pending |
-| PLAYER-07 | Phase 7 | Pending |
-| PLAYER-08 | Phase 7 | Pending |
+| PLAYER-07 | Phase 7 | Complete |
+| PLAYER-08 | Phase 7 | Complete |
 | SOCIAL-01 | Phase 8 | Pending |
 | SOCIAL-02 | Phase 8 | Pending |
 | OPS-01 | Phase 8 | Pending |

@@ -29,9 +29,9 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 ### v1.1 Live & Lethal (Phases 5–8)
 
-- [ ] **Phase 5: Ship It Live** — Koyeb WEB service + Neon serverless Postgres standup (re-targeted from Oracle), full live-UAT checklist, reconnect race fix, Neon PITR restore validated
+- [~] **Phase 5: Ship It Live** — code-complete + code-verified; ⏸ LIVE 24/7 deploy PARKED (YouTube blocks datacenter IPs → cloud non-viable for free; no credit card; no Raspberry Pi yet). Bot runs on user PC (residential IP) on demand → Neon Singapore. Resume when a Pi / always-on residential host is acquired.
 - [ ] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock
-- [ ] **Phase 7: Player UX & Filters** — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects
+- [→] **Phase 7: Player UX & Filters** (NEXT) — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects
 - [ ] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility
 
 ## Phase Details
@@ -118,7 +118,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 2.5. Hardening | v1.0 | shipped (pre-GSD) | Complete | 2026-06-02 |
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
-| 5. Ship It Live | v1.1 | 3/3 (replanned Koyeb+Neon) | Code complete — awaiting live UAT | - |
+| 5. Ship It Live | v1.1 | 3/3 | Code complete — live deploy ⏸ PARKED (YT datacenter-IP block; resume on a Pi) | - |
 | 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
-| 7. Player UX & Filters | v1.1 | 0/TBD | Not started | - |
+| 7. Player UX & Filters | v1.1 | 1/4 | In Progress|  |
 | 8. Social & Ops | v1.1 | 0/TBD | Not started | - |

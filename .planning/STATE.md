@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
 status: executing
-stopped_at: 05-03-PLAN.md complete (UAT runbook re-targeted to Koyeb+Neon per K-18); ready for user live UAT
-last_updated: "2026-06-15T10:31:00Z"
-last_activity: 2026-06-15 -- 05-03 executed (05-UAT-RUNBOOK.md surgically re-targeted from Oracle A1 to Koyeb+Neon; all 3 plans complete)
+stopped_at: Completed 07-01 foundations plan — 5 tasks, 79 tests green
+last_updated: "2026-06-18T23:19:18.400Z"
+last_activity: 2026-06-18 -- Phase 07 execution started
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  completed_phases: 1
+  total_plans: 7
+  completed_plans: 4
+  percent: 25
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 05 — ship-it-live (all 3 plans complete; awaiting user live UAT on Koyeb+Neon)
+**Current focus:** Phase 07 — player-ux-filters
 
 ## Current Position
 
-Phase: 05 (ship-it-live) — ALL PLANS COMPLETE, awaiting live UAT
-Plan: 3 of 3 (COMPLETE)
-Status: All Phase 05 plans executed; runbook ready for user live execution on Koyeb+Neon
-Last activity: 2026-06-15 -- 05-03 executed (UAT runbook surgically re-targeted from Oracle A1 to Koyeb+Neon per K-18)
+Phase: 07 (player-ux-filters) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-18 -- Phase 07 execution started
 
 ## Accumulated Context
 
@@ -52,6 +52,9 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase 05-01]: DB_POOL_MAX=5, AUDIO_CACHE_MAX_MB=512, DB_MAX_INACTIVE_CONN_LIFETIME=240, DB_STATEMENT_CACHE_SIZE=0 (K-04/K-07)
 - [Phase 05-01]: _run_health_server uses asyncio.Event().wait() for cancellable keep-alive on 0.0.0.0:8000 (K-02 amendment)
 - [Phase 05-03]: Runbook version 2.0 (Koyeb+Neon) — 22 checks across A(7)/B(3)/C(11)/D(1); verified-live bar is K-17 (all 22 pass on Koyeb+Neon, reported via /gsd-verify-work)
+- [Phase ?]: clock-injectable elapsed tracking via now: float | None param — enables pure unit tests without real time.monotonic() calls
+- [Phase ?]: _build_ffmpeg_opts is module-level pure function so test_audio.py imports/tests it without mocking AudioService
+- [Phase ?]: get_source default path preserved: opus passthrough for no-seek no-filter playback (D-12)
 
 ### Pending Todos
 
@@ -84,8 +87,8 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-15T10:31:00Z
-Stopped at: 05-03-PLAN.md complete (all Phase 05 plans executed; UAT runbook re-targeted to Koyeb+Neon)
+Last session: 2026-06-18T23:19:18.380Z
+Stopped at: Completed 07-01 foundations plan — 5 tasks, 79 tests green
 Next:
 
   1. User creates Neon project (us-east-2) + Koyeb WEB service (wdc1) + UptimeRobot monitor per `docs/DEPLOY-KOYEB.md`.
@@ -101,3 +104,4 @@ Next:
 | Phase 05-ship-it-live P01 (Koyeb+Neon re-planned) | ~8 min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
 | Phase 05-ship-it-live P02 (deploy packaging) | ~12 min | 2 tasks (2 commits) | 9 files (5 created/moved, 4 modified) |
 | Phase 05-ship-it-live P03 (runbook re-target) | ~4 min | 2 tasks (1 commit) | 1 file modified |
+| Phase 07-player-ux-filters P01 | 9 min | 5 tasks | 9 files |
