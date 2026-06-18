@@ -62,3 +62,84 @@ AI_EMPTY_RESPONSE: list[str] = [
     "my brain returned nothing. which is relatable honestly.",
     "gemini ghosted me on that one. ask again.",
 ]
+
+# --- Phase 7: Player UX & Filters ---
+
+FILTER_APPLIED: list[str] = [
+    "fine. filter applied. enjoy your audio gimmick.",
+    "okay sure, i turned on the {filter} thing. happy now? 🎚",
+    "filter on. i hope you know what you're asking for.",
+    "applied. it's going to sound weird. that's on you.",
+]
+
+FILTER_CLEARED: list[str] = [
+    "filter off. back to how it's supposed to sound.",
+    "cleared. no more funny business.",
+    "filter removed. i didn't love it either.",
+    "okay, normal again. was that fun? looked painful.",
+]
+
+FAVORITE_SAVED: list[str] = [
+    "saved. you can pretend you have good taste now.",
+    "added to your favorites. solid choice, i guess.",
+    "noted. your music personality just got a little more specific.",
+    "saved to your list. try not to overdo it.",
+]
+
+FAVORITE_DUPLICATE: list[str] = [
+    "that's already in your favorites. try paying attention.",
+    "you already saved this one. i'd say it's cute but it's not.",
+    "duplicate. i saved it once, that should be enough.",
+]
+
+FAVORITE_CAP_HIT: list[str] = [
+    "you've hit 25 favorites. pick a lane and delete something.",
+    "cap reached. your music taste doesn't need to expand anymore today.",
+    "too many favorites. some of those can't be that good, trim the list.",
+]
+
+FAVORITES_EMPTY: list[str] = [
+    "you don't have any favorites yet. go listen to something first.",
+    "nothing saved. use /favorite while something's playing.",
+    "empty list. surprising for someone with such strong opinions.",
+]
+
+PLAYLIST_SAVED: list[str] = [
+    "queue saved as a playlist. impressive that you planned ahead.",
+    "saved. next time you can just load it instead of pretending to remember.",
+    "playlist locked in. don't lose the name.",
+    "saved the queue. you can thank me later, or don't.",
+]
+
+PLAYLIST_LOADED: list[str] = [
+    "loaded. incoming. brace yourself.",
+    "playlist added to the queue. here we go.",
+    "done. your past self had decent taste, apparently.",
+    "loaded your playlist. let's see how this ages.",
+]
+
+PLAYLIST_NOT_FOUND: list[str] = [
+    "i can't find a playlist with that name. did you spell it wrong?",
+    "no playlist by that name. try /playlist list to see what you actually have.",
+    "not found. either you never made it or you forgot what you called it.",
+]
+
+PLAYLIST_CAP_HIT: list[str] = [
+    "you've hit 25 playlists. delete one before making another.",
+    "cap reached. you have enough playlists. pick favorites.",
+    "too many playlists. narrow it down and come back.",
+]
+
+NOT_IN_VOICE: list[str] = [
+    "you're not even in the voice channel. what are you doing.",
+    "get in the call first, then press buttons.",
+    "i only take orders from people actually listening. join voice.",
+    "you have to be in the voice channel for that to do anything.",
+]
+
+NOTHING_PLAYING: list[str] = [
+    "nothing is playing right now.",
+    "the queue is empty. use /play to start something.",
+    "i can't do that, nothing is playing.",
+    "there's no track to work with. try /play first.",
+]
