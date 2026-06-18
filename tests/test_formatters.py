@@ -1,6 +1,6 @@
 """Tests for duration formatting and progress bar rendering."""
 
-from utils.formatters import format_duration, progress_bar
+from utils.formatters import format_duration, parse_time, progress_bar
 
 
 class TestFormatDuration:
@@ -21,6 +21,42 @@ class TestFormatDuration:
 
     def test_single_digit_seconds_padded(self):
         assert format_duration(65) == "1:05"
+
+
+class TestParseTime:
+    def test_raw_seconds_int(self):
+        assert parse_time("90") == 90
+
+    def test_mm_ss(self):
+        assert parse_time("1:30") == 90
+
+    def test_h_mm_ss(self):
+        assert parse_time("1:01:30") == 3690
+
+    def test_zero_minutes(self):
+        assert parse_time("0:45") == 45
+
+    def test_strips_whitespace(self):
+        assert parse_time("  2:00 ") == 120
+
+    def test_empty_string_is_none(self):
+        assert parse_time("") is None
+
+    def test_non_numeric_is_none(self):
+        assert parse_time("abc") is None
+
+    def test_seconds_out_of_range_is_none(self):
+        """Seconds field > 59 is invalid."""
+        assert parse_time("1:99") is None
+
+    def test_negative_raw_seconds_is_none(self):
+        assert parse_time("-5") is None
+
+    def test_round_trip_with_format_duration(self):
+        """parse_time(format_duration(x)) == x for typical values."""
+        assert parse_time(format_duration(90)) == 90
+        assert parse_time(format_duration(3690)) == 3690
+        assert parse_time(format_duration(45)) == 45
 
 
 class TestProgressBar:
