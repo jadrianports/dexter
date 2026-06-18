@@ -135,6 +135,17 @@ CREATE TABLE IF NOT EXISTS user_favorites (
 );
 
 CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(user_id, added_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_playlists (
+    user_id    TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    snapshot   JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_playlists_user ON user_playlists(user_id, updated_at DESC);
 """
 
 
@@ -500,3 +511,112 @@ async def remove_favorite(pool: asyncpg.Pool, *, user_id: str, video_id: str) ->
             "DELETE FROM user_favorites WHERE user_id = $1 AND video_id = $2",
             user_id, video_id,
         )
+
+
+# ---------------------------------------------------------------------------
+# Playlist helpers (Phase 7, D-23..D-28, PLAYER-06)
+# ---------------------------------------------------------------------------
+
+
+async def save_playlist(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    name: str,
+    snapshot: list[dict],
+) -> None:
+    """Upsert a named playlist snapshot for (user_id, name).
+
+    First save inserts; re-saving the same name overwrites the snapshot and
+    bumps updated_at (D-27). The snapshot list is serialised via json.dumps
+    and stored as JSONB — all values flow through $N params (T-07-04-01).
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO user_playlists (user_id, name, snapshot, created_at, updated_at)"
+            " VALUES ($1, $2, $3::jsonb, now(), now())"
+            " ON CONFLICT (user_id, name)"
+            " DO UPDATE SET snapshot = EXCLUDED.snapshot, updated_at = now()",
+            user_id, name, json.dumps(snapshot),
+        )
+
+
+async def get_playlist(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    name: str,
+) -> list[dict] | None:
+    """Return the snapshot list for (user_id, name), or None if not found.
+
+    asyncpg may return JSONB columns as a dict/list directly or as a JSON
+    string depending on the driver version and server type-OID registration.
+    We normalise via json.loads when the value is a str (T-07-04-01 / D-23).
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT snapshot FROM user_playlists WHERE user_id = $1 AND name = $2",
+            user_id, name,
+        )
+    if row is None:
+        return None
+    payload = row["snapshot"]
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    return list(payload)
+
+
+async def list_playlists(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+) -> list[dict]:
+    """Return the user's playlists as metadata rows, newest-updated-first (D-24).
+
+    Each dict has: name (str), track_count (int), updated_at (datetime).
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT name,"
+            "       jsonb_array_length(snapshot) AS track_count,"
+            "       updated_at"
+            " FROM user_playlists"
+            " WHERE user_id = $1"
+            " ORDER BY updated_at DESC",
+            user_id,
+        )
+    return [dict(row) for row in rows]
+
+
+async def delete_playlist(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    name: str,
+) -> bool:
+    """Delete (user_id, name) from user_playlists.
+
+    Returns True if a row was deleted, False if no matching row existed (D-28).
+    Ownership is implicit — the user_id param ensures users only delete their
+    own rows (T-07-04-02).
+    """
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM user_playlists WHERE user_id = $1 AND name = $2",
+            user_id, name,
+        )
+    # asyncpg execute() returns a status string like "DELETE 1" or "DELETE 0"
+    return result.endswith("1")
+
+
+async def count_playlists(pool: asyncpg.Pool, *, user_id: str) -> int:
+    """Return the number of named playlists saved by user_id (for cap checks, D-28).
+
+    T-07-04-02: keyed on user_id — only counts the requesting user's rows.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS cnt FROM user_playlists WHERE user_id = $1",
+            user_id,
+        )
+    return int(row["cnt"]) if row else 0
