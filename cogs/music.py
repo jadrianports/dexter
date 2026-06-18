@@ -1441,6 +1441,170 @@ class MusicCog(commands.Cog):
         except discord.HTTPException:
             pass
 
+    # ──────────────────────────── PHASE 7: NAVIGATION + FILTER COMMANDS ────────────────────────────
+
+    @app_commands.command(name="seek", description="Jump to a position in the current song")
+    @app_commands.describe(position="Time to jump to — e.g. 1:30 or 90 (seconds)")
+    @app_commands.checks.cooldown(1, config.SEEK_COOLDOWN_SECONDS)
+    async def seek(self, interaction: discord.Interaction, position: str) -> None:
+        """Seek to a position within the current track (D-14, D-15, PLAYER-02).
+
+        Accepts mm:ss, h:mm:ss, or raw seconds.  Past-end seeks advance to the
+        next track (D-15).  Enforces SEEK_COOLDOWN_SECONDS.
+        """
+        queue = self.get_queue(interaction.guild.id)
+        track = queue.get_current()
+        voice_client = interaction.guild.voice_client
+
+        if not track or not queue.is_playing:
+            return await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
+            )
+
+        secs = parse_time(position)
+        if secs is None:
+            return await interaction.response.send_message(
+                embed=embeds.error(
+                    "i don't know what that time is. try something like `1:30` or `90`."
+                ),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer()
+
+        if secs >= track.duration_seconds:
+            # Past end — skip to next track (D-15)
+            next_track = await self._do_skip(interaction.guild, queue, voice_client)
+            if next_track:
+                await interaction.followup.send(
+                    f"seek past the end — skipping to **{next_track.title}**."
+                )
+            else:
+                await interaction.followup.send("seek past the end — nothing left to play.")
+            return
+
+        # Re-play from the new offset (filter chain preserved via active_filter)
+        await self._play_track(interaction.guild, track, offset_seconds=secs)
+        embed = embeds.now_playing(track, queue)
+        view = NowPlayingView(self.bot)
+        await interaction.followup.send(
+            f"jumped to **{format_duration(secs)}**.", embed=embed, view=view
+        )
+
+    @app_commands.command(name="previous", description="Go back to the previous song")
+    @app_commands.checks.cooldown(1, config.SEEK_COOLDOWN_SECONDS)
+    async def previous(self, interaction: discord.Interaction) -> None:
+        """Restart the prior queue entry on the no-pop index model (D-17, PLAYER-03)."""
+        queue = self.get_queue(interaction.guild.id)
+        voice_client = interaction.guild.voice_client
+
+        if not voice_client or not queue.is_playing and not queue.is_paused:
+            return await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
+            )
+
+        prev_track = queue.previous()
+        if prev_track is None:
+            return await interaction.response.send_message(
+                embed=embeds.error("nothing before this. you're at the beginning."), ephemeral=True
+            )
+
+        await interaction.response.defer()
+        await self._play_track(interaction.guild, prev_track)
+        await self._persist_queue(interaction.guild, queue)
+        embed = embeds.now_playing(prev_track, queue)
+        view = NowPlayingView(self.bot)
+        await interaction.followup.send(embed=embed, view=view)
+
+    @app_commands.command(name="jump", description="Jump to a specific song in the queue")
+    @app_commands.describe(position="Queue position to jump to (1-based)")
+    @app_commands.checks.cooldown(1, config.SEEK_COOLDOWN_SECONDS)
+    async def jump(self, interaction: discord.Interaction, position: int) -> None:
+        """Jump to the nth queue slot (1-based in UI) on the no-pop index model (D-17, PLAYER-04)."""
+        queue = self.get_queue(interaction.guild.id)
+
+        if not queue.tracks:
+            return await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
+            )
+
+        # Convert 1-based UI position to 0-based index
+        index = position - 1
+        target = queue.jump_to(index)
+        if target is None:
+            return await interaction.response.send_message(
+                embed=embeds.error(
+                    f"position {position} is out of range. queue has {len(queue.tracks)} tracks."
+                ),
+                ephemeral=True,
+            )
+
+        await interaction.response.defer()
+        await self._play_track(interaction.guild, target)
+        await self._persist_queue(interaction.guild, queue)
+        embed = embeds.now_playing(target, queue)
+        view = NowPlayingView(self.bot)
+        await interaction.followup.send(embed=embed, view=view)
+
+    @app_commands.command(name="filter", description="Apply an audio filter to the current stream")
+    @app_commands.describe(preset="Audio filter to apply")
+    @app_commands.choices(preset=[
+        app_commands.Choice(name="Bass Boost", value="bassboost"),
+        app_commands.Choice(name="Nightcore", value="nightcore"),
+        app_commands.Choice(name="Slowed + Reverb", value="slowed+reverb"),
+        app_commands.Choice(name="8D", value="8d"),
+        app_commands.Choice(name="Off", value="off"),
+    ])
+    @app_commands.checks.cooldown(1, config.FILTER_COOLDOWN_SECONDS)
+    async def filter_cmd(
+        self, interaction: discord.Interaction, preset: app_commands.Choice[str]
+    ) -> None:
+        """Apply a sticky whole-guild audio filter, resuming from current position (D-07..D-13, PLAYER-07/08).
+
+        Preset is resolved from config.FFMPEG_FILTERS — no raw user text reaches FFmpeg (T-07-02-02).
+        off restores opus passthrough (D-12). Sticky across tracks until /filter off (D-10).
+        """
+        queue = self.get_queue(interaction.guild.id)
+        voice_client = interaction.guild.voice_client
+
+        if not voice_client or not voice_client.is_connected():
+            return await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
+            )
+
+        if not interaction.user.voice or interaction.user.voice.channel != voice_client.channel:
+            return await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOT_IN_VOICE)), ephemeral=True
+            )
+
+        current = queue.get_current()
+        queue.active_filter = preset.value
+
+        await interaction.response.defer()
+
+        if current and (queue.is_playing or queue.is_paused):
+            # Re-play from current elapsed position with the new (or cleared) filter (D-09)
+            pos = queue.elapsed_seconds()
+            await self._play_track(interaction.guild, current, offset_seconds=pos)
+            await self._persist_queue(interaction.guild, queue)
+
+        if preset.value == "off":
+            msg = pick_random_r(FILTER_CLEARED)
+        else:
+            # Format the filter name into the response if the template uses {filter}
+            template = pick_random_r(FILTER_APPLIED)
+            try:
+                msg = template.format(filter=preset.name)
+            except (KeyError, IndexError):
+                msg = template
+
+        embed = embeds.now_playing(current, queue) if current else None
+        view = NowPlayingView(self.bot) if current else None
+        if embed:
+            await interaction.followup.send(msg, embed=embed, view=view)
+        else:
+            await interaction.followup.send(msg)
+
     # ──────────────────────────── VOICE EVENTS ────────────────────────────
 
     @commands.Cog.listener()
