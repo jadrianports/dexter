@@ -1,11 +1,18 @@
-"""LibraryCog — personal favorites management (Phase 7, PLAYER-05).
+"""LibraryCog — personal favorites + named playlists (Phase 7, PLAYER-05, PLAYER-06).
 
 Commands:
     /favorite  — save the currently-playing song to the invoking user's favorites
     /favorites — show a pick-list select menu; choose to queue or remove a saved song
+    /playlist save <name>   — freeze the current queue as a named snapshot
+    /playlist load <name>   — append a saved snapshot to the current queue
+    /playlist list          — show the user's saved playlists
+    /playlist delete <name> — delete a saved playlist
 
 Favorites are per-user and global (cross-server, D-18), capped at FAVORITES_MAX_PER_USER
 (25, D-21), current-song-only (D-19). All responses are ephemeral (D-29, D-30).
+
+Playlists are per-user frozen JSONB snapshots (D-23), capped at PLAYLISTS_MAX_PER_USER
+(25, D-28), append-on-load (D-26), upsert-on-name-clash (D-27).
 
 Security:
     T-07-03-01 — all DB calls use $N-parameterised asyncpg helpers; no string interpolation.
@@ -13,6 +20,9 @@ Security:
                  their own rows.
     T-07-03-03 — FAVORITES_MAX_PER_USER cap enforced before insert; dedupe via PK avoids
                  count inflation.
+    T-07-04-01 — playlist snapshot serialised via json.dumps; name stored as bound param.
+    T-07-04-02 — every playlist op keyed on str(interaction.user.id); no cross-user reads.
+    T-07-04-03 — PLAYLISTS_MAX_PER_USER + PLAYLIST_NAME_MAX_LENGTH enforced on save.
 """
 
 from __future__ import annotations
@@ -22,7 +32,17 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
-from database import add_favorite, count_favorites, get_favorites, remove_favorite
+from database import (
+    add_favorite,
+    count_favorites,
+    get_favorites,
+    remove_favorite,
+    save_playlist,
+    get_playlist,
+    list_playlists,
+    delete_playlist,
+    count_playlists,
+)
 from models.queue import Track, QueueFullError
 from personality.responses import (
     pick_random,
@@ -31,6 +51,10 @@ from personality.responses import (
     FAVORITE_CAP_HIT,
     FAVORITES_EMPTY,
     NOTHING_PLAYING,
+    PLAYLIST_SAVED,
+    PLAYLIST_LOADED,
+    PLAYLIST_NOT_FOUND,
+    PLAYLIST_CAP_HIT,
 )
 from utils.logger import log
 from utils import embeds
@@ -394,6 +418,234 @@ class LibraryCog(commands.Cog):
             await interaction.response.send_message(
                 f"cooldown. try again in {error.retry_after:.1f}s.", ephemeral=True
             )
+
+    # ---- /playlist group -------------------------------------------------
+
+    playlist = app_commands.Group(
+        name="playlist",
+        description="Save and load named playlists",
+    )
+
+    @playlist.command(name="save", description="Save the current queue as a named playlist")
+    @app_commands.describe(name="Name for the playlist (max 60 chars)")
+    async def playlist_save(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/playlist save <name> — snapshot the current queue to a named playlist.
+
+        Guards: empty queue, over-long name, playlist cap (unless overwriting).
+        Upserts on name clash (D-27). Ephemeral response (D-29, D-30).
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        name = name.strip()
+        if not name:
+            await interaction.response.send_message(
+                "playlist name can't be empty.", ephemeral=True
+            )
+            return
+
+        if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
+            await interaction.response.send_message(
+                f"that name is too long. keep it under {config.PLAYLIST_NAME_MAX_LENGTH} chars.",
+                ephemeral=True,
+            )
+            return
+
+        music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
+        if music_cog is None:
+            await interaction.response.send_message(
+                "music isn't loaded right now.", ephemeral=True
+            )
+            return
+
+        queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
+        if not queue.tracks:
+            await interaction.response.send_message(
+                "the queue is empty. add some songs first.", ephemeral=True
+            )
+            return
+
+        user_id = str(interaction.user.id)
+
+        # Cap check — allow overwriting an existing playlist without counting it twice
+        # (T-07-04-03, D-28). Only block when creating a genuinely new name.
+        existing = await get_playlist(self.bot.pool, user_id=user_id, name=name)
+        if existing is None:
+            current_count = await count_playlists(self.bot.pool, user_id=user_id)
+            if current_count >= config.PLAYLISTS_MAX_PER_USER:
+                await interaction.response.send_message(
+                    pick_random(PLAYLIST_CAP_HIT), ephemeral=True
+                )
+                return
+
+        snapshot = [t.to_dict() for t in queue.tracks]
+        await save_playlist(self.bot.pool, user_id=user_id, name=name, snapshot=snapshot)
+
+        log.info(
+            "User %s saved playlist '%s' with %d tracks", user_id, name, len(snapshot)
+        )
+        await interaction.response.send_message(
+            f"{pick_random(PLAYLIST_SAVED)} ({len(snapshot)} tracks, \"{name}\")",
+            ephemeral=True,
+        )
+
+    @playlist.command(name="load", description="Append a saved playlist to the current queue")
+    @app_commands.describe(name="Name of the playlist to load")
+    async def playlist_load(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/playlist load <name> — rebuild tracks from snapshot and APPEND to queue (D-26).
+
+        Truncates to MAX_QUEUE_SIZE_PER_GUILD with a message if the queue would overflow.
+        Starts playback if the queue was idle. Ephemeral summary (D-29, D-30).
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        user_id = str(interaction.user.id)
+        name = name.strip()
+
+        rows = await get_playlist(self.bot.pool, user_id=user_id, name=name)
+        if rows is None:
+            await interaction.response.send_message(
+                pick_random(PLAYLIST_NOT_FOUND), ephemeral=True
+            )
+            return
+
+        music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
+        if music_cog is None:
+            await interaction.response.send_message(
+                "music isn't loaded right now.", ephemeral=True
+            )
+            return
+
+        if not interaction.user.voice or not interaction.user.voice.channel:  # type: ignore[union-attr]
+            await interaction.response.send_message(
+                "you're not in a voice channel.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
+        was_idle = not queue.is_playing
+
+        added = 0
+        truncated = 0
+        for track_dict in rows:
+            track = Track.from_dict({**track_dict, "requested_by": interaction.user.id})
+            try:
+                queue.add(track)
+                added += 1
+            except QueueFullError:
+                truncated += 1
+
+        # Persist queue state
+        if hasattr(self.bot, "queue_persistence"):
+            try:
+                await self.bot.queue_persistence.persist(
+                    guild,
+                    queue,
+                    interaction.user.voice.channel.id,  # type: ignore[union-attr]
+                )
+            except Exception as exc:
+                log.debug("playlist load: queue persist failed: %s", exc)
+
+        # Kick off playback if we were idle
+        if was_idle and queue.tracks:
+            user_channel = interaction.user.voice.channel  # type: ignore[union-attr]
+            voice_client = guild.voice_client
+            if voice_client is None:
+                try:
+                    voice_client = await user_channel.connect()
+                except Exception as exc:
+                    log.warning("playlist load: connect failed: %s", exc)
+
+            queue.current_index = len(queue.tracks) - added  # first newly added track
+            first_track = queue.get_current()
+            if first_track is not None:
+                await music_cog._play_track(guild, first_track)  # type: ignore[attr-defined]
+                from cogs.music import NowPlayingView
+                embed = embeds.now_playing(first_track, queue)
+                view = NowPlayingView(self.bot)
+                msg = await interaction.followup.send(embed=embed, view=view, wait=True)
+                queue._now_playing_message_id = msg.id
+                return  # followup with now-playing embed serves as confirmation
+
+        summary = f"{pick_random(PLAYLIST_LOADED)} added {added} track(s) from \"{name}\"."
+        if truncated:
+            summary += (
+                f" {truncated} track(s) were skipped — queue is at the"
+                f" {config.MAX_QUEUE_SIZE_PER_GUILD}-song cap."
+            )
+        await interaction.followup.send(summary, ephemeral=True)
+
+    @playlist.command(name="list", description="Show your saved playlists")
+    async def playlist_list(self, interaction: discord.Interaction) -> None:
+        """/playlist list — ephemeral embed of the user's saved playlists (D-24)."""
+        user_id = str(interaction.user.id)
+        rows = await list_playlists(self.bot.pool, user_id=user_id)
+
+        if not rows:
+            await interaction.response.send_message(
+                "you don't have any saved playlists. use /playlist save while something's queued.",
+                ephemeral=True,
+            )
+            return
+
+        embed = discord.Embed(
+            title="your playlists",
+            color=discord.Color.blurple(),
+        )
+        for row in rows:
+            updated = row["updated_at"]
+            # updated_at may be a datetime or an aware datetime from asyncpg
+            ts = (
+                discord.utils.format_dt(updated, style="R")
+                if hasattr(updated, "tzinfo")
+                else str(updated)
+            )
+            embed.add_field(
+                name=row["name"],
+                value=f"{row['track_count']} track(s) — updated {ts}",
+                inline=False,
+            )
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @playlist.command(name="delete", description="Delete a saved playlist")
+    @app_commands.describe(name="Name of the playlist to delete")
+    async def playlist_delete(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/playlist delete <name> — remove a named playlist (D-28).
+
+        Ephemeral confirmation or not-found message (D-29, D-30).
+        """
+        user_id = str(interaction.user.id)
+        name = name.strip()
+
+        deleted = await delete_playlist(self.bot.pool, user_id=user_id, name=name)
+        if not deleted:
+            await interaction.response.send_message(
+                pick_random(PLAYLIST_NOT_FOUND), ephemeral=True
+            )
+            return
+
+        log.info("User %s deleted playlist '%s'", user_id, name)
+        await interaction.response.send_message(
+            f"deleted playlist \"{name}\".", ephemeral=True
+        )
 
 
 async def setup(bot: commands.Bot) -> None:
