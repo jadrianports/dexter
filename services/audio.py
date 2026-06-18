@@ -11,11 +11,39 @@ import config
 from models.queue import Track
 from utils.logger import log
 
+# FFmpeg reconnect flags shared across stream and seeked/filtered paths
+_RECONNECT_FLAGS = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+
 # FFmpeg options for stream fallback (non-opus sources)
 FFMPEG_STREAM_OPTS = {
-    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "before_options": _RECONNECT_FLAGS,
     "options": "-vn",
 }
+
+
+def _build_ffmpeg_opts(
+    seek_seconds: int = 0, ffmpeg_filter: str | None = None
+) -> dict:
+    """Build FFmpeg before_options/options for a seeked or filtered source.
+
+    - Always includes reconnect flags in before_options.
+    - Prepends -ss {seek_seconds} only when seek_seconds > 0.
+    - Appends -af "{ffmpeg_filter}" to options only when a filter is set.
+    - With neither seek nor filter the result is equivalent to FFMPEG_STREAM_OPTS
+      (reconnect flags + -vn), so callers can safely pass the result through
+      without special-casing the passthrough default.
+
+    Pure function — fully unit-testable (no FFmpeg invocation).
+    """
+    before = _RECONNECT_FLAGS
+    if seek_seconds > 0:
+        before = f"-ss {seek_seconds} {before}"
+
+    options = "-vn"
+    if ffmpeg_filter:
+        options = f'-vn -af "{ffmpeg_filter}"'
+
+    return {"before_options": before, "options": options}
 
 
 class AudioService:
@@ -40,26 +68,55 @@ class AudioService:
         """Check if a video's audio is in the cache."""
         return self.cache_path(video_id).exists()
 
-    async def get_source(self, track: Track) -> discord.AudioSource:
-        """Get a playable audio source for a track."""
-        cached = self.cache_path(track.video_id)
+    async def get_source(
+        self,
+        track: Track,
+        *,
+        seek_seconds: int = 0,
+        ffmpeg_filter: str | None = None,
+    ) -> discord.AudioSource:
+        """Get a playable audio source for a track.
 
-        # 1. Cache hit — opus passthrough
+        When seek_seconds == 0 and ffmpeg_filter is None the existing
+        opus-passthrough behaviour is preserved exactly (D-12): cached tracks
+        use FFmpegOpusAudio with no extra options, downloaded tracks likewise.
+        A transcode path is taken ONLY when a seek or filter is requested.
+
+        Args:
+            track: the track to play.
+            seek_seconds: start playback from this offset (0 = beginning).
+            ffmpeg_filter: FFmpeg -af chain string from config.FFMPEG_FILTERS, or
+                None for no filter.
+        """
+        cached = self.cache_path(track.video_id)
+        use_opts = seek_seconds > 0 or ffmpeg_filter is not None
+
+        # 1. Cache hit
         if cached.exists():
             log.info(f"Cache hit for {track.video_id}")
-            return discord.FFmpegOpusAudio(str(cached))
+            if not use_opts:
+                # Opus passthrough — D-12 default path, unchanged
+                return discord.FFmpegOpusAudio(str(cached))
+            opts = _build_ffmpeg_opts(seek_seconds, ffmpeg_filter)
+            return discord.FFmpegOpusAudio(str(cached), **opts)
 
         # 2. Try downloading to cache
         path = await self.youtube_service.async_download(track.video_id, track.url)
         if path and path.exists():
-            return discord.FFmpegOpusAudio(str(path))
+            if not use_opts:
+                return discord.FFmpegOpusAudio(str(path))
+            opts = _build_ffmpeg_opts(seek_seconds, ffmpeg_filter)
+            return discord.FFmpegOpusAudio(str(path), **opts)
 
         # 3. Stream fallback — re-extract for fresh URL
         log.warning(f"Download failed for {track.video_id}, falling back to stream")
         try:
             data = await self.youtube_service.async_extract(track.url)
             stream_url = data.get("url") or track.url
-            return discord.FFmpegPCMAudio(stream_url, **FFMPEG_STREAM_OPTS)
+            if not use_opts:
+                return discord.FFmpegPCMAudio(stream_url, **FFMPEG_STREAM_OPTS)
+            opts = _build_ffmpeg_opts(seek_seconds, ffmpeg_filter)
+            return discord.FFmpegPCMAudio(stream_url, **opts)
         except Exception as e:
             log.error(f"Stream fallback also failed for {track.video_id}: {e}")
             raise RuntimeError(f"Track unavailable: {track.title}") from e

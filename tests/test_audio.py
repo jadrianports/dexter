@@ -1,11 +1,11 @@
-"""Tests for AudioService cache logic."""
+"""Tests for AudioService cache logic and FFmpeg options builder."""
 
 import os
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.audio import AudioService
+from services.audio import AudioService, _build_ffmpeg_opts
 
 
 @pytest.fixture
@@ -19,6 +19,43 @@ def audio_service(tmp_cache):
     yt_service = MagicMock()
     service = AudioService(youtube_service=yt_service, cache_dir=tmp_cache)
     return service
+
+
+class TestBuildFfmpegOpts:
+    """Pure unit tests for the _build_ffmpeg_opts helper — no FFmpeg invocation."""
+
+    def test_no_seek_no_filter_passthrough(self):
+        """Default case: before_options has no -ss, options is -vn (passthrough)."""
+        opts = _build_ffmpeg_opts(0, None)
+        assert "-ss" not in opts["before_options"]
+        assert opts["options"] == "-vn"
+
+    def test_seek_only(self):
+        """With seek but no filter: before_options contains -ss, options still -vn."""
+        opts = _build_ffmpeg_opts(45, None)
+        assert "-ss 45" in opts["before_options"]
+        assert opts["options"] == "-vn"
+
+    def test_filter_only(self):
+        """With filter but no seek: options contains -af chain and -vn."""
+        opts = _build_ffmpeg_opts(0, "bass=g=8")
+        assert "-ss" not in opts["before_options"]
+        assert '-af "bass=g=8"' in opts["options"]
+        assert "-vn" in opts["options"]
+
+    def test_seek_and_filter(self):
+        """Both seek and filter: -ss in before_options and -af in options."""
+        opts = _build_ffmpeg_opts(45, "bass=g=8")
+        assert "-ss 45" in opts["before_options"]
+        assert '-af "bass=g=8"' in opts["options"]
+        assert "-vn" in opts["options"]
+
+    def test_reconnect_flags_preserved(self):
+        """Reconnect flags are included in before_options regardless of seek."""
+        opts_no_seek = _build_ffmpeg_opts(0, None)
+        opts_seek = _build_ffmpeg_opts(10, None)
+        assert "-reconnect" in opts_no_seek["before_options"]
+        assert "-reconnect" in opts_seek["before_options"]
 
 
 class TestCacheLookup:
