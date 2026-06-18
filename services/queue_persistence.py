@@ -51,6 +51,7 @@ class QueuePersistenceService:
             "loop_mode": queue.loop_mode.value,
             "text_channel_id": queue._text_channel_id,
             "voice_channel_id": voice_channel_id,
+            "active_filter": queue.active_filter,  # Phase 7: persist sticky filter (D-10)
         }
         try:
             async with self._pool.acquire() as conn:
@@ -135,6 +136,7 @@ class QueuePersistenceService:
 
             queue.loop_mode = LoopMode(payload.get("loop_mode", "off"))
             queue._text_channel_id = payload.get("text_channel_id")
+            queue.active_filter = payload.get("active_filter", "off")  # Phase 7: restore sticky filter (D-10)
 
             # Smart rejoin (D-21): only connect if humans are already in the channel,
             # we have something to play, and we are not already connected (CR-03).
