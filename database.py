@@ -121,6 +121,20 @@ CREATE TABLE IF NOT EXISTS guild_queues (
     payload    JSONB NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS user_favorites (
+    user_id          TEXT NOT NULL,
+    video_id         TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    artist           TEXT,
+    url              TEXT NOT NULL,
+    duration_seconds INTEGER,
+    thumbnail        TEXT,
+    added_at         TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (user_id, video_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(user_id, added_at DESC);
 """
 
 
@@ -412,3 +426,77 @@ async def get_history_rows(
             guild_id, int(limit),
         )
     return [dict(row) for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Favorites helpers (Phase 7, D-18..D-22, PLAYER-05)
+# ---------------------------------------------------------------------------
+
+
+async def add_favorite(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    video_id: str,
+    title: str,
+    artist: str | None,
+    url: str,
+    duration_seconds: int | None,
+    thumbnail: str | None,
+) -> None:
+    """Insert a favorite row for (user_id, video_id).
+
+    Duplicate (same user_id + video_id) is a no-op via ON CONFLICT DO NOTHING
+    so it does NOT consume a cap slot.
+    All values are bound as $N params — no string interpolation (T-07-03-01).
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO user_favorites"
+            " (user_id, video_id, title, artist, url, duration_seconds, thumbnail)"
+            " VALUES ($1, $2, $3, $4, $5, $6, $7)"
+            " ON CONFLICT (user_id, video_id) DO NOTHING",
+            user_id, video_id, title, artist, url, duration_seconds, thumbnail,
+        )
+
+
+async def count_favorites(pool: asyncpg.Pool, *, user_id: str) -> int:
+    """Return the number of favorites saved by user_id."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS cnt FROM user_favorites WHERE user_id = $1",
+            user_id,
+        )
+    return int(row["cnt"]) if row else 0
+
+
+async def get_favorites(
+    pool: asyncpg.Pool, *, user_id: str, limit: int = 25
+) -> list[dict]:
+    """Return the user's saved favorites, newest first.
+
+    Each dict carries enough fields to rebuild a Track:
+    video_id, title, artist, url, duration_seconds, thumbnail.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT video_id, title, artist, url, duration_seconds, thumbnail"
+            " FROM user_favorites"
+            " WHERE user_id = $1"
+            " ORDER BY added_at DESC"
+            " LIMIT $2",
+            user_id, int(limit),
+        )
+    return [dict(row) for row in rows]
+
+
+async def remove_favorite(pool: asyncpg.Pool, *, user_id: str, video_id: str) -> None:
+    """Delete the (user_id, video_id) row from user_favorites.
+
+    No-op if the row does not exist.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM user_favorites WHERE user_id = $1 AND video_id = $2",
+            user_id, video_id,
+        )

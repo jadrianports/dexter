@@ -41,6 +41,7 @@ async def pool():
         await conn.execute(
             "DROP TABLE IF EXISTS guild_queues, song_history,"
             " user_artist_counts, image_generation_log,"
-            " bot_daily_stats, user_profiles CASCADE"
+            " bot_daily_stats, user_profiles,"
+            " user_favorites, user_playlists, user_playlist_tracks CASCADE"
         )
     await p.close()
