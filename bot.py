@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import json
 import random
 import sys
 
@@ -203,8 +204,25 @@ async def _run_health_server() -> None:
     Returns the minimal {"status":"ok"} — no internal state exposed (T-05-01).
     """
     async def health(request: _aio_web.Request) -> _aio_web.Response:
+        # Import at request time (function-scope) to avoid circular import at module load.
+        # Matches the existing pattern for `from services.queue_persistence import restore_queues`.
+        # Pitfall 6: health may fire before cogs are loaded → broad try/except fallback.
+        try:
+            from cogs.ops import gather_bot_metrics
+            metrics = await gather_bot_metrics(bot)
+            reasons = metrics.get("degraded_reasons", [])
+        except Exception:
+            reasons = ["metrics gatherer unavailable"]
+
+        # D-28: always HTTP 200 — non-200 causes Koyeb kill-loop and Neon 5-min restart cascade.
+        # D-27: body exposes ONLY status + generic reason strings (no guild/shard/pool internals).
+        if reasons:
+            body = json.dumps({"status": "degraded", "reasons": reasons})
+        else:
+            body = '{"status":"ok"}'
+
         return _aio_web.Response(
-            text='{"status":"ok"}',
+            text=body,
             content_type='application/json',
         )
 

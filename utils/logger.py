@@ -61,5 +61,15 @@ async def log_to_discord(bot, embed: discord.Embed) -> None:
         return
     try:
         await channel.send(embed=embed)
+        # Phase 8 (D-23): count errors surfaced to the Discord error-log channel.
+        # Inner try/except is the recursion guard (Pitfall 5 / T-08-12) — a
+        # DB-down failure here must NOT re-enter log_to_discord.
+        pool = getattr(bot, "pool", None)
+        if pool is not None:
+            try:
+                from database import increment_daily_stat
+                await increment_daily_stat(pool, "total_errors")
+            except Exception:
+                pass  # never let total_errors tracking break the logger
     except Exception as e:
         log.error(f"Failed to log to Discord error channel: {e}")
