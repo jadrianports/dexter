@@ -42,13 +42,13 @@
 ### Social & Personality (`SOCIAL`)
 
 - [x] **SOCIAL-01**: User can `/roast @user` — a personalized roast generated from that user's tracked history
-- [ ] **SOCIAL-02**: User can view a `/leaderboard` for the server (most songs queued, longest streak, most skipped)
+- [x] **SOCIAL-02**: User can view a `/leaderboard` for the server (most songs queued, longest streak, most skipped)
 
 ### Ops & Observability (`OPS`)
 
-- [ ] **OPS-01**: Owner can view a `/stats` dashboard in Discord (commands, songs, AI queries, images, errors)
-- [ ] **OPS-02**: A health endpoint exposes bot liveness for the dead-man switch
-- [ ] **OPS-03**: Gemini and Oracle quota/usage is observable before limits are hit
+- [x] **OPS-01**: Owner can view a `/stats` dashboard in Discord (commands, songs, AI queries, images, errors)
+- [x] **OPS-02**: A health endpoint exposes bot liveness for the dead-man switch
+- [x] **OPS-03**: Gemini and Oracle quota/usage is observable before limits are hit
 
 ## Future Requirements
 
@@ -106,10 +106,10 @@ Which phases cover which requirements. Phase numbering continues from v1.0 (last
 | PLAYER-07 | Phase 7 | Complete |
 | PLAYER-08 | Phase 7 | Complete |
 | SOCIAL-01 | Phase 8 | Complete |
-| SOCIAL-02 | Phase 8 | Pending |
-| OPS-01 | Phase 8 | Pending |
-| OPS-02 | Phase 8 | Pending |
-| OPS-03 | Phase 8 | Pending |
+| SOCIAL-02 | Phase 8 | Complete |
+| OPS-01 | Phase 8 | Complete |
+| OPS-02 | Phase 8 | Complete |
+| OPS-03 | Phase 8 | Complete |
 
 **Coverage:**
 
