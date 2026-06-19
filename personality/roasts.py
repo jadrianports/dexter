@@ -31,6 +31,10 @@ __all__ = [
     "MILESTONE_STREAK_TEMPLATES",
     "NO_LYRICS_FOUND",
     "is_late_night",
+    "ROAST_COMMAND_LINES",
+    "ROAST_SELF_LINES",
+    "ROAST_BOT_LINES",
+    "ROAST_NO_HISTORY_LINES",
 ]
 
 
@@ -159,6 +163,44 @@ NO_LYRICS_FOUND: list[str] = [
     "no lyrics. genius didn't have it, azlyrics didn't have it. maybe that's the universe telling you something.",
     "lyrics not found. the song might be too obscure or too bad for anyone to have documented.",
     "nothing came back. sometimes songs are better without the words confirmed.",
+]
+
+
+# ---------------------------------------------------------------------------
+# /roast command pools (Phase 8 — SOCIAL-01)
+# Harsher than ambient; stays about music behavior (D-06).
+# {name} placeholder for .format() at call site where noted.
+# ---------------------------------------------------------------------------
+
+ROAST_COMMAND_LINES: list[str] = [
+    # outward/down at target's music choices — harsher than VOICE_JOIN_ROASTS
+    "{name}'s listening history reads like someone picked every genre at random and committed to none of them.",
+    "went through {name}'s top artists. it's not a music taste, it's a symptom.",
+    "{name} has queued the same emotional damage in different keys for months. variety exists. you wouldn't know it.",
+    "if {name}'s playlist were a person, it'd be the type who says 'i like all kinds of music' and means three genres.",
+    "{name}'s most-played tracks confirm what we all suspected. it's giving no taste and no apologies. 🎵",
+    "the data on {name} says prolific queuer. it does not say good queuer. that's the whole story.",
+]
+
+ROAST_SELF_LINES: list[str] = [
+    "you used a slash command to roast yourself. the results were already in before you typed it.",
+    "self-roast. bold move. the saddest part is i didn't even have to look anything up.",
+    "you really typed /roast and picked your own name. that's the most you've ever committed to anything.",
+    "roasting yourself in public. i respect the honesty. i also have the receipts to back it up.",
+]
+
+ROAST_BOT_LINES: list[str] = [
+    "nice try. you thought i'd fumble a roast aimed at myself. the real fumble was asking me.",
+    "roast the bot. sure. while you're at it, go insult the smoke alarm for beeping too loud. i don't make the rules, i enforce them.",
+    "you came to me for a roast and picked the one target i'm legally allowed to defend. your queue history is still public though.",
+    "roasting the bot that tracks your every skip. bold. reckless. exactly the energy your playlist projects.",
+]
+
+ROAST_NO_HISTORY_LINES: list[str] = [
+    "{name} has zero music history here. either brand new or actively avoiding accountability. i'll find out which.",
+    "no data on {name}. either they've never queued anything or they know i'm watching. one of those is smart.",
+    "{name} is a blank slate in my logs. that changes the second they pick a song. i'm already judging the first choice.",
+    "nothing on {name}. no songs, no history, no basis for a roast. so: who are you and why are you here.",
 ]
 
 
