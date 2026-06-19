@@ -25,6 +25,12 @@ from personality.responses import (
     AUTO_QUEUE_CAP_REACHED,
     AUTO_QUEUE_IGNORED,
 )
+from personality.roasts import (
+    ROAST_COMMAND_LINES,
+    ROAST_SELF_LINES,
+    ROAST_BOT_LINES,
+    ROAST_NO_HISTORY_LINES,
+)
 from personality.seasonal import get_seasonal_context
 from services.gemini import GeminiRateLimitError, GeminiAPIError
 from services.lyrics import build_genius_search_query
@@ -136,6 +142,77 @@ class AICog(commands.Cog):
             log.error(f"/ask Gemini error: {e}")
             await interaction.followup.send(pick_random(ERROR_MESSAGES))
             await self._log_error("Gemini API Error", str(e))
+
+    # ──────────────────────────── /roast ────────────────────────────
+
+    @app_commands.command(name="roast", description="Roast a user based on their music history")
+    @app_commands.describe(target="The user to roast")
+    @app_commands.checks.cooldown(1, config.ROAST_COOLDOWN_SECONDS, key=lambda i: i.user.id)
+    async def roast(self, interaction: discord.Interaction, target: discord.Member) -> None:
+        await interaction.response.defer()  # public response (D-01)
+
+        # 1. Resolve edge cases first (D-02), before mood/Gemini setup
+        user_summary: str | None = None
+        if target == self.bot.user or target.bot:
+            scenario = "someone tried to roast the bot itself"
+            fallback_pool = ROAST_BOT_LINES
+        elif target.id == interaction.user.id:
+            scenario = "someone tried to roast themselves"
+            fallback_pool = ROAST_SELF_LINES
+        else:
+            user_summary = await get_user_summary(self.bot.pool, str(target.id))
+            if user_summary is None:
+                scenario = f"{target.display_name} has no music history in this bot"
+                fallback_pool = ROAST_NO_HISTORY_LINES
+            else:
+                scenario = f"roast {target.display_name}: {user_summary}"
+                fallback_pool = ROAST_COMMAND_LINES
+
+        # 2. Build fallback line before any async calls that may fail
+        fallback_line = pick_random(fallback_pool)
+        if "{name}" in fallback_line:
+            fallback_line = fallback_line.format(name=target.display_name)
+
+        # 3. Mood + seasonal context injection (D-08) — same as /ask
+        mood = await get_mood(self.bot.pool)
+        seasonal = get_seasonal_context()
+        system_prompt = build_chat_prompt(mood, user_summary, seasonal)
+
+        # 4. Gemini call at priority=1 (D-05) + guaranteed template fallback
+        try:
+            conversation = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"{scenario}. respond with exactly one roast line in your voice — "
+                        "under 200 characters, lowercase, no preamble. harsher than usual."
+                    ),
+                }
+            ]
+            result = await self.gemini.chat(system_prompt, conversation, priority=1)
+            if result:
+                # Personality-voice enforcement (from events.py _generate_ambient_roast)
+                result = result.strip()
+                if len(result) > 500:
+                    result = result[:497] + "..."
+                if result and result[0].isupper():
+                    result = result[0].lower() + result[1:]
+                await interaction.followup.send(
+                    result, allowed_mentions=discord.AllowedMentions.none()
+                )
+            else:
+                await interaction.followup.send(
+                    fallback_line, allowed_mentions=discord.AllowedMentions.none()
+                )
+        except (GeminiRateLimitError, GeminiAPIError):
+            # Guaranteed template fallback (D-05) — roast never fails
+            await interaction.followup.send(
+                fallback_line, allowed_mentions=discord.AllowedMentions.none()
+            )
+
+        # 5. Update daily stats
+        await increment_daily_stat(self.bot.pool, "total_commands")
+        await increment_daily_stat(self.bot.pool, "total_ai_queries")
 
     # ──────────────────────────── AUTO-QUEUE ────────────────────────────
 

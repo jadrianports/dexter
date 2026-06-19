@@ -75,11 +75,16 @@ def _make_target(
 
 
 async def _invoke_roast(bot, interaction, target):
-    """Import AICog and call roast() directly, bypassing Discord decorator machinery."""
-    # Late import so the module under test uses our patched environment
+    """Import AICog and call roast() directly, bypassing Discord decorator machinery.
+
+    discord.py's @app_commands.command wraps the method in an app_commands.Command
+    object (not directly awaitable). Use .callback to reach the underlying coroutine,
+    passing cog as the first 'self' argument explicitly.
+    """
     from cogs.ai import AICog
     cog = AICog(bot)
-    await cog.roast(interaction, target)
+    # .callback is the raw coroutine; pass cog as self
+    await cog.roast.callback(cog, interaction, target)
 
 
 # ---------------------------------------------------------------------------
