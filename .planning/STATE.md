@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: completed
-stopped_at: Phase 8 context gathered
-last_updated: "2026-06-19T06:50:59.418Z"
-last_activity: 2026-06-19 -- Phase 07 Plan 02 complete
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-06-19T07:28:42.362Z"
+last_activity: 2026-06-19 -- Phase 08 execution started
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 8
   percent: 50
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 07 — player-ux-filters
+**Current focus:** Phase 08 — social-ops
 
 ## Current Position
 
-Phase: 07 (player-ux-filters) — EXECUTING
-Plan: 4 of 4
-Status: Plan 02 complete — ready for Plan 03
-Last activity: 2026-06-19 -- Phase 07 Plan 02 complete
+Phase: 08 (social-ops) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-19 -- Phase 08 execution started
 
 ## Accumulated Context
 
@@ -64,6 +64,10 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase ?]: delete_playlist returns bool via asyncpg execute() status string ('DELETE N') — no extra SELECT, avoids race window
 - [Phase ?]: list_playlists uses jsonb_array_length(snapshot) for track_count — eliminates a separate COUNT query, keeps metadata atomic
 - [Phase ?]: [Phase 07-04]: playlist load idle-start sets current_index to first newly added track before _play_track — mirrors queue_persistence restore pattern
+- [Phase ?]: ROAST_COOLDOWN_SECONDS=30 for slash command (D-04); ambient ceiling in AMBIENT_ROAST_CEILING_SECONDS=300
+- [Phase ?]: Leaderboard SQL aggregates: COUNT(*) FROM song_history WHERE guild_id=$1 (not global total_songs_queued, D-14)
+- [Phase ?]: rpm_usage()/rpm_headroom() are synchronous on _RateLimiter — benign read race acceptable for dashboard (D-24)
+- [Phase ?]: GROUP BY includes first_seen_at in get_leaderboard_songs for valid tie-break ORDER BY without Postgres error
 
 ### Pending Todos
 
@@ -96,8 +100,8 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-19T01:08:07.039Z
-Stopped at: Phase 8 context gathered
+Last session: 2026-06-19T07:28:42.347Z
+Stopped at: Completed 08-01-PLAN.md
 Next:
 
   1. User creates Neon project (us-east-2) + Koyeb WEB service (wdc1) + UptimeRobot monitor per `docs/DEPLOY-KOYEB.md`.
@@ -117,3 +121,4 @@ Next:
 | Phase 07-player-ux-filters P02 | ~25 min | 5 tasks (4 commits) | 4 files modified |
 | Phase 07 P03 | ~20 min | 2 tasks | 5 files |
 | Phase 07-player-ux-filters P04 | ~15 min | 2 tasks | 3 files |
+| Phase 08-social-ops P01 | 6min | 3 tasks | 5 files |
