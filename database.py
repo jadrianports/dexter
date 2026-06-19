@@ -605,8 +605,9 @@ async def delete_playlist(
             "DELETE FROM user_playlists WHERE user_id = $1 AND name = $2",
             user_id, name,
         )
-    # asyncpg execute() returns a status string like "DELETE 1" or "DELETE 0"
-    return result.endswith("1")
+    # asyncpg execute() returns a status string like "DELETE 1" or "DELETE 0";
+    # parse the trailing affected-row count rather than a fragile suffix match.
+    return result.rsplit(" ", 1)[-1] != "0"
 
 
 async def count_playlists(pool: asyncpg.Pool, *, user_id: str) -> int:

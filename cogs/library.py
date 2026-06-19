@@ -304,7 +304,9 @@ class LibraryCog(commands.Cog):
         # Persist queue state
         if hasattr(self.bot, "queue_persistence"):
             try:
-                await self.bot.queue_persistence.persist(guild.id, queue)
+                await self.bot.queue_persistence.persist(
+                    guild, queue, user_channel.id
+                )
             except Exception as exc:
                 log.debug("favorites: queue persist failed: %s", exc)
 
