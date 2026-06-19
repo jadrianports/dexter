@@ -321,7 +321,7 @@ async def _initialize_once() -> None:
     bot.queue_persistence = QueuePersistenceService(bot.pool)
 
     # Load cogs (idempotent — a retry after a partial init must not double-load)
-    for _ext in ("cogs.music", "cogs.help", "cogs.events", "cogs.library"):
+    for _ext in ("cogs.music", "cogs.help", "cogs.events", "cogs.library", "cogs.ops"):
         if _ext not in bot.extensions:
             await bot.load_extension(_ext)
     if hasattr(bot, "gemini_service"):
@@ -368,6 +368,11 @@ async def _initialize_once() -> None:
     # ready before announcing itself (Anti-Pattern ordering).
     from services.queue_persistence import restore_queues
     await restore_queues(bot)
+
+    # Phase 8: Monotonic uptime anchor — set after full init so gather_bot_metrics
+    # reports time since the bot was fully ready, not since module load.
+    import time as _time
+    bot._start_monotonic = _time.monotonic()
 
 
 async def _post_startup_messages() -> None:
