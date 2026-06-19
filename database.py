@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS user_playlists (
 );
 
 CREATE INDEX IF NOT EXISTS idx_playlists_user ON user_playlists(user_id, updated_at DESC);
+
+ALTER TABLE bot_daily_stats ADD COLUMN IF NOT EXISTS total_errors INTEGER DEFAULT 0;
 """
 
 
@@ -274,6 +276,7 @@ async def increment_daily_stat(pool: asyncpg.Pool, field: str) -> None:
         "total_songs_played",
         "total_ai_queries",
         "total_images_generated",
+        "total_errors",              # Phase 8 addition (D-23)
     }
     if field not in allowed_fields:
         raise ValueError(f"Invalid stat field: {field}")
@@ -354,6 +357,115 @@ async def get_daily_command_count(pool: asyncpg.Pool) -> int:
             today,
         )
     return row["total_commands"] if row else 0
+
+
+async def get_daily_stats_row(pool: asyncpg.Pool) -> dict:
+    """Return today's bot_daily_stats row as a dict (all five fields; 0s if no row).
+
+    Today-only window — keyed by date.today().isoformat() (D-22/D-25).
+    Returns bot-wide global stats for the /stats owner dashboard.
+    """
+    today = date.today().isoformat()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT total_commands, total_songs_played, total_ai_queries,"
+            "       total_images_generated, total_errors"
+            " FROM bot_daily_stats WHERE date = $1",
+            today,
+        )
+    if row is None:
+        return {
+            "total_commands": 0,
+            "total_songs_played": 0,
+            "total_ai_queries": 0,
+            "total_images_generated": 0,
+            "total_errors": 0,
+        }
+    return dict(row)
+
+
+async def get_leaderboard_songs(
+    pool: asyncpg.Pool, guild_id: str
+) -> list[asyncpg.Record]:
+    """Return the top-N users by songs queued within a specific guild (D-10/D-14).
+
+    Per-guild scope: queries song_history WHERE guild_id = $1 (not the global
+    user_profiles.total_songs_queued counter). Ties broken by oldest first_seen_at
+    (D-16). Excludes users with zero songs (HAVING >= 1, D-18).
+    All parameters are $N positional — no string interpolation (T-08-01).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT sh.user_id, up.username, COUNT(*) AS songs_queued"
+            " FROM song_history sh"
+            " JOIN user_profiles up USING (user_id)"
+            " WHERE sh.guild_id = $1"
+            " GROUP BY sh.user_id, up.username, up.first_seen_at"
+            " HAVING COUNT(*) >= 1"
+            " ORDER BY songs_queued DESC, up.first_seen_at ASC"
+            " LIMIT $2",
+            guild_id, config.LEADERBOARD_TOP_N,
+        )
+
+
+async def get_leaderboard_skips(
+    pool: asyncpg.Pool, guild_id: str
+) -> list[asyncpg.Record]:
+    """Return the top-N most-skipped song titles within a specific guild (D-12).
+
+    Ranks song titles by skip count (was_skipped = true). Zero-skip titles are
+    excluded (HAVING >= 1, D-18). No user attribution — entity is the song title.
+    All parameters are $N positional — no string interpolation (T-08-01).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT title, COUNT(*) AS skip_count"
+            " FROM song_history"
+            " WHERE guild_id = $1 AND was_skipped = true"
+            " GROUP BY title"
+            " HAVING COUNT(*) >= 1"
+            " ORDER BY skip_count DESC"
+            " LIMIT $2",
+            guild_id, config.LEADERBOARD_TOP_N,
+        )
+
+
+async def get_leaderboard_streaks(
+    pool: asyncpg.Pool, guild_id: str
+) -> list[asyncpg.Record]:
+    """Return the top-N users by longest streak who are active in this guild (D-15).
+
+    Guild-active filter: subquery selects DISTINCT user_ids from song_history
+    WHERE guild_id = $1. Global streak (longest_streak from user_profiles) is
+    the ranking metric (D-15). Ties broken by oldest first_seen_at (D-16).
+    Users with longest_streak < 1 are excluded (D-18).
+    All parameters are $N positional — no string interpolation (T-08-01).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT up.user_id, up.username, up.longest_streak"
+            " FROM user_profiles up"
+            " WHERE up.user_id IN ("
+            "   SELECT DISTINCT user_id FROM song_history WHERE guild_id = $1"
+            " )"
+            "   AND up.longest_streak >= 1"
+            " ORDER BY up.longest_streak DESC, up.first_seen_at ASC"
+            " LIMIT $2",
+            guild_id, config.LEADERBOARD_TOP_N,
+        )
+
+
+async def get_images_today_global(pool: asyncpg.Pool) -> int:
+    """Return the total number of images generated today (all users, bot-wide).
+
+    Used by /stats to display global image-cap usage (OPS-03/D-24/D-25).
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS cnt FROM image_generation_log"
+            " WHERE generated_at::date = CURRENT_DATE"
+        )
+    return int(row["cnt"]) if row else 0
 
 
 async def get_repeat_song_count(
