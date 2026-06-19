@@ -41,7 +41,7 @@
 
 ### Social & Personality (`SOCIAL`)
 
-- [ ] **SOCIAL-01**: User can `/roast @user` — a personalized roast generated from that user's tracked history
+- [x] **SOCIAL-01**: User can `/roast @user` — a personalized roast generated from that user's tracked history
 - [ ] **SOCIAL-02**: User can view a `/leaderboard` for the server (most songs queued, longest streak, most skipped)
 
 ### Ops & Observability (`OPS`)
@@ -105,7 +105,7 @@ Which phases cover which requirements. Phase numbering continues from v1.0 (last
 | PLAYER-06 | Phase 7 | Complete |
 | PLAYER-07 | Phase 7 | Complete |
 | PLAYER-08 | Phase 7 | Complete |
-| SOCIAL-01 | Phase 8 | Pending |
+| SOCIAL-01 | Phase 8 | Complete |
 | SOCIAL-02 | Phase 8 | Pending |
 | OPS-01 | Phase 8 | Pending |
 | OPS-02 | Phase 8 | Pending |

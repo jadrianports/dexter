@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-06-19T07:28:42.362Z"
-last_activity: 2026-06-19 -- Phase 08 execution started
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-06-19T07:55:00.000Z"
+last_activity: 2026-06-19 -- Phase 08 Plan 02 /roast command complete
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
-  percent: 50
+  completed_plans: 9
+  percent: 55
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 ## Current Position
 
 Phase: 08 (social-ops) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-06-19 -- Phase 08 execution started
+Last activity: 2026-06-19 -- Completed 08-02 (/roast command)
 
 ## Accumulated Context
 
@@ -68,6 +68,8 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase ?]: Leaderboard SQL aggregates: COUNT(*) FROM song_history WHERE guild_id=$1 (not global total_songs_queued, D-14)
 - [Phase ?]: rpm_usage()/rpm_headroom() are synchronous on _RateLimiter — benign read race acceptable for dashboard (D-24)
 - [Phase ?]: GROUP BY includes first_seen_at in get_leaderboard_songs for valid tie-break ORDER BY without Postgres error
+- [Phase 08-02]: /roast resolves edge cases (bot/self/zero-history) BEFORE mood/Gemini setup — fallback pool always set before async DB calls
+- [Phase 08-02]: Test invocation of slash commands uses cog.cmd.callback(cog, interaction, ...) — @app_commands.command wraps coroutine in Command object
 
 ### Pending Todos
 
@@ -100,15 +102,11 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-19T07:28:42.347Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-06-19T07:55:00.000Z
+Stopped at: Completed 08-02-PLAN.md
 Next:
 
-  1. User creates Neon project (us-east-2) + Koyeb WEB service (wdc1) + UptimeRobot monitor per `docs/DEPLOY-KOYEB.md`.
-  2. User runs `05-UAT-RUNBOOK.md` live on Koyeb+Neon (A→B→C→D order; D1 last).
-  3. User reports results via `/gsd-verify-work 05`.
-  4. User reviews branch `gsd/phase-5-ship-it-live` and merges → main (user owns the merge).
-  5. After merge, update Koyeb tracked branch from `gsd/phase-5-ship-it-live` to `main`.
+  Execute 08-03-PLAN.md (/leaderboard, /stats, degraded /health).
 
 ## Performance Metrics
 
@@ -122,3 +120,4 @@ Next:
 | Phase 07 P03 | ~20 min | 2 tasks | 5 files |
 | Phase 07-player-ux-filters P04 | ~15 min | 2 tasks | 3 files |
 | Phase 08-social-ops P01 | 6min | 3 tasks | 5 files |
+| Phase 08-social-ops P02 | 12min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
