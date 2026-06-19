@@ -5,6 +5,13 @@ from __future__ import annotations
 import discord
 
 from models.queue import Track, LoopMode, MusicQueue
+from personality.responses import (
+    pick_random,
+    LEADERBOARD_SONGS_COMMENTARY,
+    LEADERBOARD_STREAK_COMMENTARY,
+    LEADERBOARD_SKIPS_COMMENTARY,
+    LEADERBOARD_EMPTY,
+)
 from utils.formatters import format_duration, progress_bar
 
 # Brand colors
@@ -13,6 +20,8 @@ COLOR_QUEUED = 0xDF1141        # red
 COLOR_SUCCESS = 0x0EAA51       # green
 COLOR_ERROR = 0x7D3243         # dark pink
 COLOR_QUEUE_LIST = 0x40EC88    # light green
+COLOR_LEADERBOARD = 0xFFD700   # gold — competitive/social
+COLOR_STATS = 0x7289DA         # discord blurple — ops/system
 
 
 def now_playing(track: Track, queue: MusicQueue, elapsed: int | None = None) -> discord.Embed:
@@ -118,3 +127,136 @@ def error(message: str) -> discord.Embed:
         description=message,
         color=COLOR_ERROR,
     )
+
+
+def leaderboard_embed(
+    songs_rows: list,
+    skips_rows: list,
+    streaks_rows: list,
+) -> discord.Embed:
+    """Build the per-guild leaderboard embed (D-11: one embed, three sections).
+
+    Each section shows top-5 rows (D-13) plus a dry commentary line. If a
+    section has no rows, a personality empty-state line is shown (D-17).
+    Section order: most songs queued · longest streak · most-skipped songs (D-11).
+    Discord limits: 25 fields max / 1024 chars per field / 6000 chars total.
+    This embed uses exactly 3 fields — well under all limits.
+    """
+    embed = discord.Embed(title="leaderboard", color=COLOR_LEADERBOARD)
+
+    # Section 1: Most songs queued
+    if songs_rows:
+        lines = [
+            f"{i + 1}. {r['username']} — {r['songs_queued']} songs"
+            for i, r in enumerate(songs_rows)
+        ]
+        commentary = pick_random(LEADERBOARD_SONGS_COMMENTARY)
+        embed.add_field(
+            name="most songs queued",
+            value="\n".join(lines) + f"\n\n{commentary}",
+            inline=False,
+        )
+    else:
+        embed.add_field(
+            name="most songs queued",
+            value=pick_random(LEADERBOARD_EMPTY),
+            inline=False,
+        )
+
+    # Section 2: Longest streak (guild-active users by global streak, D-15)
+    if streaks_rows:
+        lines = [
+            f"{i + 1}. {r['username']} — {r['longest_streak']} days"
+            for i, r in enumerate(streaks_rows)
+        ]
+        commentary = pick_random(LEADERBOARD_STREAK_COMMENTARY)
+        embed.add_field(
+            name="longest streak",
+            value="\n".join(lines) + f"\n\n{commentary}",
+            inline=False,
+        )
+    else:
+        embed.add_field(
+            name="longest streak",
+            value="no streaks to speak of.",
+            inline=False,
+        )
+
+    # Section 3: Most-skipped songs (titles, per-guild, D-12)
+    if skips_rows:
+        lines = [
+            f"{i + 1}. {r['title']} — {r['skip_count']} skips"
+            for i, r in enumerate(skips_rows)
+        ]
+        commentary = pick_random(LEADERBOARD_SKIPS_COMMENTARY)
+        embed.add_field(
+            name="most-skipped songs",
+            value="\n".join(lines) + f"\n\n{commentary}",
+            inline=False,
+        )
+    else:
+        embed.add_field(
+            name="most-skipped songs",
+            value="nobody's skipped enough to make the board. yet.",
+            inline=False,
+        )
+
+    return embed
+
+
+def stats_embed(
+    daily: dict,
+    rpm_usage: int,
+    rpm_max: int,
+    images_today_global: int,
+    metrics: dict,
+) -> discord.Embed:
+    """Build the owner-only /stats embed (OPS-01/OPS-03, D-22/D-24/D-25).
+
+    Shows today-only window (D-22) for activity stats, Gemini RPM headroom
+    (D-24), image-cap usage, and bot-state. Rich metrics live here ONLY —
+    never on the public /health endpoint (D-27).
+    Total fields: 14 (well under Discord's 25-field limit).
+    """
+    embed = discord.Embed(title="dexter system status", color=COLOR_STATS)
+
+    # Today's activity (D-22)
+    embed.add_field(name="commands today", value=str(daily.get("total_commands", 0)), inline=True)
+    embed.add_field(name="songs played", value=str(daily.get("total_songs_played", 0)), inline=True)
+    embed.add_field(name="ai queries", value=str(daily.get("total_ai_queries", 0)), inline=True)
+    embed.add_field(name="images generated", value=str(daily.get("total_images_generated", 0)), inline=True)
+    embed.add_field(name="errors logged", value=str(daily.get("total_errors", 0)), inline=True)
+
+    # Gemini quota panel (D-24)
+    embed.add_field(
+        name="gemini rpm",
+        value=f"{rpm_usage}/{rpm_max}",
+        inline=True,
+    )
+    embed.add_field(
+        name="images today (all users)",
+        value=f"{images_today_global} total",
+        inline=True,
+    )
+
+    # Bot state
+    uptime_min = int(metrics.get("uptime_seconds", 0) // 60)
+    embed.add_field(name="uptime", value=f"{uptime_min}m", inline=True)
+    embed.add_field(name="guilds", value=str(metrics.get("guild_count", 0)), inline=True)
+    embed.add_field(name="voice connections", value=str(metrics.get("voice_count", 0)), inline=True)
+    embed.add_field(name="shards", value=str(metrics.get("shard_count", 1)), inline=True)
+
+    # DB + gateway health
+    db_status = "ok" if metrics.get("db_ok") else "unreachable"
+    gw_status = "ready" if metrics.get("gateway_ready") else "not ready"
+    embed.add_field(name="database", value=db_status, inline=True)
+    embed.add_field(name="gateway", value=gw_status, inline=True)
+
+    # Phase-6 hooks (D-29) — left as comments until Phase 6 instruments the pipeline
+    # embed.add_field(name="cache hit rate", value="(phase 6)", inline=True)
+    # embed.add_field(name="time to first audio", value="(phase 6)", inline=True)
+
+    # Host dashboard link — no in-process psutil (D-30)
+    embed.set_footer(text="host metrics: koyeb dashboard | neon console")
+
+    return embed

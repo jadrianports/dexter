@@ -143,3 +143,31 @@ NOTHING_PLAYING: list[str] = [
     "i can't do that, nothing is playing.",
     "there's no track to work with. try /play first.",
 ]
+
+# --- Phase 8: Leaderboard commentary pools ---
+
+LEADERBOARD_SONGS_COMMENTARY: list[str] = [
+    "the bar was low. they tripped over it anyway.",
+    "congratulations on having the least life outside this bot.",
+    "first place. deeply concerning, but sure.",
+    "sheer volume. not taste. volume.",
+]
+
+LEADERBOARD_STREAK_COMMENTARY: list[str] = [
+    "dedication. unfortunately.",
+    "every day. without fail. why.",
+    "consecutive days of this. respect, i guess.",
+    "they show up. i can't say the same for everyone.",
+]
+
+LEADERBOARD_SKIPS_COMMENTARY: list[str] = [
+    "these songs had exactly one chance.",
+    "rejected, every time. i understand the feeling.",
+    "the skip button exists for a reason. these songs found it.",
+    "hall of shame. they know what they did.",
+]
+
+LEADERBOARD_EMPTY: list[str] = [
+    "nobody's done anything worth ranking yet.",
+    "new server energy. nobody's committed to anything yet.",
+]
