@@ -36,3 +36,27 @@ class TestRateLimiter:
         await asyncio.sleep(0.15)
         await limiter.acquire(priority=1)
         assert len(limiter._timestamps) == 1
+
+    @pytest.mark.asyncio
+    async def test_rpm_usage_getter(self):
+        """After N acquire(priority=1) calls, rpm_usage() must return N (D-24/OPS-03)."""
+        limiter = _RateLimiter(max_requests=5, window_seconds=60)
+        await limiter.acquire(priority=1)
+        await limiter.acquire(priority=1)
+        await limiter.acquire(priority=1)
+        assert limiter.rpm_usage() == 3, (
+            f"Expected rpm_usage() == 3 after 3 acquires, got {limiter.rpm_usage()}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_rpm_headroom_getter(self):
+        """rpm_headroom() must equal max_requests - rpm_usage(), floored at 0 (D-24/OPS-03)."""
+        max_req = 5
+        limiter = _RateLimiter(max_requests=max_req, window_seconds=60)
+        await limiter.acquire(priority=1)
+        await limiter.acquire(priority=1)
+        usage = limiter.rpm_usage()
+        headroom = limiter.rpm_headroom()
+        assert headroom == max_req - usage, (
+            f"Expected rpm_headroom() == {max_req - usage}, got {headroom}"
+        )
