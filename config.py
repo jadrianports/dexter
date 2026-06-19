@@ -61,7 +61,7 @@ STREAK_TIMEZONE = os.getenv("STREAK_TIMEZONE") or "America/New_York"  # IANA tz;
 UNPROMPTED_ROAST_CHANCE = 0.30          # 30% on voice join/leave
 LATE_NIGHT_ROAST_CHANCE = 0.50          # 50% on 1-5am joins
 AMBIENT_ROAST_CEILING_SECONDS = 300     # max 1 ambient roast per 5 min per user
-ROAST_COOLDOWN_SECONDS = 300            # same value, alias for clarity
+ROAST_COOLDOWN_SECONDS = 30             # Phase 8: /roast slash command per-invoker cooldown (D-04)
 REPEAT_SONG_ROAST_THRESHOLD = 3         # plays same song ≥3× today → always roast
 LATE_NIGHT_HOURS = (1, 5)               # tuple[int,int]: hours 1-5 inclusive
 
@@ -124,6 +124,10 @@ PLAYLIST_NAME_MAX_LENGTH = 60
 SEEK_COOLDOWN_SECONDS = 2
 FILTER_COOLDOWN_SECONDS = 5
 FAVORITE_COOLDOWN_SECONDS = 2
+
+
+# --- Phase 8: Social & Ops ---
+LEADERBOARD_TOP_N = 5               # top-N per leaderboard section (D-13)
 
 
 def sanitize_database_url(dsn: str) -> str:

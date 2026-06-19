@@ -54,6 +54,23 @@ class _RateLimiter:
         while self._timestamps and (now - self._timestamps[0]) >= self._window:
             self._timestamps.popleft()
 
+    def rpm_usage(self) -> int:
+        """Return the number of requests in the current sliding window.
+
+        Calls _clean() to prune stale timestamps before counting. Synchronous —
+        no asyncio.Lock acquire (Pitfall 4). The benign read race (off-by-1 if
+        acquire() fires concurrently) is acceptable for a dashboard display (D-24).
+        """
+        self._clean()
+        return len(self._timestamps)
+
+    def rpm_headroom(self) -> int:
+        """Return remaining request slots in the current sliding window.
+
+        Floored at 0 so callers never see a negative value.
+        """
+        return max(0, self._max_requests - self.rpm_usage())
+
     async def acquire(self, priority: int = 1) -> None:
         """Acquire a rate limit slot.
 
@@ -111,6 +128,16 @@ class GeminiService:
             ),
         )
         self._rate_limiter = _RateLimiter()
+
+    @property
+    def rpm_usage(self) -> int:
+        """Current requests in the sliding window (for /stats Gemini quota panel, D-24)."""
+        return self._rate_limiter.rpm_usage()
+
+    @property
+    def rpm_headroom(self) -> int:
+        """Remaining request slots in the sliding window (D-24)."""
+        return self._rate_limiter.rpm_headroom()
 
     async def chat(
         self,
