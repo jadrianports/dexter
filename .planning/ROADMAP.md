@@ -32,7 +32,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 - [~] **Phase 5: Ship It Live** — code-complete + code-verified; ⏸ LIVE 24/7 deploy PARKED (YouTube blocks datacenter IPs → cloud non-viable for free; no credit card; no Raspberry Pi yet). Bot runs on user PC (residential IP) on demand → Neon Singapore. Resume when a Pi / always-on residential host is acquired.
 - [ ] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock
 - [→] **Phase 7: Player UX & Filters** (NEXT) — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects
-- [x] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility (completed 2026-06-19)
+- [x] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility (code complete + verified 12/12 on 2026-06-19; live UAT pending → 08-HUMAN-UAT.md)
 
 ## Phase Details
 
@@ -121,4 +121,4 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 5. Ship It Live | v1.1 | 3/3 | Code complete — live deploy ⏸ PARKED (YT datacenter-IP block; resume on a Pi) | - |
 | 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete   | 2026-06-18 |
-| 8. Social & Ops | v1.1 | 3/3 | Complete   | 2026-06-19 |
+| 8. Social & Ops | v1.1 | 3/3 | Code complete + verified — live UAT pending (08-HUMAN-UAT) | 2026-06-19 |

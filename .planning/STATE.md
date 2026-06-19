@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: verifying
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-06-19T07:55:04.606Z"
-last_activity: 2026-06-19 -- Completed 08-02 (/roast command)
+status: awaiting-uat
+stopped_at: Phase 08 executed + verified (human_needed) — live UAT pending
+last_updated: "2026-06-19T08:09:49Z"
+last_activity: 2026-06-19 -- Phase 08 social-ops code complete + verified 12/12; 9 live-UAT items in 08-HUMAN-UAT.md
 progress:
   total_phases: 4
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 08 (social-ops) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-06-19 -- Completed 08-02 (/roast command)
+Phase: 08 (social-ops) — CODE COMPLETE + VERIFIED (human_needed)
+Plan: 3 of 3 (all complete)
+Status: All 3 plans done; verifier 12/12 must-haves; 9 live-behavioral items pending in 08-HUMAN-UAT.md
+Last activity: 2026-06-19 -- Phase 08 social-ops verified (human_needed)
 
 ## Accumulated Context
 
