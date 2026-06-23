@@ -1,7 +1,9 @@
 ---
 phase: 07-player-ux-filters
 verified: 2026-06-19T00:00:00Z
-status: human_needed
+uat_passed: 2026-06-24T00:00:00Z
+status: passed
+uat_outcome: "Live UAT complete (07-HUMAN-UAT.md): 10 passed, 1 issue (stale now-playing buttons on track advance) FIXED in code + 6 regression tests, 2 /seek checks skipped (accepted). User marked passed 2026-06-24. Follow-up: quick live re-confirm of skip->refresh UX on next run."
 score: 13/13
 overrides_applied: 0
 human_verification:

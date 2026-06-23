@@ -30,9 +30,9 @@
 
 ### Player UX & Filters (`PLAYER`)
 
-- [ ] **PLAYER-01**: The now-playing embed has interactive control buttons (play/pause, skip, loop, shuffle, stop)
+- [x] **PLAYER-01**: The now-playing embed has interactive control buttons (play/pause, skip, loop, shuffle, stop)
 - [x] **PLAYER-02**: User can `/seek <time>` within the current track
-- [ ] **PLAYER-03**: User can `/previous` to replay the prior track
+- [x] **PLAYER-03**: User can `/previous` to replay the prior track
 - [x] **PLAYER-04**: User can `/jump <position>` to a specific queue slot
 - [x] **PLAYER-05**: User can save and replay personal favorite songs
 - [x] **PLAYER-06**: User can save and load named playlists (queue snapshots)
@@ -97,9 +97,9 @@ Which phases cover which requirements. Phase numbering continues from v1.0 (last
 | PERF-05 | Phase 6 | Complete |
 | PERF-06 | Phase 6 | Complete |
 | PERF-07 | Phase 6 | Complete |
-| PLAYER-01 | Phase 7 | Pending |
+| PLAYER-01 | Phase 7 | Complete |
 | PLAYER-02 | Phase 7 | Complete |
-| PLAYER-03 | Phase 7 | Pending |
+| PLAYER-03 | Phase 7 | Complete |
 | PLAYER-04 | Phase 7 | Complete |
 | PLAYER-05 | Phase 7 | Complete |
 | PLAYER-06 | Phase 7 | Complete |

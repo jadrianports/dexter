@@ -31,8 +31,8 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 - [~] **Phase 5: Ship It Live** — code-complete + code-verified; ⏸ LIVE 24/7 deploy PARKED (YouTube blocks datacenter IPs → cloud non-viable for free; no credit card; no Raspberry Pi yet). Bot runs on user PC (residential IP) on demand → Neon Singapore. Resume when a Pi / always-on residential host is acquired.
 - [x] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock — code complete 2026-06-24; live verification pending
-- [→] **Phase 7: Player UX & Filters** (NEXT) — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects
-- [x] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility (code complete + verified 12/12 on 2026-06-19; live UAT pending → 08-HUMAN-UAT.md)
+- [x] **Phase 7: Player UX & Filters** — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects (verified live 2026-06-24; 10 passed + 1 issue fixed, 2 /seek skipped → 07-HUMAN-UAT.md)
+- [x] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility (verified live 2026-06-24; 7 passed, Healthchecks.io dead-man check deferred to 24/7 deploy → 08-HUMAN-UAT.md)
 
 ## Phase Details
 

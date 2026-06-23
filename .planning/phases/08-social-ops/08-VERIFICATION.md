@@ -1,7 +1,9 @@
 ---
 phase: 08-social-ops
 verified: 2026-06-19T00:00:00Z
-status: human_needed
+uat_passed: 2026-06-24T00:00:00Z
+status: passed
+uat_outcome: "Live UAT complete (08-HUMAN-UAT.md): 7 passed, 0 issues, 1 cosmetic gap (stale Koyeb /stats footer link) FIXED, 1 skipped + 1 blocked (Healthchecks.io dead-man switch — needs a 24/7 deploy, accepted). User marked passed 2026-06-24."
 score: 12/12 must-haves verified (code-level)
 overrides_applied: 0
 human_verification:
