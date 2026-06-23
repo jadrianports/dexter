@@ -210,6 +210,7 @@ def stats_embed(
     rpm_max: int,
     images_today_global: int,
     metrics: dict,
+    perf_metrics: dict | None = None,
 ) -> discord.Embed:
     """Build the owner-only /stats embed (OPS-01/OPS-03, D-22/D-24/D-25).
 
@@ -252,9 +253,25 @@ def stats_embed(
     embed.add_field(name="database", value=db_status, inline=True)
     embed.add_field(name="gateway", value=gw_status, inline=True)
 
-    # Phase-6 hooks (D-29) — left as comments until Phase 6 instruments the pipeline
-    # embed.add_field(name="cache hit rate", value="(phase 6)", inline=True)
-    # embed.add_field(name="time to first audio", value="(phase 6)", inline=True)
+    # Phase-6 pipeline instrumentation (PERF-06 / D-18)
+    # Rendered only when perf_metrics is provided (guard ensures backward-compat).
+    # No Oracle/CPU label — baselines against actual run environment (D-19).
+    if perf_metrics:
+        embed.add_field(
+            name="cache hit rate",
+            value=f"{perf_metrics['cache_hit_rate']:.0f}%",
+            inline=True,
+        )
+        embed.add_field(
+            name="avg time-to-first-audio",
+            value=f"{perf_metrics['avg_ttfa_s']:.1f}s",
+            inline=True,
+        )
+        embed.add_field(
+            name="avg download",
+            value=f"{perf_metrics['avg_download_s']:.1f}s",
+            inline=True,
+        )
 
     # Host dashboard link — no in-process psutil (D-30)
     embed.set_footer(text="host metrics: neon console")

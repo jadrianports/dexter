@@ -199,7 +199,14 @@ class OpsCog(commands.Cog):
             )
             return
 
-        embed = embeds.stats_embed(daily, rpm, config.GEMINI_RPM_LIMIT, images, metrics)
+        # Phase 6: surface rolling perf metrics in /stats (PERF-06 / D-18).
+        # getattr guard: bot booted without perf_metrics (e.g. tests) never crashes.
+        perf_summary = (
+            self.bot.perf_metrics.summary()
+            if getattr(self.bot, "perf_metrics", None) is not None
+            else None
+        )
+        embed = embeds.stats_embed(daily, rpm, config.GEMINI_RPM_LIMIT, images, metrics, perf_metrics=perf_summary)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
