@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import random
 import time
 from dataclasses import dataclass, field
@@ -83,6 +84,9 @@ class MusicQueue:
         self.paused_at: float | None = None
         # Active audio filter preset (Phase 7). "off" = no filter.
         self.active_filter: str = "off"
+        # Phase 6: prefetch state — cleared on queue clear (PERF-01, D-04)
+        self._prefetch_video_id: str | None = None   # video_id currently being prefetched
+        self._prefetch_task: asyncio.Task | None = None  # in-flight prefetch task
 
     def add(self, track: Track) -> int:
         """Add a track to the end of the queue. Returns its index.
@@ -223,6 +227,9 @@ class MusicQueue:
         self.active_filter = "off"
         self.playback_started_at = None
         self.paused_at = None
+        # Phase 6: prefetch state reset
+        self._prefetch_video_id = None
+        self._prefetch_task = None
 
     def upcoming(self) -> list[Track]:
         """Return tracks after the current one."""

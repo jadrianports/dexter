@@ -126,6 +126,15 @@ FILTER_COOLDOWN_SECONDS = 5
 FAVORITE_COOLDOWN_SECONDS = 2
 
 
+# --- Phase 6: Speed & Caching ---
+PREFETCH_TIMEOUT_SECONDS = 45       # generous budget for background prefetch (D-10)
+RES_CACHE_TTL_DAYS = 14             # resolution cache TTL in days (D-07)
+SPONSORBLOCK_CATEGORIES: frozenset = frozenset({
+    "sponsor", "selfpromo", "intro", "outro", "interaction", "music_offtopic"
+})                                   # D-14 SponsorBlock categories for download-time removal
+PERF_ROLLING_WINDOW = 50            # rolling aggregate sample count (D-18)
+
+
 # --- Phase 8: Social & Ops ---
 LEADERBOARD_TOP_N = 5               # top-N per leaderboard section (D-13)
 

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 import asyncpg
@@ -148,6 +149,16 @@ CREATE TABLE IF NOT EXISTS user_playlists (
 CREATE INDEX IF NOT EXISTS idx_playlists_user ON user_playlists(user_id, updated_at DESC);
 
 ALTER TABLE bot_daily_stats ADD COLUMN IF NOT EXISTS total_errors INTEGER DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS resolution_cache (
+    query_key   TEXT PRIMARY KEY,
+    video_id    TEXT NOT NULL,
+    title       TEXT,
+    created_at  TIMESTAMPTZ DEFAULT now(),
+    expires_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_rescache_expires ON resolution_cache(expires_at);
 """
 
 
@@ -733,3 +744,64 @@ async def count_playlists(pool: asyncpg.Pool, *, user_id: str) -> int:
             user_id,
         )
     return int(row["cnt"]) if row else 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: Resolution cache helpers (PERF-03, D-07/D-09, T-06-01)
+# ---------------------------------------------------------------------------
+
+
+def normalize_search_query(q: str) -> str:
+    """Strip, lowercase, and collapse internal whitespace of a search query.
+
+    Pure function — no DB access. Used as the resolution-cache key so that
+    queries like '  Lo-Fi   Beats  ' and 'lo-fi beats' share the same cache
+    entry. All cache writes and reads go through this function before touching
+    the DB (T-06-01 / ASVS V5).
+    """
+    return re.sub(r"\s+", " ", q.strip().lower())
+
+
+async def get_resolution_cache(pool: asyncpg.Pool, *, query_key: str) -> dict | None:
+    """Fetch a cached resolution for a normalized query key.
+
+    Returns dict(video_id, title) if a non-expired row exists, else None.
+    The WHERE clause filters on expires_at > now() so stale rows are invisible
+    without a background cleanup job (D-07 TTL design).
+    All parameters use $N positional binding — no string interpolation (T-06-01).
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT video_id, title FROM resolution_cache"
+            " WHERE query_key = $1 AND expires_at > now()",
+            query_key,
+        )
+    return dict(row) if row else None
+
+
+async def set_resolution_cache(
+    pool: asyncpg.Pool,
+    *,
+    query_key: str,
+    video_id: str,
+    title: str | None,
+    ttl_days: int,
+) -> None:
+    """Upsert a resolution cache entry, refreshing the TTL on conflict (Pitfall 5).
+
+    The ON CONFLICT clause updates video_id, title, AND expires_at so that a
+    frequently-used query never expires while it is actively being resolved.
+    TTL is computed in Python and passed as a $N param — never embedded in SQL
+    (Pitfall 7 / T-06-01 / ASVS V5).
+    """
+    expires = datetime.now(timezone.utc) + timedelta(days=ttl_days)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO resolution_cache (query_key, video_id, title, expires_at)"
+            " VALUES ($1, $2, $3, $4)"
+            " ON CONFLICT (query_key) DO UPDATE SET"
+            "  video_id = EXCLUDED.video_id,"
+            "  title = EXCLUDED.title,"
+            "  expires_at = EXCLUDED.expires_at",
+            query_key, video_id, title, expires,
+        )
