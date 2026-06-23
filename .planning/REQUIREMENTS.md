@@ -21,12 +21,12 @@
 ### Speed & Caching (`PERF`)
 
 - [ ] **PERF-01**: The next track is prefetched into cache during current playback (no inter-song download gap)
-- [ ] **PERF-02**: Cached audio uses native-opus copy (no opus→opus re-encode) when the source is already opus
+- [x] **PERF-02**: Cached audio uses native-opus copy (no opus→opus re-encode) when the source is already opus
 - [x] **PERF-03**: A resolution cache maps repeat queries → `video_id` without re-searching YouTube
 - [ ] **PERF-04**: Download attempts honor `DOWNLOAD_TIMEOUT_SECONDS`, falling back to stream on timeout
 - [ ] **PERF-05**: Cache eviction is play-frequency based and does not depend on filesystem `atime`
 - [x] **PERF-06**: Pipeline timing is instrumented (search, download, transcode, time-to-first-audio, cache-hit rate) and observable
-- [ ] **PERF-07**: SponsorBlock segments (sponsor / intro / non-music) are skipped on YouTube-video playback
+- [x] **PERF-07**: SponsorBlock segments (sponsor / intro / non-music) are skipped on YouTube-video playback
 
 ### Player UX & Filters (`PLAYER`)
 
@@ -91,12 +91,12 @@ Which phases cover which requirements. Phase numbering continues from v1.0 (last
 | DEPLOY-07 | Phase 5 | Pending |
 | DEPLOY-08 | Phase 5 | Pending |
 | PERF-01 | Phase 6 | Pending |
-| PERF-02 | Phase 6 | Pending |
+| PERF-02 | Phase 6 | Complete |
 | PERF-03 | Phase 6 | Complete |
 | PERF-04 | Phase 6 | Pending |
 | PERF-05 | Phase 6 | Pending |
 | PERF-06 | Phase 6 | Complete |
-| PERF-07 | Phase 6 | Pending |
+| PERF-07 | Phase 6 | Complete |
 | PLAYER-01 | Phase 7 | Pending |
 | PLAYER-02 | Phase 7 | Complete |
 | PLAYER-03 | Phase 7 | Pending |

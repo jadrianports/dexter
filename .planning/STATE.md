@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-06-23T20:07:10.439Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-06-23T20:23:17.785Z"
 last_activity: 2026-06-23 -- Phase 06 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 14
-  completed_plans: 11
+  completed_plans: 12
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 ## Current Position
 
 Phase: 06 (speed-caching) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-23 -- Phase 06 execution started
 
@@ -73,6 +73,8 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase ?]: Phase 6-01: SCHEMA_SQL DDL-only (no dollar-N params) for resolution_cache - asyncpg multi-statement path requires it (Pitfall 1/7)
 - [Phase ?]: Phase 6-01: set_resolution_cache ON CONFLICT updates expires_at on re-write to keep TTL fresh (Pitfall 5)
 - [Phase ?]: Phase 6-01: conftest pool fixture pytest.skip on asyncpg.create_pool failure instead of raising (Rule 1 fix)
+- [Phase ?]: Phase 06-02: DOWNLOAD_OPTS 3-PP order: SponsorBlock(when=after_filter) first, FFmpegExtractAudio second, ModifyChapters last (Pitfall 1 / Anti-Pattern in 06-RESEARCH.md)
+- [Phase ?]: Phase 06-02: copy-when-opus NOT rewritten — FFmpegExtractAudioPP already handles natively; download() only adds postprocessor_hooks for codec-path logging (06-RESEARCH.md critical finding / D-01)
 
 ### Pending Todos
 
@@ -105,8 +107,8 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-23T20:07:10.409Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-06-23T20:23:17.775Z
+Stopped at: Completed 06-02-PLAN.md
 Next:
 
   Execute 08-03-PLAN.md (/leaderboard, /stats, degraded /health).
@@ -126,3 +128,4 @@ Next:
 | Phase 08-social-ops P02 | 12min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
 | Phase 08-social-ops P03 | 18min | 3 tasks | 6 files |
 | Phase 06 P01 | 15 min | 2 tasks | 6 files |
+| Phase 06-speed-caching P02 | 4 min | 2 tasks | 2 files |
