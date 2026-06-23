@@ -257,6 +257,6 @@ def stats_embed(
     # embed.add_field(name="time to first audio", value="(phase 6)", inline=True)
 
     # Host dashboard link — no in-process psutil (D-30)
-    embed.set_footer(text="host metrics: koyeb dashboard | neon console")
+    embed.set_footer(text="host metrics: neon console")
 
     return embed

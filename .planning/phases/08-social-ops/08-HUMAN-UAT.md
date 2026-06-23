@@ -73,7 +73,7 @@ blocked: 1
 ## Gaps
 
 - truth: "User-visible host links in /stats reflect the actual deployment"
-  status: failed
+  status: resolved
   reason: "stats_embed footer links 'koyeb dashboard | neon console', but the project pivoted off Koyeb (YouTube datacenter-IP block) to self-host on PC + Neon. The Koyeb link is stale/misleading; only 'neon console' is valid."
   severity: cosmetic
   test: 6
@@ -83,4 +83,5 @@ blocked: 1
       issue: "stats_embed footer references a dead Koyeb dashboard"
   missing:
     - "Drop the Koyeb dashboard link from the stats_embed footer (and optionally scrub other Koyeb references: docker-compose.yml comments, .env.example) now that hosting is PC + Neon"
+  resolution: "Fixed 2026-06-24 — footer now reads 'host metrics: neon console' (Koyeb link removed). No tests asserted on footer text. Broader Koyeb-reference scrub (bot.py, config.py, Dockerfile, .env.example, utils/logger.py, docs/DEPLOY-KOYEB.md) deferred — pending decision on whether Koyeb is abandoned or parked."
   debug_session: ""
