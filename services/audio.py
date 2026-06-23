@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -100,8 +101,18 @@ class AudioService:
             opts = _build_ffmpeg_opts(seek_seconds, ffmpeg_filter)
             return discord.FFmpegOpusAudio(str(cached), **opts)
 
-        # 2. Try downloading to cache
-        path = await self.youtube_service.async_download(track.video_id, track.url)
+        # 2. Try downloading to cache (bounded by DOWNLOAD_TIMEOUT_SECONDS — PERF-04 / D-10/D-11)
+        try:
+            path = await asyncio.wait_for(
+                self.youtube_service.async_download(track.video_id, track.url),
+                timeout=config.DOWNLOAD_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            log.warning(
+                "download timeout after %ss video_id=%s, falling back to stream",
+                config.DOWNLOAD_TIMEOUT_SECONDS, track.video_id,
+            )
+            path = None
         if path and path.exists():
             if not use_opts:
                 return discord.FFmpegOpusAudio(str(path))
@@ -121,8 +132,13 @@ class AudioService:
             log.error(f"Stream fallback also failed for {track.video_id}: {e}")
             raise RuntimeError(f"Track unavailable: {track.title}") from e
 
-    def cleanup_cache(self) -> None:
-        """Delete oldest cached files if total cache exceeds max size."""
+    async def cleanup_cache(self, pool, protected_video_ids: set[str]) -> None:
+        """Delete least-frequently-played cached files when total cache exceeds max size.
+
+        Eviction order: lowest play_count first (sourced from song_history),
+        tie-break by oldest mtime. Files whose video_id is in protected_video_ids
+        (currently playing, queued, or prefetched) are NEVER evicted (PERF-05 / D-12/D-13).
+        """
         files = list(self.cache_dir.glob("*.opus"))
         if not files:
             return
@@ -133,13 +149,40 @@ class AudioService:
         if total_bytes <= max_bytes:
             return
 
-        # Sort by last access time (oldest first)
-        files.sort(key=lambda f: f.stat().st_atime)
+        # Fetch play counts for all URLs in song_history
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT url, COUNT(*) AS plays FROM song_history GROUP BY url"
+            )
+
+        # Build play_count dict keyed by video_id extracted from YouTube URLs
+        play_counts: dict[str, int] = {}
+        for row in rows:
+            url = row["url"]
+            if "v=" in url:
+                vid = url.split("v=")[-1].split("&")[0]
+                play_counts[vid] = row["plays"]
+
+        # Sort: lowest play_count first; tie-break by oldest mtime.
+        # Protected files sort to float("inf") so they are never reached.
+        def eviction_key(f: Path):
+            vid = f.stem
+            if vid in protected_video_ids:
+                return (float("inf"), 0)
+            return (play_counts.get(vid, 0), f.stat().st_mtime)
+
+        files.sort(key=eviction_key)
 
         for f in files:
             if total_bytes <= max_bytes:
                 break
+            vid = f.stem
+            if vid in protected_video_ids:
+                continue
             size = f.stat().st_size
             f.unlink()
             total_bytes -= size
-            log.info(f"Cache cleanup: deleted {f.name} ({size // 1024}KB)")
+            log.info(
+                "cache evict video_id=%s play_count=%d size=%dKB",
+                vid, play_counts.get(vid, 0), size // 1024,
+            )
