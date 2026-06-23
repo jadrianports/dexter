@@ -73,12 +73,18 @@ Full phase details, success criteria, decisions, and deferred items archived in
   3. Queuing the same search query twice within a session hits the resolution cache — the second `/play` shows a cache-hit in instrumentation output with no YouTube re-search
   4. A download that exceeds `DOWNLOAD_TIMEOUT_SECONDS` falls back to the stream URL rather than hanging indefinitely, and the bot continues playback
   5. Cache eviction removes least-played tracks (lowest song_history play_count, not oldest-by-atime) when the `AUDIO_CACHE_MAX_MB` limit is reached (512MB per K-07; the 2GB figure in CLAUDE.md is stale), observable in eviction log output; SponsorBlock segments are silently skipped during YouTube video playback
-
-**Plans**: 4 plans (3 waves)
+**Plans**: 4 plans (3 waves)
+**Wave 1**
 
 - [ ] 06-01-PLAN.md — Foundation: Phase-6 config constants, `resolution_cache` table + asyncpg helpers (`normalize_search_query`/`get`/`set`), `PerfMetrics` rolling aggregate, queue prefetch fields, Wave-0 test scaffold (`tests/test_phase6_perf.py` + conftest teardown) — `config.py`, `database.py`, `models/queue.py`, `services/metrics.py`, `tests/conftest.py`, `tests/test_phase6_perf.py` (PERF-03, PERF-06) — Wave 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 06-02-PLAN.md — Download pipeline: SponsorBlock 2-PP chain (`when=after_filter`) + codec-path logging via `postprocessor_hooks` in `DOWNLOAD_OPTS`/`download()` — `services/youtube.py`, `tests/test_youtube.py` (PERF-02, PERF-07) — Wave 2
 - [ ] 06-03-PLAN.md — Audio/cache layer: `DOWNLOAD_TIMEOUT_SECONDS` via `asyncio.wait_for` → stream fallback in `get_source`; LFU `cleanup_cache(pool, protected_video_ids)` rewrite — `services/audio.py`, `tests/test_audio.py` (PERF-04, PERF-05) — Wave 2
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 06-04-PLAN.md — Controller wiring: fire-and-forget `_prefetch_next_track` (generation-guarded) + trigger, resolution-cache intercept in `play()`, `PerfMetrics` into `/stats` embed — `cogs/music.py`, `bot.py`, `utils/embeds.py`, `cogs/ops.py`, `tests/test_phase6_perf.py` (PERF-01, PERF-03, PERF-06) — Wave 3
 
 ### Phase 7: Player UX & Filters
