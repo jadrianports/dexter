@@ -154,8 +154,12 @@ class TestDownloadOpts:
 class TestCodecLogging:
     """Tests for codec-path logging via postprocessor_hooks in download() (PERF-02/D-03)."""
 
-    def _make_ydl_mock(self, hook_payload: dict):
-        """Build a YoutubeDL context-manager mock that fires the hook on .download()."""
+    def _make_ydl_mock(self, hook_payload: dict, opus_file_to_create=None):
+        """Build a YoutubeDL context-manager mock that fires the hook on .download().
+
+        ``opus_file_to_create`` — if provided, the mock creates this file during .download()
+        to simulate yt-dlp writing the cache file (so the post-download existence check passes).
+        """
         mock_ydl = MagicMock()
         captured_opts = {}
 
@@ -164,6 +168,9 @@ class TestCodecLogging:
             return mock_ydl
 
         def fake_download(urls):
+            # Simulate yt-dlp writing the output file before firing hooks
+            if opus_file_to_create is not None:
+                opus_file_to_create.touch()
             for hook_fn in captured_opts.get("postprocessor_hooks", []):
                 hook_fn(hook_payload)
 
@@ -179,16 +186,14 @@ class TestCodecLogging:
         import services.youtube as yt_mod
 
         video_id = "test_copy_vid"
+        opus_file = tmp_path / f"{video_id}.opus"
         hook_payload = {
             "postprocessor": "FFmpegExtractAudio",
             "status": "finished",
             "info_dict": {"acodec": "opus"},
         }
-        fake_init, _ = self._make_ydl_mock(hook_payload)
-
-        # Point cache dir to tmp_path so the existence check passes
-        opus_file = tmp_path / f"{video_id}.opus"
-        opus_file.touch()
+        # File must NOT exist before download; the mock creates it inside fake_download
+        fake_init, _ = self._make_ydl_mock(hook_payload, opus_file_to_create=opus_file)
 
         with patch.object(yt_mod, "YoutubeDL", side_effect=fake_init), \
              patch.object(yt_mod.config, "AUDIO_CACHE_DIR", tmp_path), \
@@ -207,15 +212,13 @@ class TestCodecLogging:
         import services.youtube as yt_mod
 
         video_id = "test_transcode_vid"
+        opus_file = tmp_path / f"{video_id}.opus"
         hook_payload = {
             "postprocessor": "FFmpegExtractAudio",
             "status": "finished",
             "info_dict": {"acodec": "aac"},
         }
-        fake_init, _ = self._make_ydl_mock(hook_payload)
-
-        opus_file = tmp_path / f"{video_id}.opus"
-        opus_file.touch()
+        fake_init, _ = self._make_ydl_mock(hook_payload, opus_file_to_create=opus_file)
 
         with patch.object(yt_mod, "YoutubeDL", side_effect=fake_init), \
              patch.object(yt_mod.config, "AUDIO_CACHE_DIR", tmp_path), \

@@ -64,10 +64,22 @@ DOWNLOAD_OPTS = {
     "format": "bestaudio/best",
     "postprocessors": [
         {
+            "key": "SponsorBlock",
+            "categories": config.SPONSORBLOCK_CATEGORIES,
+            "when": "after_filter",    # REQUIRED: populates chapters before ModifyChapters runs (Pitfall 1)
+        },
+        {
             "key": "FFmpegExtractAudio",
             "preferredcodec": "opus",
-            "preferredquality": config.AUDIO_QUALITY,
-        }
+            "preferredquality": config.AUDIO_QUALITY,   # unchanged; no effect on copy path (D-01)
+        },
+        {
+            "key": "ModifyChapters",
+            "remove_sponsor_segments": config.SPONSORBLOCK_CATEGORIES,
+            "remove_chapters_patterns": [],
+            "remove_ranges": [],
+            "force_keyframes": False,
+        },
     ],
     "outtmpl": str(config.AUDIO_CACHE_DIR / "%(id)s.%(ext)s"),
     "quiet": True,
@@ -166,11 +178,26 @@ class YouTubeService:
         if cached.exists():
             return cached
 
+        # Codec-path detection closure (D-03): tracks whether FFmpegExtractAudio
+        # performed a stream-copy (opus source) or a transcode (non-opus source).
+        _codec_path = {"value": "unknown"}
+
+        def _pp_hook(d: dict) -> None:
+            if d.get("postprocessor") == "FFmpegExtractAudio" and d.get("status") == "finished":
+                acodec = (d.get("info_dict") or {}).get("acodec", "unknown")
+                _codec_path["value"] = "copy" if acodec == "opus" else "transcode"
+
+        opts = {**DOWNLOAD_OPTS, "postprocessor_hooks": [_pp_hook]}
         try:
-            with YoutubeDL(DOWNLOAD_OPTS) as ydl:
+            t0 = time.monotonic()
+            with YoutubeDL(opts) as ydl:
                 ydl.download([url])
+            elapsed = time.monotonic() - t0
             if cached.exists():
-                log.info(f"Downloaded {video_id} to cache")
+                log.info(
+                    "download complete video_id=%s codec_path=%s elapsed=%.2fs",
+                    video_id, _codec_path["value"], elapsed,
+                )
                 return cached
             return None
         except Exception as e:
@@ -185,10 +212,15 @@ class YouTubeService:
             if not update_ytdlp():
                 return None
             try:
-                with YoutubeDL(DOWNLOAD_OPTS) as ydl:
+                t0 = time.monotonic()
+                with YoutubeDL(opts) as ydl:
                     ydl.download([url])
+                elapsed = time.monotonic() - t0
                 if cached.exists():
-                    log.info(f"Downloaded {video_id} after yt-dlp update")
+                    log.info(
+                        "download complete video_id=%s codec_path=%s elapsed=%.2fs",
+                        video_id, _codec_path["value"], elapsed,
+                    )
                     return cached
             except Exception as retry_error:
                 log.error(f"Retry after update failed for {video_id}: {retry_error}")
