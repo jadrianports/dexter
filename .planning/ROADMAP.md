@@ -63,8 +63,8 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 ### Phase 6: Speed & Caching
 
-**Goal**: Playback is noticeably faster with no inter-song gap, and every pipeline stage is instrumented so gains are measured against live Oracle numbers
-**Depends on**: Phase 5 (bot must be running live so instrumentation captures real-world latency, not laptop numbers)
+**Goal**: Playback is noticeably faster with no inter-song gap, and every pipeline stage is instrumented so gains are measured against the bot's actual run environment (user's PC, residential IP — NOT Oracle, per 06-CONTEXT.md D-19)
+**Depends on**: Phase 5 code (the audio/cache/asyncpg substrate). Live 24/7 deploy is PARKED (YT datacenter-IP block); instrumentation baselines against the on-demand PC run env, not Oracle (D-19).
 **Requirements**: PERF-01, PERF-02, PERF-03, PERF-04, PERF-05, PERF-06, PERF-07
 **Success Criteria** (what must be TRUE):
 
@@ -72,9 +72,14 @@ Full phase details, success criteria, decisions, and deferred items archived in
   2. Playing a previously-cached song skips the re-encode step; the bot's logs confirm an opus-copy path rather than a transcode path for that track
   3. Queuing the same search query twice within a session hits the resolution cache — the second `/play` shows a cache-hit in instrumentation output with no YouTube re-search
   4. A download that exceeds `DOWNLOAD_TIMEOUT_SECONDS` falls back to the stream URL rather than hanging indefinitely, and the bot continues playback
-  5. Cache eviction removes least-played tracks (not oldest-by-atime) when the 2GB limit is reached, observable in eviction log output; SponsorBlock segments are silently skipped during YouTube video playback
+  5. Cache eviction removes least-played tracks (lowest song_history play_count, not oldest-by-atime) when the `AUDIO_CACHE_MAX_MB` limit is reached (512MB per K-07; the 2GB figure in CLAUDE.md is stale), observable in eviction log output; SponsorBlock segments are silently skipped during YouTube video playback
 
-**Plans**: TBD
+**Plans**: 4 plans (3 waves)
+
+- [ ] 06-01-PLAN.md — Foundation: Phase-6 config constants, `resolution_cache` table + asyncpg helpers (`normalize_search_query`/`get`/`set`), `PerfMetrics` rolling aggregate, queue prefetch fields, Wave-0 test scaffold (`tests/test_phase6_perf.py` + conftest teardown) — `config.py`, `database.py`, `models/queue.py`, `services/metrics.py`, `tests/conftest.py`, `tests/test_phase6_perf.py` (PERF-03, PERF-06) — Wave 1
+- [ ] 06-02-PLAN.md — Download pipeline: SponsorBlock 2-PP chain (`when=after_filter`) + codec-path logging via `postprocessor_hooks` in `DOWNLOAD_OPTS`/`download()` — `services/youtube.py`, `tests/test_youtube.py` (PERF-02, PERF-07) — Wave 2
+- [ ] 06-03-PLAN.md — Audio/cache layer: `DOWNLOAD_TIMEOUT_SECONDS` via `asyncio.wait_for` → stream fallback in `get_source`; LFU `cleanup_cache(pool, protected_video_ids)` rewrite — `services/audio.py`, `tests/test_audio.py` (PERF-04, PERF-05) — Wave 2
+- [ ] 06-04-PLAN.md — Controller wiring: fire-and-forget `_prefetch_next_track` (generation-guarded) + trigger, resolution-cache intercept in `play()`, `PerfMetrics` into `/stats` embed — `cogs/music.py`, `bot.py`, `utils/embeds.py`, `cogs/ops.py`, `tests/test_phase6_perf.py` (PERF-01, PERF-03, PERF-06) — Wave 3
 
 ### Phase 7: Player UX & Filters
 
@@ -119,6 +124,6 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
 | 5. Ship It Live | v1.1 | 3/3 | Code complete — live deploy ⏸ PARKED (YT datacenter-IP block; resume on a Pi) | - |
-| 6. Speed & Caching | v1.1 | 0/TBD | Not started | - |
+| 6. Speed & Caching | v1.1 | 0/4 | Planned (3 waves) | - |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete   | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Code complete + verified — live UAT pending (08-HUMAN-UAT) | 2026-06-19 |
