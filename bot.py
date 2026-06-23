@@ -624,11 +624,18 @@ async def first_run(guild_id: str | None = None):
         await bot.close()
 
     # Load cogs so their commands are registered before sync.
+    # IMPORTANT: this non-AI list MUST stay in sync with the cog tuple in
+    # _initialize_once. If they drift, --first-run syncs a different command set
+    # than the running bot exposes — Phase 8 UAT surfaced /leaderboard, /stats,
+    # and the library commands missing because cogs.ops and cogs.library were
+    # absent here while present in normal startup.
     # Mirror on_ready: only load AI cogs when a Gemini key is configured,
     # otherwise their setup references a gemini_service that won't exist.
     await bot.load_extension("cogs.music")
     await bot.load_extension("cogs.help")
     await bot.load_extension("cogs.events")
+    await bot.load_extension("cogs.library")
+    await bot.load_extension("cogs.ops")
     if os.getenv("GEMINI_API_KEY"):
         await bot.load_extension("cogs.ai")
         await bot.load_extension("cogs.imagine")
