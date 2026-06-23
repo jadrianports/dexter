@@ -290,6 +290,27 @@ class NowPlayingView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
+    def apply_state(self, queue: "MusicQueue") -> "NowPlayingView":
+        """Sync button labels to current queue state (pause/resume, loop mode).
+
+        A freshly-constructed view carries default labels; call this before
+        rendering so the controls reflect reality after a track change
+        (otherwise loop/pause state snaps back to defaults on the new song).
+        """
+        mode_labels = {
+            LoopMode.OFF: "🔁 Loop: Off",
+            LoopMode.SINGLE: "🔂 Loop: Single",
+            LoopMode.QUEUE: "🔁 Loop: Queue",
+        }
+        for child in self.children:
+            if not isinstance(child, discord.ui.Button):
+                continue
+            if child.custom_id == "dex:np:playpause":
+                child.label = "▶ Resume" if queue.is_paused else "⏸ Pause"
+            elif child.custom_id == "dex:np:loop":
+                child.label = mode_labels.get(queue.loop_mode, "🔁 Loop: Off")
+        return self
+
     def _resolve_cog_queue_vc(
         self, interaction: discord.Interaction
     ) -> tuple["MusicCog | None", "MusicQueue | None", discord.VoiceClient | None]:
@@ -578,6 +599,30 @@ class MusicCog(commands.Cog):
         if queue.auto_lyrics:
             asyncio.create_task(self._post_auto_lyrics(guild, track))
 
+    async def _refresh_now_playing(self, guild: discord.Guild, queue: MusicQueue) -> None:
+        """Re-render the now-playing message for the current track, in-place.
+
+        Single source of truth for now-playing refresh: builds the embed and a
+        state-synced NowPlayingView, then edits the tracked message (or posts a
+        fresh one if it's gone). Every track-change site — natural advance and
+        skip — calls this so the controller never freezes on the previous song.
+        """
+        track = queue.get_current()
+        channel = self._get_text_channel(guild)
+        if channel is None or track is None:
+            return
+        embed = embeds.now_playing(track, queue)
+        view = NowPlayingView(self.bot).apply_state(queue)
+        if queue._now_playing_message_id:
+            try:
+                msg = await channel.fetch_message(queue._now_playing_message_id)
+                await msg.edit(embed=embed, view=view)
+                return
+            except (discord.NotFound, discord.HTTPException) as edit_error:
+                log.debug(f"Now-playing edit failed, sending a new message: {edit_error}")
+        msg = await channel.send(embed=embed, view=view)
+        queue._now_playing_message_id = msg.id
+
     async def _on_track_end(self, guild: discord.Guild) -> None:
         """Called when a track finishes naturally. Handles advance/loop/auto-queue logic."""
         queue = self.get_queue(guild.id)
@@ -597,20 +642,7 @@ class MusicCog(commands.Cog):
         await self._persist_queue(guild, queue)
         if next_track:
             await self._play_track(guild, next_track)
-            # Edit existing now-playing message, or send new one if edit fails
-            channel = self._get_text_channel(guild)
-            if channel:
-                embed = embeds.now_playing(next_track, queue)
-                view = NowPlayingView(self.bot)
-                if queue._now_playing_message_id:
-                    try:
-                        msg = await channel.fetch_message(queue._now_playing_message_id)
-                        await msg.edit(embed=embed, view=view)
-                        return
-                    except (discord.NotFound, discord.HTTPException) as edit_error:
-                        log.debug(f"Now-playing edit failed, sending a new message: {edit_error}")
-                msg = await channel.send(embed=embed, view=view)
-                queue._now_playing_message_id = msg.id
+            await self._refresh_now_playing(guild, queue)
         else:
             # Queue exhausted — try auto-queue before stopping
             voice_client = guild.voice_client
@@ -732,6 +764,9 @@ class MusicCog(commands.Cog):
         await self._persist_queue(guild, queue)
         if next_track:
             asyncio.create_task(self._play_track(guild, next_track))
+            # Refresh the now-playing controller so it reflects the new track
+            # (otherwise the embed + buttons stay frozen on the skipped song).
+            await self._refresh_now_playing(guild, queue)
         else:
             queue.is_playing = False
             voice_client.stop()

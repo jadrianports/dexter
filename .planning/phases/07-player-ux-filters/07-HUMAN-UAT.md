@@ -24,6 +24,7 @@ expected: Boot the bot, `/play` a song; the now-playing embed shows 5 buttons (P
 result: issue
 reported: "buttons work for the current song, but whenever a new song from the queue auto-plays the buttons are still from that last song (stale view not refreshed on track advance)"
 severity: major
+resolution: "FIXED in code (pending live re-confirmation). Root cause: the now-playing refresh lived only in _on_track_end and the skip path (_do_skip) never refreshed the message, so the embed+buttons froze on the skipped song. Fix: centralized refresh into MusicCog._refresh_now_playing() (single source of truth), wired _do_skip to call it, and added NowPlayingView.apply_state() so button labels (pause/resume, loop mode) derive from queue state instead of resetting to defaults on each new view. Regression tests: tests/test_now_playing_refresh.py (6 tests, green). Full DB-less suite green (201 passed)."
 
 ### 2. Persistent view survives restart
 expected: With a pre-restart now-playing message, restart the bot and press a button on the old message — it still responds (persistent view registered in `setup_hook` survived restart).
@@ -86,12 +87,18 @@ blocked: 0
 
 ## Gaps
 
-- truth: "On auto-advance to the next queued song, the now-playing buttons control the new song and reflect its state"
-  status: failed
+- truth: "On advance to the next queued song, the now-playing buttons control the new song and reflect its state"
+  status: resolved
   reason: "User reported: buttons work for the current song, but whenever a new song from the queue auto-plays the buttons are still from that last song (stale view not refreshed on track advance)"
   severity: major
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Now-playing refresh logic lived only inside _on_track_end (natural advance); the skip path (_do_skip, used by both /skip and the Skip button) played the next track but never refreshed the now-playing message, so the embed+buttons froze on the skipped song. Secondary: even the one refresh site rebuilt NowPlayingView with hardcoded default labels, so loop/pause state reset on each new song."
+  artifacts:
+    - path: "cogs/music.py"
+      issue: "_do_skip did not refresh the now-playing message; refresh logic duplicated/not centralized; view labels not derived from queue state"
+  missing:
+    - "Centralize refresh into MusicCog._refresh_now_playing() and call it from _do_skip (DONE)"
+    - "Derive button labels from queue state via NowPlayingView.apply_state() (DONE)"
+  fix_commit: "(see fix commit) — tests/test_now_playing_refresh.py, 6 tests green; 281 non-DB tests pass"
+  debug_session: "inline (systematic-debugging) — pending live re-confirmation of the skip→refresh UX"
+  follow_up: "Latent: /seek, /jump, /previous post NEW now-playing messages without updating _now_playing_message_id, so the tracked message can diverge. Not the reported bug; consider routing them through _refresh_now_playing in a follow-up."
