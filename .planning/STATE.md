@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
 status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-06-23T20:31:29.110Z"
-last_activity: 2026-06-23 -- Phase 06 execution started
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-06-24T00:00:00.000Z"
+last_activity: 2026-06-24 -- Phase 06 all 4 plans complete
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 14
-  completed_plans: 13
-  percent: 75
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 06 (speed-caching) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-06-23 -- Phase 06 execution started
+Phase: 06 (speed-caching) — COMPLETE
+Plan: 4 of 4 (all complete)
+Status: Phase complete — ready for verification
+Last activity: 2026-06-24 -- Phase 06 all 4 plans executed
 
 ## Accumulated Context
 
@@ -75,6 +75,9 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase ?]: Phase 6-01: conftest pool fixture pytest.skip on asyncpg.create_pool failure instead of raising (Rule 1 fix)
 - [Phase ?]: Phase 06-02: DOWNLOAD_OPTS 3-PP order: SponsorBlock(when=after_filter) first, FFmpegExtractAudio second, ModifyChapters last (Pitfall 1 / Anti-Pattern in 06-RESEARCH.md)
 - [Phase ?]: Phase 06-02: copy-when-opus NOT rewritten — FFmpegExtractAudioPP already handles natively; download() only adds postprocessor_hooks for codec-path logging (06-RESEARCH.md critical finding / D-01)
+- [Phase ?]: Phase 06-04: resolution cache hit routes through async_extract (full guards) not inline Track construction — prevents duration/livestream bypass on cached stale video
+- [Phase ?]: Phase 06-04: SongSelectView orig_query param threads query through callback via getattr; URL branch never sets orig_query so it never writes cache (D-09)
+- [Phase ?]: Phase 06-04: cache_cleanup protected set built from MusicCog.queues via cog reference (bot.cogs.get("MusicCog"))
 
 ### Pending Todos
 
@@ -107,11 +110,11 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-23T20:31:29.102Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-06-24T00:00:00.000Z
+Stopped at: Completed 06-04-PLAN.md (Phase 06 complete)
 Next:
 
-  Execute 08-03-PLAN.md (/leaderboard, /stats, degraded /health).
+  Phase 06 complete. Run /gsd-verify-work for Phase 06 verification.
 
 ## Performance Metrics
 
@@ -129,3 +132,4 @@ Next:
 | Phase 08-social-ops P03 | 18min | 3 tasks | 6 files |
 | Phase 06 P01 | 15 min | 2 tasks | 6 files |
 | Phase 06-speed-caching P02 | 4 min | 2 tasks | 2 files |
+| Phase 06-speed-caching P04 | ~35 min | 3 tasks (3 commits) | 5 files |

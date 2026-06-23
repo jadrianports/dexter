@@ -20,7 +20,7 @@
 
 ### Speed & Caching (`PERF`)
 
-- [ ] **PERF-01**: The next track is prefetched into cache during current playback (no inter-song download gap)
+- [x] **PERF-01**: The next track is prefetched into cache during current playback (no inter-song download gap)
 - [x] **PERF-02**: Cached audio uses native-opus copy (no opus→opus re-encode) when the source is already opus
 - [x] **PERF-03**: A resolution cache maps repeat queries → `video_id` without re-searching YouTube
 - [x] **PERF-04**: Download attempts honor `DOWNLOAD_TIMEOUT_SECONDS`, falling back to stream on timeout
@@ -90,7 +90,7 @@ Which phases cover which requirements. Phase numbering continues from v1.0 (last
 | DEPLOY-06 | Phase 5 | Complete |
 | DEPLOY-07 | Phase 5 | Pending |
 | DEPLOY-08 | Phase 5 | Pending |
-| PERF-01 | Phase 6 | Pending |
+| PERF-01 | Phase 6 | Complete |
 | PERF-02 | Phase 6 | Complete |
 | PERF-03 | Phase 6 | Complete |
 | PERF-04 | Phase 6 | Complete |

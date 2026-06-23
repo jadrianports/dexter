@@ -30,7 +30,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 ### v1.1 Live & Lethal (Phases 5–8)
 
 - [~] **Phase 5: Ship It Live** — code-complete + code-verified; ⏸ LIVE 24/7 deploy PARKED (YouTube blocks datacenter IPs → cloud non-viable for free; no credit card; no Raspberry Pi yet). Bot runs on user PC (residential IP) on demand → Neon Singapore. Resume when a Pi / always-on residential host is acquired.
-- [ ] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock
+- [x] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock — code complete 2026-06-24; live verification pending
 - [→] **Phase 7: Player UX & Filters** (NEXT) — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects
 - [x] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility (code complete + verified 12/12 on 2026-06-19; live UAT pending → 08-HUMAN-UAT.md)
 
@@ -85,7 +85,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-04-PLAN.md — Controller wiring: fire-and-forget `_prefetch_next_track` (generation-guarded) + trigger, resolution-cache intercept in `play()`, `PerfMetrics` into `/stats` embed — `cogs/music.py`, `bot.py`, `utils/embeds.py`, `cogs/ops.py`, `tests/test_phase6_perf.py` (PERF-01, PERF-03, PERF-06) — Wave 3
+- [x] 06-04-PLAN.md — Controller wiring: fire-and-forget `_prefetch_next_track` (generation-guarded) + trigger, resolution-cache intercept in `play()`, `PerfMetrics` into `/stats` embed — `cogs/music.py`, `bot.py`, `utils/embeds.py`, `cogs/ops.py`, `tests/test_phase6_perf.py` (PERF-01, PERF-03, PERF-06) — Wave 3 — COMPLETE 2026-06-24
 
 ### Phase 7: Player UX & Filters
 
