@@ -5,7 +5,7 @@ status: verified
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-06-19
-validated: 2026-06-19
+validated: 2026-06-24
 ---
 
 # Phase 08 — Validation Strategy
@@ -115,6 +115,26 @@ Framework install: none — pytest + pytest-asyncio already present. `conftest.p
 
 ---
 
+## Validation Audit 2026-06-24 (re-run)
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+Re-validated after the Phase-8 UAT pass and the `bdda1c0` footer fix. All automated tests re-run live and confirmed green — no rubber-stamp:
+
+- **DB-less (13):** `pytest tests/test_roast_command.py tests/test_rate_limiter.py tests/test_health_endpoint.py` → **13 passed** (~2.3s).
+- **Live DB (8):** throwaway `postgres:16-alpine` (DSN `postgresql://dexter:dexter@localhost:5432/dexter_test`), `pytest tests/test_database_phase8.py` → **8 passed** (~3.5s); container removed after run.
+- **Total: 17/17 green.** No MISSING or PARTIAL automated gaps; the 3 inherent human-UAT items are unchanged (tone, embed layout, owner ACL — all exercised during the 08 UAT pass).
+
+The footer change (`utils/embeds.py` — removed dead Koyeb link) touches no asserted behavior; no test references the footer string, and the DB-integration tests exercise `database.py`, not embeds. `nyquist_compliant: true` holds.
+
+> **Manual-Only note:** the "Koyeb/Neon dashboard link visible" row (OPS-03) is now partially obsolete — the Koyeb link was removed in `bdda1c0`; only the Neon console reference remains relevant. Revisit when the hosting decision (Koyeb abandoned vs. parked) is settled.
+
+---
+
 ## Validation Sign-Off
 
 - [x] All tasks have `<automated>` verify or Wave 0 dependencies
@@ -124,4 +144,4 @@ Framework install: none — pytest + pytest-asyncio already present. `conftest.p
 - [x] Feedback latency < 40s
 - [x] `nyquist_compliant: true` set in frontmatter (Wave 0 landed + 17/17 green)
 
-**Approval:** verified 2026-06-19 (17/17 automated green; 3 inherent human-UAT items pending live verification)
+**Approval:** verified 2026-06-19 · re-verified 2026-06-24 (17/17 automated green on live re-run; 3 inherent human-UAT items exercised during 08 UAT)
