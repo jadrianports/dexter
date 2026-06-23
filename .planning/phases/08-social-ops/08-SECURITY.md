@@ -70,6 +70,7 @@ created: 2026-06-19
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-06-19 | 13 | 13 | 0 | gsd-security-auditor (model: sonnet) via /gsd:secure-phase 08 |
+| 2026-06-24 | 13 | 13 | 0 | re-verification via /gsd:secure-phase 08 (short-circuit: threats_open:0 + register authored at plan-time) |
 
 ### Audit Notes (2026-06-19)
 
@@ -80,6 +81,11 @@ created: 2026-06-19
 - **T-08-12 (recursion guard):** The inner `try/except Exception: pass` is nested inside the outer `try` covering `channel.send`; the increment fires only after a successful send and its failure is isolated from the outer error path.
 - **Unregistered flags:** None. All three SUMMARY.md files report zero threat flags; no new attack surface detected beyond the registered threats.
 
+### Audit Notes (2026-06-24 — re-verification)
+
+- Re-ran after UAT. Only code change since the 2026-06-19 audit is `bdda1c0` (dropped the dead "koyeb dashboard" link from the `/stats` embed footer in `utils/embeds.py`). This **removes** a user-visible URL — it introduces no new endpoint, auth path, input sink, or data egress, so the threat register is unaffected.
+- Short-circuit applied: `threats_open: 0` and the register was authored at plan-time (all three PLANs carry `<threat_model>` blocks), so all 13 threats remain verified CLOSED without a fresh auditor scan.
+
 ---
 
 ## Sign-Off
@@ -89,4 +95,4 @@ created: 2026-06-19
 - [x] `threats_open: 0` confirmed
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-06-19
+**Approval:** verified 2026-06-19 · re-verified 2026-06-24
