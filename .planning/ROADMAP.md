@@ -81,7 +81,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 06-02-PLAN.md — Download pipeline: SponsorBlock 2-PP chain (`when=after_filter`) + codec-path logging via `postprocessor_hooks` in `DOWNLOAD_OPTS`/`download()` — `services/youtube.py`, `tests/test_youtube.py` (PERF-02, PERF-07) — Wave 2
-- [ ] 06-03-PLAN.md — Audio/cache layer: `DOWNLOAD_TIMEOUT_SECONDS` via `asyncio.wait_for` → stream fallback in `get_source`; LFU `cleanup_cache(pool, protected_video_ids)` rewrite — `services/audio.py`, `tests/test_audio.py` (PERF-04, PERF-05) — Wave 2
+- [x] 06-03-PLAN.md — Audio/cache layer: `DOWNLOAD_TIMEOUT_SECONDS` via `asyncio.wait_for` → stream fallback in `get_source`; LFU `cleanup_cache(pool, protected_video_ids)` rewrite — `services/audio.py`, `tests/test_audio.py` (PERF-04, PERF-05) — Wave 2
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -130,6 +130,6 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
 | 5. Ship It Live | v1.1 | 3/3 | Code complete — live deploy ⏸ PARKED (YT datacenter-IP block; resume on a Pi) | - |
-| 6. Speed & Caching | v1.1 | 2/4 | In Progress|  |
+| 6. Speed & Caching | v1.1 | 3/4 | In Progress|  |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete   | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Code complete + verified — live UAT pending (08-HUMAN-UAT) | 2026-06-19 |
