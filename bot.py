@@ -20,6 +20,7 @@ from database import init_db
 from models.message_buffer import MessageBuffer
 from models.server_state import ServerState
 from services.audio import AudioService
+from services.metrics import PerfMetrics
 from services.youtube import YouTubeService
 from utils.logger import log
 
@@ -308,6 +309,9 @@ async def _initialize_once() -> None:
     bot.youtube_service = YouTubeService()
     bot.audio_service = AudioService(youtube_service=bot.youtube_service)
 
+    # Phase 6: Rolling performance metrics aggregate (PERF-06 / D-18)
+    bot.perf_metrics = PerfMetrics(config.PERF_ROLLING_WINDOW)
+
     # Phase 2: Message buffer + server states
     bot.message_buffer = MessageBuffer()
     bot.server_states: dict[int, ServerState] = {}
@@ -560,10 +564,26 @@ async def before_idle_check():
 
 @tasks.loop(hours=1)
 async def cache_cleanup():
-    """Hourly cache size check and cleanup."""
-    if hasattr(bot, "audio_service"):
-        bot.audio_service.cleanup_cache()
-        log.info("Cache cleanup check completed")
+    """Hourly cache size check and cleanup (Phase 6: LFU with protected-set guard)."""
+    if not hasattr(bot, "audio_service") or not hasattr(bot, "pool"):
+        return
+
+    # Build protected set: currently queued + prefetched video IDs across all guilds.
+    # Prevents LFU eviction from removing a track that is currently playing,
+    # queued for upcoming playback, or being prefetched (PERF-05 / D-12/D-13).
+    protected_video_ids: set[str] = set()
+    music_cog = bot.cogs.get("MusicCog")
+    if music_cog is not None:
+        for queue in music_cog.queues.values():
+            # Include current track and all upcoming tracks
+            for t in queue.tracks[queue.current_index:]:
+                protected_video_ids.add(t.video_id)
+            # Include in-flight prefetch slot
+            if queue._prefetch_video_id:
+                protected_video_ids.add(queue._prefetch_video_id)
+
+    await bot.audio_service.cleanup_cache(bot.pool, protected_video_ids)
+    log.info("Cache cleanup check completed (protected=%d)", len(protected_video_ids))
 
 
 @cache_cleanup.before_loop

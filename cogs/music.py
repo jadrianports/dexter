@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING
 
 import discord
@@ -17,6 +18,9 @@ from database import (
     log_track_batch,
     increment_daily_stat,
     mark_song_skipped,
+    normalize_search_query,
+    get_resolution_cache,
+    set_resolution_cache,
 )
 from models.queue import Track, LoopMode, MusicQueue, QueueFullError
 from models.user_profile import get_user_summary
@@ -598,6 +602,83 @@ class MusicCog(commands.Cog):
         # lyrics thread if enabled. Never awaited — must not delay playback.
         if queue.auto_lyrics:
             asyncio.create_task(self._post_auto_lyrics(guild, track))
+
+        # Prefetch the next track so the inter-song gap is zero (PERF-01 / D-04).
+        # Fire-and-forget — must not block or delay current playback.
+        # Use the in-scope current_gen captured above; never re-read the generation.
+        next_tracks = queue.upcoming()
+        if next_tracks:
+            asyncio.create_task(self._prefetch_next_track(guild, next_tracks[0], current_gen))
+
+    async def _prefetch_next_track(
+        self,
+        guild: discord.Guild,
+        track: Track,
+        expected_gen: int,
+    ) -> None:
+        """Background prefetch of the next queued track during current playback (PERF-01 / D-04/D-06).
+
+        Generation-guarded at entry AND after the download so a user skip discards
+        a stale result — mirrors the existing after_callback generation guard
+        (CLAUDE.md gotcha). Swallows all exceptions like _post_auto_lyrics so it
+        never affects the playback path.
+        """
+        try:
+            queue = self.get_queue(guild.id)
+
+            # Entry guard: if generation has advanced the user already skipped
+            if queue._play_generation != expected_gen:
+                log.debug(
+                    "prefetch skipped (stale gen): gen=%d expected=%d video_id=%s",
+                    queue._play_generation, expected_gen, track.video_id,
+                )
+                return
+
+            # Early exit if already cached — nothing to download
+            if self.audio.is_cached(track.video_id):
+                log.debug("prefetch skip — already cached: video_id=%s", track.video_id)
+                return
+
+            # Mark this video_id as in-use so LFU eviction skips it (D-13)
+            queue._prefetch_video_id = track.video_id
+            t0 = time.monotonic()
+            try:
+                path = await asyncio.wait_for(
+                    self.youtube.async_download(track.video_id, track.url),
+                    timeout=config.PREFETCH_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                log.info(
+                    "prefetch timeout after %.0fs video_id=%s",
+                    config.PREFETCH_TIMEOUT_SECONDS, track.video_id,
+                )
+                return
+
+            elapsed = time.monotonic() - t0
+
+            # Post-download generation guard: discard result if user skipped
+            if queue._play_generation != expected_gen:
+                log.debug(
+                    "prefetch discarded (stale post-download): gen=%d expected=%d video_id=%s",
+                    queue._play_generation, expected_gen, track.video_id,
+                )
+                return
+
+            ok = path is not None and path.exists()
+            log.info(
+                "prefetch complete video_id=%s elapsed=%.2fs ok=%s",
+                track.video_id, elapsed, ok,
+            )
+            if hasattr(self.bot, "perf_metrics"):
+                self.bot.perf_metrics.record_download(elapsed)
+
+        except Exception as exc:  # noqa: BLE001
+            log.debug("prefetch error video_id=%s: %s", track.video_id, exc)
+        finally:
+            # Only clear if this task is still the owner of the slot
+            queue = self.get_queue(guild.id)
+            if queue._prefetch_video_id == track.video_id:
+                queue._prefetch_video_id = None
 
     async def _refresh_now_playing(self, guild: discord.Guild, queue: MusicQueue) -> None:
         """Re-render the now-playing message for the current track, in-place.
