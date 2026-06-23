@@ -24,6 +24,15 @@ findings:
   info: 5
   total: 13
 status: issues_found
+resolved_in: 08c910a
+resolved:
+  - CR-01  # clear() now keeps _play_generation monotonic
+  - WR-01  # cache hit recorded once, only after successful extract
+  - WR-03  # eviction unlink guarded; one failure no longer aborts the pass
+  - WR-04  # record_ttfa now wired in _play_track (PERF-06)
+deferred:
+  - WR-02  # prefetch wait_for cancels awaiter but not executor-thread yt-dlp (follow-up)
+  - WR-07  # daily-stats UTC vs STREAK_TIMEZONE (pre-existing, out of Phase 6 scope)
 ---
 
 # Phase 6: Code Review Report
