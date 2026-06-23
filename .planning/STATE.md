@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: awaiting-uat
-stopped_at: Phase 08 executed + verified (human_needed) — live UAT pending
-last_updated: "2026-06-19T08:09:49Z"
-last_activity: 2026-06-19 -- Phase 08 social-ops code complete + verified 12/12; 9 live-UAT items in 08-HUMAN-UAT.md
+status: verifying
+stopped_at: Phase 6 context gathered
+last_updated: "2026-06-23T18:24:38.366Z"
+last_activity: 2026-06-19 -- Phase 08 social-ops verified (human_needed)
 progress:
   total_phases: 4
   completed_phases: 3
@@ -102,8 +102,8 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-19T07:55:04.586Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-06-23T18:24:38.346Z
+Stopped at: Phase 6 context gathered
 Next:
 
   Execute 08-03-PLAN.md (/leaderboard, /stats, degraded /health).
