@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: verifying
-stopped_at: Phase 6 context gathered
-last_updated: "2026-06-23T19:26:14.550Z"
-last_activity: 2026-06-19 -- Phase 08 social-ops verified (human_needed)
+status: executing
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-06-23T20:07:10.439Z"
+last_activity: 2026-06-23 -- Phase 06 execution started
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 14
+  completed_plans: 11
   percent: 75
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 08 — social-ops
+**Current focus:** Phase 06 — speed-caching
 
 ## Current Position
 
-Phase: 08 (social-ops) — CODE COMPLETE + VERIFIED (human_needed)
-Plan: 3 of 3 (all complete)
-Status: All 3 plans done; verifier 12/12 must-haves; 9 live-behavioral items pending in 08-HUMAN-UAT.md
-Last activity: 2026-06-19 -- Phase 08 social-ops verified (human_needed)
+Phase: 06 (speed-caching) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-23 -- Phase 06 execution started
 
 ## Accumulated Context
 
@@ -70,6 +70,9 @@ Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.
 - [Phase ?]: GROUP BY includes first_seen_at in get_leaderboard_songs for valid tie-break ORDER BY without Postgres error
 - [Phase 08-02]: /roast resolves edge cases (bot/self/zero-history) BEFORE mood/Gemini setup — fallback pool always set before async DB calls
 - [Phase 08-02]: Test invocation of slash commands uses cog.cmd.callback(cog, interaction, ...) — @app_commands.command wraps coroutine in Command object
+- [Phase ?]: Phase 6-01: SCHEMA_SQL DDL-only (no dollar-N params) for resolution_cache - asyncpg multi-statement path requires it (Pitfall 1/7)
+- [Phase ?]: Phase 6-01: set_resolution_cache ON CONFLICT updates expires_at on re-write to keep TTL fresh (Pitfall 5)
+- [Phase ?]: Phase 6-01: conftest pool fixture pytest.skip on asyncpg.create_pool failure instead of raising (Rule 1 fix)
 
 ### Pending Todos
 
@@ -102,8 +105,8 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-23T18:24:38.346Z
-Stopped at: Phase 6 context gathered
+Last session: 2026-06-23T20:07:10.409Z
+Stopped at: Completed 06-01-PLAN.md
 Next:
 
   Execute 08-03-PLAN.md (/leaderboard, /stats, degraded /health).
@@ -122,3 +125,4 @@ Next:
 | Phase 08-social-ops P01 | 6min | 3 tasks | 5 files |
 | Phase 08-social-ops P02 | 12min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
 | Phase 08-social-ops P03 | 18min | 3 tasks | 6 files |
+| Phase 06 P01 | 15 min | 2 tasks | 6 files |
