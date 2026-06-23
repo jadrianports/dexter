@@ -544,6 +544,9 @@ class MusicCog(commands.Cog):
         if queue.active_filter != "off":
             ffmpeg_filter = config.FFMPEG_FILTERS.get(queue.active_filter)
 
+        # Time-to-first-audio starts now: from source acquisition (cache/copy or
+        # cold download + ffmpeg spawn) through to voice_client.play() (PERF-06).
+        _ttfa_t0 = time.monotonic()
         try:
             source = await self.audio.get_source(
                 track,
@@ -603,6 +606,8 @@ class MusicCog(commands.Cog):
             queue.mark_started(offset_seconds)
 
             voice_client.play(source, after=after_callback)
+            if hasattr(self.bot, "perf_metrics"):
+                self.bot.perf_metrics.record_ttfa(time.monotonic() - _ttfa_t0)
             log.debug("play() called gen=%d connected=%s guild=%d", current_gen, voice_client.is_connected(), guild.id)
             log.info(f"Playing '{track.title}' in guild {guild.id}")
         except Exception:
@@ -1331,8 +1336,10 @@ class MusicCog(commands.Cog):
                 # Cache hit: route cached video_id through the same single-video
                 # queue path as the URL branch so duration cap, livestream
                 # rejection, and song_history logging are all applied.
-                if hasattr(self.bot, "perf_metrics"):
-                    self.bot.perf_metrics.record_cache_result(True)
+                # NOTE: record the hit only after the extract succeeds (below) —
+                # a stale entry that forces a fresh search is effectively a miss,
+                # and recording True here would double-count it against the False
+                # on the fall-through path, corrupting the /stats hit-rate.
                 watch_url = f"https://www.youtube.com/watch?v={cached_res['video_id']}"
                 log.info(
                     "resolution_cache hit key=%r video_id=%s",
@@ -1352,6 +1359,9 @@ class MusicCog(commands.Cog):
                     cached_res = None
 
                 if cached_res is not None:
+                    # Usable hit confirmed — count it once here.
+                    if hasattr(self.bot, "perf_metrics"):
+                        self.bot.perf_metrics.record_cache_result(True)
                     # Refresh TTL on hit (Pitfall 5 guard)
                     if hasattr(self.bot, "pool"):
                         try:

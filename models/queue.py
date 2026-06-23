@@ -222,7 +222,12 @@ class MusicQueue:
         self.is_paused = False
         self.loop_mode = LoopMode.OFF
         self._now_playing_message_id = None
-        self._play_generation = 0
+        # Keep the play-generation counter monotonic — resetting to 0 here would
+        # let a stale prefetch/after-callback from before this clear() collide
+        # with the next track's generation and fire on it (the exact double-play
+        # race the counter exists to prevent — CLAUDE.md). Teardown sites
+        # pre-increment, so clear() must only ever advance, never rewind.
+        self._play_generation += 1
         # Phase 7 playback state (NOT server preferences like auto_lyrics)
         self.active_filter = "off"
         self.playback_started_at = None

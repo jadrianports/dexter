@@ -180,7 +180,13 @@ class AudioService:
             if vid in protected_video_ids:
                 continue
             size = f.stat().st_size
-            f.unlink()
+            try:
+                f.unlink()
+            except OSError as e:
+                # One un-deletable file (locked/in-use on Windows, permissions)
+                # must not abort the whole pass and leave the cache over the cap.
+                log.warning("cache evict failed video_id=%s: %s", vid, e)
+                continue
             total_bytes -= size
             log.info(
                 "cache evict video_id=%s play_count=%d size=%dKB",
