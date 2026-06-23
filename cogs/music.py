@@ -73,7 +73,10 @@ class SongSelect(discord.ui.Select):
         try:
             index = int(self.values[0])
             selected = self.results[index]
-            await self.cog._queue_from_selection(interaction, selected)
+            # Phase 6: pass orig_query from the view so _queue_from_selection
+            # can write the resolution cache after extraction (PERF-03).
+            orig_query = getattr(self.view, "orig_query", None)
+            await self.cog._queue_from_selection(interaction, selected, orig_query=orig_query)
         except Exception as e:
             log.error(f"Song select callback error: {e}", exc_info=True)
             try:
@@ -90,8 +93,17 @@ class SongSelect(discord.ui.Select):
 class SongSelectView(discord.ui.View):
     """View containing the song select dropdown."""
 
-    def __init__(self, results: list[dict], cog: "MusicCog", timeout: float = 180.0) -> None:
+    def __init__(
+        self,
+        results: list[dict],
+        cog: "MusicCog",
+        timeout: float = 180.0,
+        orig_query: str | None = None,
+    ) -> None:
         super().__init__(timeout=timeout)
+        # Phase 6: carry the original search query so _queue_from_selection can
+        # write the resolution cache after the user picks (PERF-03).
+        self.orig_query: str | None = orig_query
         self.add_item(SongSelect(results, cog))
 
     async def on_timeout(self) -> None:
@@ -894,7 +906,12 @@ class MusicCog(commands.Cog):
             voice_client.stop()
             await voice_client.disconnect()
 
-    async def _queue_from_selection(self, interaction: discord.Interaction, selected: dict) -> None:
+    async def _queue_from_selection(
+        self,
+        interaction: discord.Interaction,
+        selected: dict,
+        orig_query: str | None = None,
+    ) -> None:
         """Queue a song after the user picks from the select menu."""
         await interaction.response.defer()
         log.info(f"Selection: {selected.get('title')} | URL: {selected.get('url')}")
@@ -909,6 +926,26 @@ class MusicCog(commands.Cog):
             log.error(f"Extract failed: {e}", exc_info=True)
             await interaction.followup.send(embed=embeds.error(f"Failed to extract: {e}"))
             return
+
+        # Phase 6: write the resolution cache so a repeat of this query skips YouTube
+        # re-search entirely (PERF-03 / D-07). Guarded by orig_query presence so URL
+        # direct-play (which never passes orig_query) never writes the cache (D-09).
+        if orig_query is not None and hasattr(self.bot, "pool"):
+            try:
+                cache_key = normalize_search_query(orig_query)
+                await set_resolution_cache(
+                    self.bot.pool,
+                    query_key=cache_key,
+                    video_id=data["video_id"],
+                    title=data["title"],
+                    ttl_days=config.RES_CACHE_TTL_DAYS,
+                )
+                log.debug(
+                    "resolution_cache write key=%r video_id=%s",
+                    cache_key, data["video_id"],
+                )
+            except Exception as cache_err:
+                log.debug("resolution_cache write failed (non-fatal): %s", cache_err)
 
         track = Track(
             video_id=data["video_id"],
@@ -1283,12 +1320,102 @@ class MusicCog(commands.Cog):
                 embed = embeds.song_queued(track, position)
                 await interaction.followup.send(embed=embed)
         else:
-            # Text search — show select menu
+            # Text search — check resolution cache first (PERF-03 / D-07 / D-09).
+            # Direct-URL /play never reaches this branch (is_url guard above).
+            cache_key = normalize_search_query(query)
+            cached_res = None
+            if hasattr(self.bot, "pool"):
+                cached_res = await get_resolution_cache(self.bot.pool, query_key=cache_key)
+
+            if cached_res is not None:
+                # Cache hit: route cached video_id through the same single-video
+                # queue path as the URL branch so duration cap, livestream
+                # rejection, and song_history logging are all applied.
+                if hasattr(self.bot, "perf_metrics"):
+                    self.bot.perf_metrics.record_cache_result(True)
+                watch_url = f"https://www.youtube.com/watch?v={cached_res['video_id']}"
+                log.info(
+                    "resolution_cache hit key=%r video_id=%s",
+                    cache_key, cached_res["video_id"],
+                )
+                try:
+                    data = await self.youtube.async_extract(watch_url)
+                except ValueError as e:
+                    # Stale/removed/blocked — fall through to a fresh search
+                    log.info(
+                        "resolution_cache stale video_id=%s (%s), falling through to search",
+                        cached_res["video_id"], e,
+                    )
+                    cached_res = None
+                except Exception as e:
+                    log.warning("resolution_cache extract failed (%s), falling through to search", e)
+                    cached_res = None
+
+                if cached_res is not None:
+                    # Refresh TTL on hit (Pitfall 5 guard)
+                    if hasattr(self.bot, "pool"):
+                        try:
+                            await set_resolution_cache(
+                                self.bot.pool,
+                                query_key=cache_key,
+                                video_id=data["video_id"],
+                                title=data["title"],
+                                ttl_days=config.RES_CACHE_TTL_DAYS,
+                            )
+                        except Exception as ttl_err:
+                            log.debug("resolution_cache TTL refresh failed (non-fatal): %s", ttl_err)
+
+                    track = Track(
+                        video_id=data["video_id"],
+                        title=data["title"],
+                        artist=data["artist"],
+                        url=data["url"],
+                        duration_seconds=data["duration"],
+                        requested_by=interaction.user.id,
+                        thumbnail=data.get("thumbnail"),
+                    )
+
+                    queue = self.get_queue(interaction.guild.id)
+                    try:
+                        position = queue.add(track) + 1
+                    except QueueFullError:
+                        await interaction.followup.send(
+                            f"queue's full at {config.MAX_QUEUE_SIZE_PER_GUILD} tracks. impressive dedication, wrong bot.",
+                            ephemeral=True,
+                        )
+                        return
+                    await self._persist_queue(interaction.guild, queue)
+
+                    await self._log_track(interaction, track)
+
+                    voice_client = await self._ensure_voice(interaction)
+                    if not voice_client:
+                        return
+
+                    if not queue.is_playing:
+                        queue.current_index = len(queue.tracks) - 1
+                        await self._play_track(interaction.guild, track)
+                        embed = embeds.now_playing(track, queue)
+                        view = NowPlayingView(self.bot)
+                        msg = await interaction.followup.send(embed=embed, view=view, wait=True)
+                        queue._now_playing_message_id = msg.id
+                    else:
+                        embed = embeds.song_queued(track, position)
+                        await interaction.followup.send(embed=embed)
+                    return
+
+            # Cache miss (or stale) — run the YouTube search
+            if hasattr(self.bot, "perf_metrics"):
+                self.bot.perf_metrics.record_cache_result(False)
+            t0 = time.monotonic()
             results = await self.youtube.async_search(query)
+            if hasattr(self.bot, "perf_metrics"):
+                self.bot.perf_metrics.record_search(time.monotonic() - t0)
             if not results:
                 return await interaction.followup.send(embed=embeds.error("No results found."))
 
-            view = SongSelectView(results, self)
+            # Pass orig_query so _queue_from_selection can write the cache after pick
+            view = SongSelectView(results, self, orig_query=query)
             await interaction.followup.send("Pick a song:", view=view)
 
     @app_commands.command(name="skip", description="Skip to the next song")
