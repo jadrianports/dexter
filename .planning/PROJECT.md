@@ -29,7 +29,9 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 
 **Shipped: v1.0 MVP (2026-06-12)** — Phases 1, 2, 2.5, 3, 4 complete; all 45 v1 requirements satisfied at the code/structural level. ~7,139 Python LOC across 49 modules, 20 test files, 71 commits.
 
-The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Postgres + Discord gateway behavioral UAT) is the outstanding day-1 deployment checklist — see STATE.md Deferred Items. No active milestone; next cycle starts with `/gsd-new-milestone`.
+The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Postgres + Discord gateway behavioral UAT) is the outstanding day-1 deployment checklist — see STATE.md Deferred Items.
+
+**v1.1 "Live & Lethal" in progress.** Phase 8 (Social & Ops) and Phase 6 (Speed & Caching) are code-complete and verified at the code level; both carry a live-UAT-pending gate (08-HUMAN-UAT.md, 06-HUMAN-UAT.md). Phase 6 delivered: generation-guarded next-track prefetch (zero inter-song gap), opus-copy codec-path logging + SponsorBlock, a Postgres-backed resolution cache (survives restarts, URL-bypass), download-timeout→stream fallback, LFU cache eviction protecting in-use tracks, and `PerfMetrics` instrumentation surfaced in `/stats`. Phase 7 (Player UX & Filters) is next.
 
 ## Requirements
 
@@ -120,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after v1.1 "Live & Lethal" milestone kickoff*
+*Last updated: 2026-06-24 after Phase 6 (Speed & Caching) code completion*
