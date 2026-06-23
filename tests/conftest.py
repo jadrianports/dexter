@@ -28,13 +28,23 @@ async def pool():
     """asyncpg pool pointed at the dexter_test database.
 
     Creates all schema tables via init_db, yields the pool, then drops all
-    7 tables in teardown so each test run starts clean.
+    tables in teardown so each test run starts clean.
+
+    Skips the test (not errors) when Postgres is unavailable — matching the
+    documented "skipped (connection error)" behaviour in the module docstring.
     """
+    import pytest  # local import keeps the global namespace clean
+
     dsn = os.getenv(
         "TEST_DATABASE_URL",
         "postgresql://dexter:dexter@localhost:5432/dexter_test",
     )
-    p = await asyncpg.create_pool(dsn)
+    try:
+        p = await asyncpg.create_pool(dsn)
+    except Exception as exc:
+        pytest.skip(f"Postgres unavailable ({exc}); skipping live-DB test")
+        return  # unreachable — skip raises; satisfies type checkers
+
     await init_db(p)
     yield p
     async with p.acquire() as conn:
@@ -42,6 +52,7 @@ async def pool():
             "DROP TABLE IF EXISTS guild_queues, song_history,"
             " user_artist_counts, image_generation_log,"
             " bot_daily_stats, user_profiles,"
-            " user_favorites, user_playlists, user_playlist_tracks CASCADE"
+            " user_favorites, user_playlists, user_playlist_tracks,"
+            " resolution_cache CASCADE"
         )
     await p.close()
