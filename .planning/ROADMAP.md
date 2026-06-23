@@ -130,6 +130,6 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
 | 5. Ship It Live | v1.1 | 3/3 | Code complete — live deploy ⏸ PARKED (YT datacenter-IP block; resume on a Pi) | - |
-| 6. Speed & Caching | v1.1 | 3/4 | In Progress|  |
+| 6. Speed & Caching | v1.1 | 4/4 | Complete    | 2026-06-23 |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete   | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Code complete + verified — live UAT pending (08-HUMAN-UAT) | 2026-06-19 |
