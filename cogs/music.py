@@ -756,10 +756,27 @@ class MusicCog(commands.Cog):
                 if human_members:
                     ai_cog = self.bot.cogs.get("AICog")
                     if ai_cog:
+                        log.info(
+                            "auto-queue: queue empty with %d human(s) in voice — triggering (guild %d)",
+                            len(human_members), guild.id,
+                        )
                         asyncio.create_task(ai_cog.try_auto_queue(guild))
                         return  # Don't set is_playing = False; auto-queue will handle it
+                    log.info("auto-queue: NOT triggered — AICog not loaded (guild %d)", guild.id)
+                else:
+                    log.info("auto-queue: NOT triggered — no humans left in voice (guild %d)", guild.id)
+            else:
+                log.info("auto-queue: NOT triggered — not connected to a voice channel (guild %d)", guild.id)
 
+            # Queue genuinely exhausted with nothing left to resume. Tear down the
+            # persisted row so the just-finished track is NOT replayed on the next
+            # restart (mirrors the /stop teardown template; closes the same
+            # clear_persisted() gap as DEPLOY-06 / IN-02). A still-playing or paused
+            # track never reaches here, so resume-on-restart for unfinished songs is
+            # unaffected; a looping queue never exhausts so it never hits this branch.
             queue.is_playing = False
+            if hasattr(self.bot, "queue_persistence"):
+                await self.bot.queue_persistence.clear_persisted(guild.id)
 
     async def _post_auto_lyrics(self, guild: discord.Guild, track: Track) -> None:
         """Post the current track's lyrics to the per-guild '🎵 lyrics' thread.
