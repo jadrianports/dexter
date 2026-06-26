@@ -24,6 +24,7 @@ Security:
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 import discord
@@ -162,6 +163,13 @@ class OpsCog(commands.Cog):
             songs_rows = await get_leaderboard_songs(self.pool, guild_id=guild_id)
             skips_rows = await get_leaderboard_skips(self.pool, guild_id=guild_id)
             streaks_rows = await get_leaderboard_streaks(self.pool, guild_id=guild_id)
+        except asyncio.TimeoutError:
+            # REL-05 / T-09-02: static message — never interpolate exc, SQL, or DSN
+            log.warning("/leaderboard DB timeout")
+            await interaction.followup.send(
+                "database is being slow. try again in a bit.", ephemeral=True
+            )
+            return
         except Exception as exc:
             log.error("/leaderboard DB error: %s", exc)
             await interaction.followup.send(
@@ -199,6 +207,13 @@ class OpsCog(commands.Cog):
             images = await get_images_today_global(self.pool)
             rpm = self.bot.gemini_service.rpm_usage if hasattr(self.bot, "gemini_service") else 0
             metrics = await gather_bot_metrics(self.bot)
+        except asyncio.TimeoutError:
+            # REL-05 / T-09-02: static message — never interpolate exc, SQL, or DSN
+            log.warning("/stats DB timeout")
+            await interaction.followup.send(
+                "stats are taking too long. try again in a bit.", ephemeral=True
+            )
+            return
         except Exception as exc:
             log.error("/stats data gather error: %s", exc)
             await interaction.followup.send(

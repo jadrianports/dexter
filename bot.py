@@ -301,7 +301,7 @@ async def _initialize_once() -> None:
         dsn=config.sanitize_database_url(config.DATABASE_URL),
         min_size=config.DB_POOL_MIN,
         max_size=config.DB_POOL_MAX,          # now 5 via K-04 constant update
-        command_timeout=30,
+        command_timeout=config.DB_COMMAND_TIMEOUT_SECONDS,
         ssl='require',                         # K-05: explicit ssl, not via DSN string
         max_inactive_connection_lifetime=config.DB_MAX_INACTIVE_CONN_LIFETIME,  # K-04: 240s
         statement_cache_size=config.DB_STATEMENT_CACHE_SIZE,                     # K-04: 0
