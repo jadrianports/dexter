@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
 status: executing
-stopped_at: Phase 9 context gathered
-last_updated: "2026-06-26T14:20:21.620Z"
-last_activity: 2026-06-26 — v1.2 roadmap created (Phases 9–12, 21/21 requirements mapped)
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-06-26T14:38:03.780Z"
+last_activity: 2026-06-26 -- Phase 09 execution started
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** v1.2 "Sharper & Smarter" roadmapped — Phases 9–12 (reliability hardening → critical-path tests → RAG long-term memory → richer music/UX). Ready to plan Phase 9. The 24/7 live deploy stays parked until an always-on residential host exists.
+**Current focus:** Phase 09 — reliability-ops-hardening
 
 ## Current Position
 
-Phase: 9 of 12 (Reliability & Ops Hardening) — not yet planned
-Plan: — of ~5 in Phase 9
+Phase: 09 (reliability-ops-hardening) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-26 — v1.2 roadmap created (Phases 9–12, 21/21 requirements mapped)
+Last activity: 2026-06-26 -- Phase 09 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | 12. Richer Music/UX | 0/4 | - | - |
 
 *Updated after each plan completion. Full v1.1 per-plan timings archived in milestones/v1.1-ROADMAP.md.*
+| Phase 09 P01 | 613 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,9 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - Neon-tuned asyncpg pool: `ssl='require'`, `statement_cache_size=0`, 240s lifetime (K-04) — Phase 11 registers the pgvector codec via `init=` (a per-connection codec, NOT a prepared statement, so `statement_cache_size=0` is a verified non-issue).
 - Gemini-first personality output with guaranteed template fallback; `priority=2` for all background AI — Phase 11 memory writes are priority-2 background work.
 - Pure-logic TDD seam: clock-injectable / module-level pure functions (mirrors `compute_streak`, `_build_ffmpeg_opts`) — the convention Phase 10 extracts to and Phase 11's rerank/dedup functions follow.
+- [Phase ?]: HEALTH_STRICT_STATUS defaults true via env-derived bool so Koyeb deployments can opt out without code change
+- [Phase ?]: MusicCog degraded check guarded by _ready_done to prevent false-degraded during startup (Pitfall 3)
+- [Phase ?]: asyncio.TimeoutError caught before Exception in DB handlers: asyncpg client-side timeout raises TimeoutError not QueryCanceledError
 
 ### Pending Todos
 
@@ -98,8 +102,8 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-26T13:08:34.860Z
-Stopped at: Phase 9 context gathered
+Last session: 2026-06-26T14:38:03.772Z
+Stopped at: Completed 09-01-PLAN.md
 Next:
 
   Plan the first v1.2 phase: `/gsd-plan-phase 9` (Reliability & Ops Hardening). Phase 11 (RAG) is

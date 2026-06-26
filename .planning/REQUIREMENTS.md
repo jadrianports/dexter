@@ -11,11 +11,11 @@ the others derive from the v1.2 codebase-analysis pass.
 
 ### Reliability & Ops Hardening (Phase 9)
 
-- [ ] **REL-01**: `/health` reports a degraded (non-200) status when a critical cog (e.g. MusicCog) failed to load or a core subsystem is down — it can no longer return "ok" while broken
+- [x] **REL-01**: `/health` reports a degraded (non-200) status when a critical cog (e.g. MusicCog) failed to load or a core subsystem is down — it can no longer return "ok" while broken
 - [ ] **REL-02**: Fire-and-forget background tasks (`_prefetch_next_track`, `_post_auto_lyrics`, ambient roasts) attach a done-callback that logs any exception instead of failing silently
 - [ ] **REL-03**: Command-tree sync on startup (`first_run` / `on_ready`) handles a sync failure or timeout without hanging the bot silently — it logs and recovers
 - [ ] **REL-04**: The `on_ready` re-entry guard cannot get permanently stuck (a shard crash mid-init no longer blocks all future ready-handling)
-- [ ] **REL-05**: Database queries enforce a timeout so a slow query (e.g. leaderboard on a large guild) cannot block the bot
+- [x] **REL-05**: Database queries enforce a timeout so a slow query (e.g. leaderboard on a large guild) cannot block the bot
 - [ ] **REL-06**: `youtube` search/extract self-heal on transient failure (bounded retry), matching the existing download self-heal path
 
 ### Critical-Path Test Coverage (Phase 10)
@@ -86,11 +86,11 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | Phase 9 | Pending |
+| REL-01 | Phase 9 | Complete |
 | REL-02 | Phase 9 | Pending |
 | REL-03 | Phase 9 | Pending |
 | REL-04 | Phase 9 | Pending |
-| REL-05 | Phase 9 | Pending |
+| REL-05 | Phase 9 | Complete |
 | REL-06 | Phase 9 | Pending |
 | TEST-01 | Phase 10 | Pending |
 | TEST-02 | Phase 10 | Pending |
@@ -109,6 +109,7 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 | UX-04 | Phase 12 | Pending |
 
 **Coverage:**
+
 - v1.2 requirements: 21 total
 - Mapped to phases: 21 (100% — confirmed by roadmap)
 - Unmapped: 0
