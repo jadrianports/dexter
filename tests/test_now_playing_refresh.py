@@ -58,7 +58,9 @@ class TestApplyState:
 
 class TestRefreshNowPlaying:
     @pytest.mark.asyncio
-    async def test_edits_tracked_message_with_current_track(self):
+    async def test_reposts_at_bottom_deleting_previous_message(self):
+        """On track change the old now-playing message is deleted and a fresh one
+        is sent at the bottom (so the live player + controls follow the chat)."""
         cog = MusicCog.__new__(MusicCog)
         cog.bot = Mock()
         q = MusicQueue(1)
@@ -67,18 +69,24 @@ class TestRefreshNowPlaying:
         q.advance()  # current = B
         q._now_playing_message_id = 555
 
-        msg = Mock()
-        msg.edit = AsyncMock()
+        old_msg = Mock()
+        old_msg.delete = AsyncMock()
         channel = Mock()
-        channel.fetch_message = AsyncMock(return_value=msg)
+        channel.fetch_message = AsyncMock(return_value=old_msg)
+        new_msg = Mock(id=888)
+        channel.send = AsyncMock(return_value=new_msg)
         cog._get_text_channel = Mock(return_value=channel)
 
         await cog._refresh_now_playing(Mock(), q)
 
+        # Old message fetched and deleted
         channel.fetch_message.assert_awaited_once_with(555)
-        msg.edit.assert_awaited_once()
-        kwargs = msg.edit.await_args.kwargs
+        old_msg.delete.assert_awaited_once()
+        # Fresh message sent at the bottom, with a state-synced view
+        channel.send.assert_awaited_once()
+        kwargs = channel.send.await_args.kwargs
         assert isinstance(kwargs["view"], NowPlayingView)
+        assert q._now_playing_message_id == 888
 
     @pytest.mark.asyncio
     async def test_posts_new_message_when_tracked_message_gone(self):

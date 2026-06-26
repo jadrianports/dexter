@@ -698,12 +698,16 @@ class MusicCog(commands.Cog):
                 queue._prefetch_video_id = None
 
     async def _refresh_now_playing(self, guild: discord.Guild, queue: MusicQueue) -> None:
-        """Re-render the now-playing message for the current track, in-place.
+        """Re-post the now-playing message at the BOTTOM of the channel on song change.
 
-        Single source of truth for now-playing refresh: builds the embed and a
-        state-synced NowPlayingView, then edits the tracked message (or posts a
-        fresh one if it's gone). Every track-change site — natural advance and
-        skip — calls this so the controller never freezes on the previous song.
+        Single source of truth for now-playing refresh on track change (natural
+        advance + skip). To keep the live player and its controls at the bottom of
+        the chat, this deletes the previous now-playing message and sends a fresh
+        one as the most recent message — rather than editing the old one in place
+        up in scroll history. There is always exactly one live player.
+
+        In-song state changes (pause/resume/loop/shuffle button toggles) edit in
+        place via NowPlayingView and intentionally do NOT move the message.
         """
         track = queue.get_current()
         channel = self._get_text_channel(guild)
@@ -711,13 +715,16 @@ class MusicCog(commands.Cog):
             return
         embed = embeds.now_playing(track, queue)
         view = NowPlayingView(self.bot).apply_state(queue)
+        # Delete the previous now-playing message so there's exactly one live
+        # player, and it always lands at the bottom of the channel.
         if queue._now_playing_message_id:
             try:
-                msg = await channel.fetch_message(queue._now_playing_message_id)
-                await msg.edit(embed=embed, view=view)
-                return
-            except (discord.NotFound, discord.HTTPException) as edit_error:
-                log.debug(f"Now-playing edit failed, sending a new message: {edit_error}")
+                old = await channel.fetch_message(queue._now_playing_message_id)
+                await old.delete()
+            except (discord.NotFound, discord.HTTPException) as del_error:
+                log.debug(f"Old now-playing delete skipped (already gone?): {del_error}")
+            finally:
+                queue._now_playing_message_id = None
         msg = await channel.send(embed=embed, view=view)
         queue._now_playing_message_id = msg.id
 
