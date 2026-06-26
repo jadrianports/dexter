@@ -269,8 +269,25 @@ async def on_ready():
         return
     bot._ready_initializing = True
     try:
-        await _initialize_once()
+        await asyncio.wait_for(
+            _initialize_once(),
+            timeout=config.INIT_WATCHDOG_TIMEOUT_SECONDS,
+        )
         bot._ready_done = True
+    except asyncio.TimeoutError:
+        log.error(
+            "on_ready init hung for %ss; cleaning up pool to retry on next READY event",
+            config.INIT_WATCHDOG_TIMEOUT_SECONDS,
+        )
+        _pool = getattr(bot, "pool", None)
+        if _pool is not None:
+            try:
+                await _pool.close()
+            except Exception:
+                pass
+            if hasattr(bot, "pool"):
+                del bot.pool
+        return
     except Exception:
         log.exception("on_ready init failed; cleaning up to retry on next ready event")
         _pool = getattr(bot, "pool", None)
