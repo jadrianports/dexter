@@ -1,54 +1,29 @@
-# Dexter Docker Compose — Oracle A1 ARM production stack
-# Usage: docker compose up -d
-# Prereqs: copy .env.example to .env, fill in POSTGRES_PASSWORD + other secrets.
-# One `docker compose up` rebuilds the full stack (D-10); volumes survive container rebuilds.
-version: "3.9"
+# Dexter Docker Compose — host-on-PC + Neon Singapore stack
+# Usage: docker compose up -d --build
+# Prereqs: copy .env.example to .env, fill in DISCORD_TOKEN, GEMINI_API_KEY,
+#          GENIUS_TOKEN, and DATABASE_URL (Neon DSN, sslmode=require).
+# DB is Neon (managed Postgres) — no colocated Postgres container. The bot's
+# ssl='require' (bot.py) matches Neon's mandatory SSL.
 
 services:
-  # ── Postgres (colocated, D-11) ──────────────────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: dexter
-      POSTGRES_USER: dexter
-      # Password is sourced from .env — never a literal value in this file (T-04-05)
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      # Bot waits for this check to pass before starting (depends_on: service_healthy)
-      test: ["CMD-SHELL", "pg_isready -U dexter -d dexter"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   # ── Dexter bot ──────────────────────────────────────────────────────────────────────
   bot:
     build:
       context: .
       dockerfile: Dockerfile
-      # No platform pin — builds native for the host (amd64 on a PC, arm64 on a Pi/Oracle).
-    # Load all env vars from .env (DISCORD_TOKEN, GEMINI_API_KEY, GENIUS_TOKEN, etc.)
+      # No platform pin — builds native for the host (amd64 on a PC, arm64 on a Pi).
+    # Load all env vars from .env (DISCORD_TOKEN, GEMINI_API_KEY, GENIUS_TOKEN,
+    # DATABASE_URL=Neon DSN, etc.). DATABASE_URL is NOT overridden here — the bot
+    # connects directly to Neon (the colocated-Postgres override was Oracle-era legacy).
     env_file: .env
-    environment:
-      # Override DATABASE_URL to point at the colocated postgres service (D-11).
-      # Uses ${POSTGRES_PASSWORD} from .env; no plaintext password in this file (T-04-05).
-      DATABASE_URL: postgresql://dexter:${POSTGRES_PASSWORD}@postgres:5432/dexter
-    # Do not start bot until Postgres is healthy (avoids pool-acquire errors on cold boot)
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       # Paths match config.AUDIO_CACHE_DIR (BASE_DIR / "data" / "cache") and config.LOG_DIR
       - audio_cache:/app/data/cache
       - logs:/app/logs
     restart: unless-stopped
 
-# ── Named volumes (D-10) ────────────────────────────────────────────────────────────
-# All three survive `docker compose down` (not --volumes); data is preserved across
-# container rebuilds and bot restarts. Only `docker compose down -v` wipes them.
+# ── Named volumes ───────────────────────────────────────────────────────────────────
+# Both survive `docker compose down` (not --volumes). Only `docker compose down -v` wipes them.
 volumes:
-  postgres_data:
   audio_cache:
   logs:
