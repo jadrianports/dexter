@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import ExtractorError as _ExtractorError
 
 import config
 from utils.logger import log
@@ -20,6 +21,21 @@ _URL_PATTERN = re.compile(r"^https?://")
 # On-failure self-update throttle: attempt at most once per hour.
 _last_ytdlp_update: float = 0.0
 _UPDATE_THROTTLE_SECONDS: float = 3600.0
+
+
+def _is_transient_ytdlp_error(exc: Exception) -> bool:
+    """Return True if the error is plausibly transient and worth retrying.
+
+    ExtractorError.expected=True signals content unavailable / age-restricted —
+    a permanent condition that must NOT be retried (A1/A2: [ASSUMED] — no formal
+    yt-dlp API docs, but the conservative fallback is sound: any non-expected
+    error is treated as transient so we never skip a retry we should make).
+    All other errors (network blips, unexpected extractor failures) are transient
+    candidates.
+    """
+    if isinstance(exc, _ExtractorError) and exc.expected:
+        return False
+    return True
 
 
 def update_ytdlp() -> bool:
@@ -227,14 +243,85 @@ class YouTubeService:
             return None
 
     async def async_search(self, query: str, count: int | None = None) -> list[dict]:
-        """Run search in a thread pool to avoid blocking the event loop."""
+        """Run search with bounded quick-retry + throttled self-heal (REL-06 / D-08).
+
+        Retry budget: YTDLP_MAX_QUICK_RETRIES quick attempts with exponential backoff.
+        If all quick retries are exhausted, fall back to a throttled yt-dlp self-update
+        (at most once per _UPDATE_THROTTLE_SECONDS) and one final attempt, matching the
+        self-heal path already in download(). A permanent ExtractorError (expected=True)
+        bypasses both the retry loop and the update path entirely.
+        """
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, functools.partial(self.search, query, count))
+        last_exc: Exception | None = None
+        for attempt in range(config.YTDLP_MAX_QUICK_RETRIES + 1):
+            try:
+                return await loop.run_in_executor(
+                    None, functools.partial(self.search, query, count)
+                )
+            except Exception as exc:
+                last_exc = exc
+                if not _is_transient_ytdlp_error(exc):
+                    raise  # permanent failure (video unavailable etc.) — don't retry
+                if attempt < config.YTDLP_MAX_QUICK_RETRIES:
+                    log.warning(
+                        "search attempt %d/%d failed (transient): %s",
+                        attempt + 1, config.YTDLP_MAX_QUICK_RETRIES + 1, exc,
+                    )
+                    await asyncio.sleep(config.YTDLP_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                else:
+                    # All quick retries exhausted — throttled update + one final attempt
+                    global _last_ytdlp_update
+                    now = time.monotonic()
+                    if now - _last_ytdlp_update >= _UPDATE_THROTTLE_SECONDS:
+                        log.warning("search exhausted quick retries; attempting yt-dlp update")
+                        await loop.run_in_executor(None, update_ytdlp)
+                    try:
+                        return await loop.run_in_executor(
+                            None, functools.partial(self.search, query, count)
+                        )
+                    except Exception as final_exc:
+                        log.error("search failed after update: %s", final_exc)
+                        raise
+        raise last_exc  # unreachable; satisfies type checker
 
     async def async_extract(self, url: str) -> dict:
-        """Run extract in a thread pool."""
+        """Run extract with bounded quick-retry + throttled self-heal (REL-06 / D-08).
+
+        Identical structure to async_search — see that method's docstring for the
+        retry/update contract. Substitutes self.extract for self.search (no count arg).
+        """
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self.extract, url)
+        last_exc: Exception | None = None
+        for attempt in range(config.YTDLP_MAX_QUICK_RETRIES + 1):
+            try:
+                return await loop.run_in_executor(
+                    None, functools.partial(self.extract, url)
+                )
+            except Exception as exc:
+                last_exc = exc
+                if not _is_transient_ytdlp_error(exc):
+                    raise  # permanent failure — don't retry
+                if attempt < config.YTDLP_MAX_QUICK_RETRIES:
+                    log.warning(
+                        "extract attempt %d/%d failed (transient): %s",
+                        attempt + 1, config.YTDLP_MAX_QUICK_RETRIES + 1, exc,
+                    )
+                    await asyncio.sleep(config.YTDLP_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                else:
+                    # All quick retries exhausted — throttled update + one final attempt
+                    global _last_ytdlp_update
+                    now = time.monotonic()
+                    if now - _last_ytdlp_update >= _UPDATE_THROTTLE_SECONDS:
+                        log.warning("extract exhausted quick retries; attempting yt-dlp update")
+                        await loop.run_in_executor(None, update_ytdlp)
+                    try:
+                        return await loop.run_in_executor(
+                            None, functools.partial(self.extract, url)
+                        )
+                    except Exception as final_exc:
+                        log.error("extract failed after update: %s", final_exc)
+                        raise
+        raise last_exc  # unreachable; satisfies type checker
 
     async def async_download(self, video_id: str, url: str) -> Path | None:
         """Run download in a thread pool."""
