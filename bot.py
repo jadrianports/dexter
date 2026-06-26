@@ -215,16 +215,19 @@ async def _run_health_server() -> None:
         except Exception:
             reasons = ["metrics gatherer unavailable"]
 
-        # D-28: always HTTP 200 — non-200 causes Koyeb kill-loop and Neon 5-min restart cascade.
+        # D-01: HEALTH_STRICT_STATUS (default True) → 503 when degraded; False → legacy 200.
         # D-27: body exposes ONLY status + generic reason strings (no guild/shard/pool internals).
         if reasons:
             body = json.dumps({"status": "degraded", "reasons": reasons})
+            status = 503 if getattr(config, "HEALTH_STRICT_STATUS", True) else 200
         else:
             body = '{"status":"ok"}'
+            status = 200
 
         return _aio_web.Response(
             text=body,
             content_type='application/json',
+            status=status,
         )
 
     app = _aio_web.Application()

@@ -108,6 +108,13 @@ async def gather_bot_metrics(bot) -> dict:
     if not metrics["gateway_ready"]:
         metrics["degraded_reasons"].append("discord gateway not ready")
 
+    # MusicCog load check (REL-01 / D-02)
+    # Guard: only report missing as degraded after full init (_ready_done).
+    # During startup, MusicCog is absent by design — cogs load after pool/services.
+    if getattr(bot, "_ready_done", False):
+        if bot.cogs.get("MusicCog") is None:
+            metrics["degraded_reasons"].append("MusicCog not loaded")
+
     return metrics
 
 

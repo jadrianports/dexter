@@ -1,9 +1,13 @@
-"""Tests for the degraded /health endpoint (OPS-02, D-28).
+"""Tests for the degraded /health endpoint (OPS-02, D-28, REL-01).
 
 Verifies:
-    test_health_ok         — no degraded_reasons → body is {"status":"ok"}
-    test_health_degraded_db — pool raises on execute → body includes "database unreachable"
-    test_health_always_200 — HTTP status is always 200, even with DB down (D-28)
+    test_health_ok              — no degraded_reasons → body is {"status":"ok"}
+    test_health_degraded_db     — pool raises on execute → body includes "database unreachable"
+    test_health_always_200      — HTTP status is always 200 when HEALTH_STRICT_STATUS=False (D-28)
+    test_musiccog_missing       — MusicCog absent post-init → "MusicCog not loaded" in reasons
+    test_startup_no_false_degraded — MusicCog absent during startup (_ready_done absent) → NOT degraded
+    test_503_strict_mode        — strict + degraded → status 503
+    test_200_legacy_mode        — legacy flag False + degraded → status 200
 
 Test approach: construct gather_bot_metrics() directly with a fake bot, then
 assert on the dict it produces. The health handler logic (body selection) is
@@ -45,14 +49,26 @@ def _make_fake_pool(db_ok: bool):
     return pool
 
 
-def _make_fake_bot(db_ok: bool = True, gateway_ready: bool = True):
-    """Build a minimal bot-like object for gather_bot_metrics."""
+def _make_fake_bot(
+    db_ok: bool = True,
+    gateway_ready: bool = True,
+    ready_done: bool = False,
+    music_cog_loaded: bool = True,
+):
+    """Build a minimal bot-like object for gather_bot_metrics.
+
+    Args:
+        db_ok:             Whether the fake pool responds to SELECT 1 without raising.
+        gateway_ready:     Whether bot.is_ready() returns True.
+        ready_done:        Whether bot._ready_done is True (post-init complete).
+        music_cog_loaded:  Whether "MusicCog" is present in bot.cogs.
+    """
     bot = MagicMock()
     bot.guilds = []
     bot.voice_clients = []
     bot.is_ready.return_value = gateway_ready
     bot.shard_count = 1
-    bot.cogs = {}
+    bot.cogs = {"MusicCog": MagicMock()} if music_cog_loaded else {}
     bot.pool = _make_fake_pool(db_ok)
     # No _start_monotonic → uptime_seconds defaults to 0.0
     if hasattr(bot, "_start_monotonic"):
@@ -62,6 +78,8 @@ def _make_fake_bot(db_ok: bool = True, gateway_ready: bool = True):
     bot._spec_class = None
     # Use configure_mock to avoid having _start_monotonic
     type(bot).__contains__ = MagicMock(return_value=False)
+    # Explicitly set _ready_done so getattr(bot, "_ready_done", False) returns the right value
+    bot._ready_done = ready_done
     return bot
 
 
@@ -155,3 +173,109 @@ async def test_health_always_200():
     )
     # HTTP 200 is enforced by bot.py returning Response(...) unconditionally —
     # validated here by confirming the handler logic path never raises
+
+
+# ---------------------------------------------------------------------------
+# REL-01: New tests for MusicCog degraded check + status code selection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_musiccog_missing_post_init():
+    """gather_bot_metrics appends 'MusicCog not loaded' when _ready_done=True and MusicCog absent.
+
+    Fake bot: _ready_done=True, cogs={} (no MusicCog), DB ok, gateway ready.
+    Expected: 'MusicCog not loaded' in degraded_reasons.
+    """
+    from cogs.ops import gather_bot_metrics
+
+    bot = _make_fake_bot(db_ok=True, gateway_ready=True, ready_done=True, music_cog_loaded=False)
+    metrics = await gather_bot_metrics(bot)
+
+    assert "MusicCog not loaded" in metrics["degraded_reasons"], (
+        f"Expected 'MusicCog not loaded' in reasons, got: {metrics['degraded_reasons']}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_startup_no_false_degraded():
+    """During startup (_ready_done absent/False), missing MusicCog must NOT be degraded.
+
+    Fake bot: _ready_done=False (startup in progress), cogs={} (MusicCog not yet loaded),
+    DB ok, gateway ready.
+    Expected: 'MusicCog not loaded' NOT in degraded_reasons.
+    """
+    from cogs.ops import gather_bot_metrics
+
+    # _ready_done=False simulates startup (MusicCog loads after pool/services)
+    bot = _make_fake_bot(db_ok=True, gateway_ready=True, ready_done=False, music_cog_loaded=False)
+    metrics = await gather_bot_metrics(bot)
+
+    assert "MusicCog not loaded" not in metrics["degraded_reasons"], (
+        f"'MusicCog not loaded' must NOT appear during startup, got: {metrics['degraded_reasons']}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_status_503_strict_mode():
+    """Handler yields status=503 when strict mode on + degraded reasons present.
+
+    Simulates the bot.py inline handler logic: HEALTH_STRICT_STATUS=True + reasons → 503.
+    """
+    from cogs.ops import gather_bot_metrics
+    import config
+
+    # Bot with MusicCog missing post-init → guarantees a degraded reason
+    bot = _make_fake_bot(db_ok=True, gateway_ready=True, ready_done=True, music_cog_loaded=False)
+    metrics = await gather_bot_metrics(bot)
+    reasons = metrics.get("degraded_reasons", [])
+
+    assert reasons, "Need non-empty degraded_reasons to test 503 path"
+
+    # Inline handler logic (mirrors bot.py health() handler)
+    if reasons:
+        body = json.dumps({"status": "degraded", "reasons": reasons})
+        status = 503 if getattr(config, "HEALTH_STRICT_STATUS", True) else 200
+    else:
+        body = '{"status":"ok"}'
+        status = 200
+
+    # HEALTH_STRICT_STATUS defaults True → expect 503
+    assert status == 503, f"Expected 503 in strict mode, got {status}"
+    parsed = json.loads(body)
+    assert parsed["status"] == "degraded"
+    # D-27: body must NOT contain internal state keys
+    assert "guild_count" not in parsed
+    assert "shard_count" not in parsed
+    assert "voice_count" not in parsed
+
+
+@pytest.mark.asyncio
+async def test_status_200_legacy_mode(monkeypatch):
+    """Handler yields status=200 when HEALTH_STRICT_STATUS=False even with degraded reasons.
+
+    Simulates the legacy escape hatch: flag false → always-200 (D-28 preserved).
+    """
+    import importlib
+    import config as cfg_mod
+    from cogs.ops import gather_bot_metrics
+
+    # Temporarily set HEALTH_STRICT_STATUS to False
+    monkeypatch.setattr(cfg_mod, "HEALTH_STRICT_STATUS", False)
+
+    bot = _make_fake_bot(db_ok=True, gateway_ready=True, ready_done=True, music_cog_loaded=False)
+    metrics = await gather_bot_metrics(bot)
+    reasons = metrics.get("degraded_reasons", [])
+
+    assert reasons, "Need non-empty degraded_reasons to test legacy-200 path"
+
+    # Inline handler logic (mirrors bot.py health() handler)
+    if reasons:
+        body = json.dumps({"status": "degraded", "reasons": reasons})
+        status = 503 if getattr(cfg_mod, "HEALTH_STRICT_STATUS", True) else 200
+    else:
+        body = '{"status":"ok"}'
+        status = 200
+
+    # HEALTH_STRICT_STATUS=False → expect 200 (legacy escape hatch)
+    assert status == 200, f"Expected 200 in legacy mode, got {status}"
