@@ -1,7 +1,7 @@
 """Tests for YouTubeService with mocked yt-dlp responses."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from services.youtube import YouTubeService
 from models.queue import Track
@@ -229,3 +229,215 @@ class TestCodecLogging:
         assert result is not None
         log_text = " ".join(r.getMessage() for r in caplog.records)
         assert "codec_path=transcode" in log_text
+
+
+# ---------------------------------------------------------------------------
+# REL-06: bounded-retry + throttled self-heal for async_search / async_extract
+# ---------------------------------------------------------------------------
+
+class TestIsTransientYtdlpError:
+    """Unit tests for the _is_transient_ytdlp_error permanent-vs-transient classifier."""
+
+    def test_extractor_error_expected_true_is_permanent(self):
+        """ExtractorError.expected=True → content unavailable (permanent) — do not retry."""
+        from yt_dlp.utils import ExtractorError
+        from services.youtube import _is_transient_ytdlp_error
+
+        exc = ExtractorError("Video unavailable", expected=True)
+        assert _is_transient_ytdlp_error(exc) is False
+
+    def test_extractor_error_expected_false_is_transient(self):
+        """ExtractorError.expected=False → unexpected extractor failure — treat as transient."""
+        from yt_dlp.utils import ExtractorError
+        from services.youtube import _is_transient_ytdlp_error
+
+        exc = ExtractorError("Unexpected extractor failure", expected=False)
+        assert _is_transient_ytdlp_error(exc) is True
+
+    def test_generic_exception_is_transient(self):
+        """Any non-ExtractorError (network timeout, connection reset) → transient."""
+        from services.youtube import _is_transient_ytdlp_error
+
+        exc = Exception("connection reset by peer")
+        assert _is_transient_ytdlp_error(exc) is True
+
+
+class TestAsyncSearchRetry:
+    """Tests for bounded quick-retry + throttled self-heal in async_search (REL-06 / D-08)."""
+
+    def setup_method(self):
+        # Reset the on-failure throttle before each test (mirrors test_ytdlp_selfheal.py pattern)
+        import services.youtube as yt_mod
+        yt_mod._last_ytdlp_update = 0.0
+
+    @pytest.mark.asyncio
+    async def test_success_on_first_attempt(self, yt_service):
+        """Happy path: succeeds immediately — no retry, no sleep, no update."""
+        with patch.object(yt_service, "search", return_value=[{"video_id": "abc"}]) as mock_s, \
+             patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            result = await yt_service.async_search("happy path")
+
+        assert result == [{"video_id": "abc"}]
+        mock_s.assert_called_once()
+        mock_sleep.assert_not_called()
+        mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_transient_failure_retries_and_recovers(self, yt_service):
+        """Transient fail on attempt 1, success on attempt 2 — one backoff sleep, no update."""
+        call_count = {"n": 0}
+
+        def flaky_search(q, c=None):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise Exception("transient network blip")
+            return [{"video_id": "rec"}]
+
+        with patch.object(yt_service, "search", side_effect=flaky_search), \
+             patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            result = await yt_service.async_search("query")
+
+        assert result == [{"video_id": "rec"}]
+        assert call_count["n"] == 2
+        assert mock_sleep.call_count == 1
+        mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_permanent_extractor_error_propagates_immediately(self, yt_service):
+        """ExtractorError(expected=True) — search called once, no sleep, no update, re-raised."""
+        from yt_dlp.utils import ExtractorError
+
+        exc = ExtractorError("Video unavailable", expected=True)
+        with patch.object(yt_service, "search", side_effect=exc) as mock_s, \
+             patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            with pytest.raises(ExtractorError):
+                await yt_service.async_search("blocked query")
+
+        mock_s.assert_called_once()
+        mock_sleep.assert_not_called()
+        mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_calls_update_once(self, yt_service):
+        """All quick retries exhausted + outside throttle → update called exactly once."""
+        import config as cfg
+        import services.youtube as yt_mod
+        yt_mod._last_ytdlp_update = 0.0  # outside throttle window
+
+        with patch.object(yt_service, "search", side_effect=Exception("persistent")) as mock_s, \
+             patch("asyncio.sleep", new_callable=AsyncMock), \
+             patch("services.youtube.update_ytdlp", return_value=True) as mock_update:
+            with pytest.raises(Exception, match="persistent"):
+                await yt_service.async_search("query")
+
+        mock_update.assert_called_once()
+        # quick-retry loop: YTDLP_MAX_QUICK_RETRIES+1 attempts + 1 final after update
+        assert mock_s.call_count == cfg.YTDLP_MAX_QUICK_RETRIES + 2
+
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_skips_update_when_throttled(self, yt_service):
+        """All quick retries exhausted but within throttle window → update is skipped."""
+        import time
+        import services.youtube as yt_mod
+        yt_mod._last_ytdlp_update = time.monotonic()  # just updated — throttled
+
+        with patch.object(yt_service, "search", side_effect=Exception("throttled")), \
+             patch("asyncio.sleep", new_callable=AsyncMock), \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            with pytest.raises(Exception):
+                await yt_service.async_search("query")
+
+        mock_update.assert_not_called()
+
+
+class TestAsyncExtractRetry:
+    """Tests for bounded quick-retry + throttled self-heal in async_extract (REL-06 / D-08)."""
+
+    def setup_method(self):
+        import services.youtube as yt_mod
+        yt_mod._last_ytdlp_update = 0.0
+
+    @pytest.mark.asyncio
+    async def test_success_on_first_attempt(self, yt_service):
+        """Happy path: succeeds immediately — no retry, no sleep, no update."""
+        with patch.object(yt_service, "extract", return_value={"video_id": "abc"}) as mock_e, \
+             patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            result = await yt_service.async_extract("https://youtube.com/watch?v=abc")
+
+        assert result == {"video_id": "abc"}
+        mock_e.assert_called_once()
+        mock_sleep.assert_not_called()
+        mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_transient_failure_retries_and_recovers(self, yt_service):
+        """Transient fail on attempt 1, success on attempt 2 — one backoff sleep, no update."""
+        call_count = {"n": 0}
+
+        def flaky_extract(url):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise Exception("transient blip")
+            return {"video_id": "abc"}
+
+        with patch.object(yt_service, "extract", side_effect=flaky_extract), \
+             patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            result = await yt_service.async_extract("https://youtube.com/watch?v=abc")
+
+        assert result == {"video_id": "abc"}
+        assert call_count["n"] == 2
+        assert mock_sleep.call_count == 1
+        mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_permanent_extractor_error_propagates_immediately(self, yt_service):
+        """ExtractorError(expected=True) — extract called once, no sleep, no update, re-raised."""
+        from yt_dlp.utils import ExtractorError
+
+        exc = ExtractorError("Video unavailable", expected=True)
+        with patch.object(yt_service, "extract", side_effect=exc) as mock_e, \
+             patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            with pytest.raises(ExtractorError):
+                await yt_service.async_extract("https://youtube.com/watch?v=blocked")
+
+        mock_e.assert_called_once()
+        mock_sleep.assert_not_called()
+        mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_calls_update_once(self, yt_service):
+        """All quick retries exhausted + outside throttle → update called exactly once."""
+        import config as cfg
+        import services.youtube as yt_mod
+        yt_mod._last_ytdlp_update = 0.0
+
+        with patch.object(yt_service, "extract", side_effect=Exception("blip")) as mock_e, \
+             patch("asyncio.sleep", new_callable=AsyncMock), \
+             patch("services.youtube.update_ytdlp", return_value=True) as mock_update:
+            with pytest.raises(Exception, match="blip"):
+                await yt_service.async_extract("https://youtube.com/watch?v=x")
+
+        mock_update.assert_called_once()
+        import config as cfg
+        assert mock_e.call_count == cfg.YTDLP_MAX_QUICK_RETRIES + 2
+
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_skips_update_when_throttled(self, yt_service):
+        """All quick retries exhausted but within throttle window → update is skipped."""
+        import time
+        import services.youtube as yt_mod
+        yt_mod._last_ytdlp_update = time.monotonic()  # just updated — throttled
+
+        with patch.object(yt_service, "extract", side_effect=Exception("throttled")), \
+             patch("asyncio.sleep", new_callable=AsyncMock), \
+             patch("services.youtube.update_ytdlp") as mock_update:
+            with pytest.raises(Exception):
+                await yt_service.async_extract("https://youtube.com/watch?v=x")
+
+        mock_update.assert_not_called()
