@@ -7,6 +7,7 @@ import json
 import asyncpg
 
 import config
+from logic.playback import clamp_restore_index, exceeds_queue_cap, should_smart_rejoin
 from models.queue import LoopMode, Track
 from utils.logger import log
 
@@ -117,7 +118,7 @@ class QueuePersistenceService:
             # (CR-03): persisted data could exceed it after a config change or
             # tampering — truncate defensively rather than bypassing the cap.
             restored = [Track.from_dict(t) for t in payload.get("tracks", [])]
-            if len(restored) > config.MAX_QUEUE_SIZE_PER_GUILD:
+            if exceeds_queue_cap(len(restored), config.MAX_QUEUE_SIZE_PER_GUILD):
                 log.warning(
                     "restore_queues: guild %s queue (%d) exceeds cap %d — truncating",
                     guild_id, len(restored), config.MAX_QUEUE_SIZE_PER_GUILD,
@@ -127,11 +128,8 @@ class QueuePersistenceService:
 
             # Clamp current_index into range (CR-03): a stale or non-int index must
             # not reach get_current() -> _play_track(None).
-            raw_index = payload.get("current_index", 0)
-            if not isinstance(raw_index, int):
-                raw_index = 0
-            queue.current_index = (
-                max(0, min(raw_index, len(queue.tracks) - 1)) if queue.tracks else 0
+            queue.current_index = clamp_restore_index(
+                payload.get("current_index", 0), len(queue.tracks)
             )
 
             queue.loop_mode = LoopMode(payload.get("loop_mode", "off"))
@@ -142,9 +140,13 @@ class QueuePersistenceService:
             # we have something to play, and we are not already connected (CR-03).
             vc_id = payload.get("voice_channel_id")
             current = queue.get_current() if queue.tracks else None
-            if vc_id and current is not None and guild.voice_client is None:
+            if vc_id:
                 vc_channel = guild.get_channel(vc_id)
-                if vc_channel and any(not m.bot for m in vc_channel.members):
+                if vc_channel and should_smart_rejoin(
+                    has_current=current is not None,
+                    already_connected=guild.voice_client is not None,
+                    humans_present=any(not m.bot for m in vc_channel.members),
+                ):
                     try:
                         vc = await vc_channel.connect()
                         log.info("smart-rejoin: connected=%s guild=%s", vc.is_connected(), guild_id)

@@ -6,6 +6,8 @@ import asyncio
 import time
 from typing import TYPE_CHECKING
 
+from logic.playback import TrackEndAction, decide_on_track_end
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -746,32 +748,55 @@ class MusicCog(commands.Cog):
 
         next_track = queue.advance()
         await self._persist_queue(guild, queue)
-        if next_track:
+
+        # Compute glue inputs for the pure decision function
+        voice_client = guild.voice_client
+        connected = bool(voice_client and voice_client.channel)
+        humans_present = (
+            any(not m.bot for m in voice_client.channel.members)
+            if connected
+            else False
+        )
+        ai_cog = self.bot.cogs.get("AICog")
+        aicog_loaded = ai_cog is not None
+
+        action = decide_on_track_end(
+            is_playing=True,  # already returned if not is_playing above
+            has_next=next_track is not None,
+            connected=connected,
+            humans_present=humans_present,
+            aicog_loaded=aicog_loaded,
+        )
+
+        if action == TrackEndAction.NOOP:
+            # Should not reach here (is_playing guard above), but handle defensively
+            return
+
+        elif action == TrackEndAction.PLAY:
             await self._play_track(guild, next_track)
             await self._refresh_now_playing(guild, queue)
-        else:
-            # Queue exhausted — try auto-queue before stopping
-            voice_client = guild.voice_client
-            if voice_client and voice_client.channel:
-                human_members = [m for m in voice_client.channel.members if not m.bot]
-                if human_members:
-                    ai_cog = self.bot.cogs.get("AICog")
-                    if ai_cog:
-                        log.info(
-                            "auto-queue: queue empty with %d human(s) in voice — triggering (guild %d)",
-                            len(human_members), guild.id,
-                        )
-                        make_task(ai_cog.try_auto_queue(guild), name="auto-queue", bot=self.bot)
-                        return  # Don't set is_playing = False; auto-queue will handle it
-                    log.info("auto-queue: NOT triggered — AICog not loaded (guild %d)", guild.id)
-                else:
-                    log.info("auto-queue: NOT triggered — no humans left in voice (guild %d)", guild.id)
-            else:
-                log.info("auto-queue: NOT triggered — not connected to a voice channel (guild %d)", guild.id)
 
-            # Queue genuinely exhausted with nothing left to resume. Tear down the
-            # persisted row so the just-finished track is NOT replayed on the next
-            # restart (mirrors the /stop teardown template; closes the same
+        elif action == TrackEndAction.AUTOQUEUE:
+            # Queue exhausted — auto-queue: don't set is_playing = False; auto-queue handles it
+            human_count = sum(1 for m in voice_client.channel.members if not m.bot)
+            log.info(
+                "auto-queue: queue empty with %d human(s) in voice — triggering (guild %d)",
+                human_count, guild.id,
+            )
+            make_task(ai_cog.try_auto_queue(guild), name="auto-queue", bot=self.bot)
+
+        else:
+            # STOP_AND_CLEAR — queue genuinely exhausted with no auto-queue fallback.
+            # Log why (mirrors the original per-branch log.info lines).
+            if not connected:
+                log.info("auto-queue: NOT triggered — not connected to a voice channel (guild %d)", guild.id)
+            elif not humans_present:
+                log.info("auto-queue: NOT triggered — no humans left in voice (guild %d)", guild.id)
+            else:
+                log.info("auto-queue: NOT triggered — AICog not loaded (guild %d)", guild.id)
+
+            # Tear down the persisted row so the just-finished track is NOT replayed on
+            # the next restart (mirrors the /stop teardown template; closes the same
             # clear_persisted() gap as DEPLOY-06 / IN-02). A still-playing or paused
             # track never reaches here, so resume-on-restart for unfinished songs is
             # unaffected; a looping queue never exhausts so it never hits this branch.

@@ -12,6 +12,7 @@ from discord.ext import commands
 
 import config
 from database import get_recent_songs, increment_daily_stat
+from logic.playback import should_start_playback
 from models.queue import Track
 from models.server_state import get_server_state, get_mood
 from models.user_profile import get_user_summary
@@ -304,16 +305,21 @@ class AICog(commands.Cog):
                          len(suggestions), config.MAX_SONG_DURATION_SECONDS, guild.id)
                 return
 
-            # Start playback if no audio is actually flowing. Check the live voice
-            # client state, NOT queue.is_playing: on the natural-exhaustion path
-            # _on_track_end leaves is_playing=True and defers to auto-queue
-            # (music.py "auto-queue will handle it"), so the old `not queue.is_playing`
-            # guard never fired and the freshly-queued tracks sat silent. The track
-            # just ended, so the voice client — the real source of truth — reports
-            # neither playing nor paused here.
+            # Start playback if no audio is actually flowing. Gate on the live voice
+            # client state (voice_client.is_playing() / is_paused()), NOT queue.is_playing:
+            # on the natural-exhaustion path _on_track_end leaves is_playing=True and
+            # defers to auto-queue ("auto-queue will handle it"), so the old
+            # `not queue.is_playing` guard never fired and the freshly-queued tracks sat
+            # silent. The voice client is the only ground truth for "audio is flowing"
+            # (scar #2 / CLAUDE.md Phase 6-8 gotcha; now locked by should_start_playback).
             voice_client = guild.voice_client
-            if voice_client and not voice_client.is_playing() and not voice_client.is_paused():
-                queue.current_index = len(queue.tracks) - len(tracks_added)
+            queue.current_index = len(queue.tracks) - len(tracks_added)
+            if should_start_playback(
+                connected=voice_client is not None,
+                voice_is_playing=voice_client.is_playing() if voice_client else False,
+                voice_is_paused=voice_client.is_paused() if voice_client else False,
+                has_track=queue.get_current() is not None,
+            ):
                 await music_cog._play_track(guild, queue.get_current())
 
             channel = self._get_text_channel(guild)
