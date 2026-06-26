@@ -8,6 +8,7 @@ import datetime
 import json
 import random
 import sys
+import time
 
 import asyncpg
 import discord
@@ -555,6 +556,40 @@ async def sync_commands(interaction: discord.Interaction, guild_id: str | None =
 
 # ──────────────────────────── BACKGROUND TASKS ────────────────────────────
 
+# Dedup map for _post_loop_error: keyed on "{loop_name}:{ExcTypeName}".
+# Mirrors the _UPDATE_THROTTLE_SECONDS monotonic pattern in services/youtube.py.
+_last_loop_error_post: dict[str, float] = {}
+
+
+async def _post_loop_error(loop_name: str, error: Exception) -> None:
+    """Post a throttled, sanitized embed to the Discord error channel for a loop crash.
+
+    Dedups per (loop_name, exc_type) within TASK_ERROR_CHANNEL_COOLDOWN_SECONDS so a
+    recurring loop failure cannot flood the error channel. Every occurrence is already
+    logged by the @loop.error handler before this is called.
+
+    Security (T-09-04): embed carries loop name + type(error).__name__ + truncated
+    message only — no guild IDs, user data, tokens, or DSNs.
+    """
+    key = f"{loop_name}:{type(error).__name__}"
+    now = time.monotonic()
+    if now - _last_loop_error_post.get(key, 0.0) < config.TASK_ERROR_CHANNEL_COOLDOWN_SECONDS:
+        return
+    _last_loop_error_post[key] = now
+    if not hasattr(bot, "log_to_discord"):
+        return
+    # Truncate message to avoid embed limit; type + message only (T-09-04)
+    desc = f"{type(error).__name__}: {str(error)[:500]}"
+    embed = discord.Embed(
+        title=f"Background Loop Error: {loop_name}",
+        description=desc,
+        color=0xFF6600,
+    )
+    try:
+        await bot.log_to_discord(embed)
+    except Exception:
+        pass  # never let the error reporter crash the loop
+
 
 @tasks.loop(seconds=60)
 async def idle_check():
@@ -637,6 +672,12 @@ async def before_idle_check():
     await bot.wait_until_ready()
 
 
+@idle_check.error
+async def on_idle_check_error(error: Exception) -> None:
+    log.error("idle_check task error: %s", error, exc_info=error)
+    await _post_loop_error("idle_check", error)
+
+
 @tasks.loop(hours=1)
 async def cache_cleanup():
     """Hourly cache size check and cleanup (Phase 6: LFU with protected-set guard)."""
@@ -666,6 +707,12 @@ async def before_cache_cleanup():
     await bot.wait_until_ready()
 
 
+@cache_cleanup.error
+async def on_cache_cleanup_error(error: Exception) -> None:
+    log.error("cache_cleanup task error: %s", error, exc_info=error)
+    await _post_loop_error("cache_cleanup", error)
+
+
 @tasks.loop(time=datetime.time(hour=4, minute=0))
 async def ytdlp_update():
     """Proactively update yt-dlp daily at 04:00 (it breaks often)."""
@@ -677,6 +724,12 @@ async def ytdlp_update():
 @ytdlp_update.before_loop
 async def before_ytdlp_update():
     await bot.wait_until_ready()
+
+
+@ytdlp_update.error
+async def on_ytdlp_update_error(error: Exception) -> None:
+    log.error("ytdlp_update task error: %s", error, exc_info=error)
+    await _post_loop_error("ytdlp_update", error)
 
 
 @tasks.loop(seconds=config.STATUS_ROTATION_INTERVAL_SECONDS)
@@ -697,6 +750,12 @@ async def status_rotation():
 @status_rotation.before_loop
 async def before_status_rotation():
     await bot.wait_until_ready()
+
+
+@status_rotation.error
+async def on_status_rotation_error(error: Exception) -> None:
+    log.error("status_rotation task error: %s", error, exc_info=error)
+    await _post_loop_error("status_rotation", error)
 
 
 # ──────────────────────────── FIRST-RUN & MAIN ────────────────────────────
