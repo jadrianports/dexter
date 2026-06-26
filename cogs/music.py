@@ -886,7 +886,10 @@ class MusicCog(commands.Cog):
         next_track = queue.skip()
         await self._persist_queue(guild, queue)
         if next_track:
-            asyncio.create_task(self._play_track(guild, next_track))
+            # WR-01: route through make_task so a re-raised _play_track failure
+            # (the voice_client.play() block re-raises after cleanup) is surfaced
+            # to logs + the error channel and a strong reference prevents GC abandonment.
+            make_task(self._play_track(guild, next_track), name="play-after-skip", bot=self.bot)
             # Refresh the now-playing controller so it reflects the new track
             # (otherwise the embed + buttons stay frozen on the skipped song).
             await self._refresh_now_playing(guild, queue)
@@ -1477,8 +1480,10 @@ class MusicCog(commands.Cog):
         await self._persist_queue(interaction.guild, queue)
         if next_track:
             await interaction.response.send_message(f"Skipped to **{next_track.title}**")
-            # Play in background — don't block the response
-            asyncio.create_task(self._play_track(interaction.guild, next_track))
+            # Play in background — don't block the response.
+            # WR-01: make_task surfaces a re-raised _play_track failure + holds a
+            # strong reference (bare create_task could be GC'd mid-await).
+            make_task(self._play_track(interaction.guild, next_track), name="play-after-skip", bot=self.bot)
         else:
             queue.is_playing = False
             voice_client.stop()
