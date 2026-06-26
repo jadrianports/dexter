@@ -1484,6 +1484,10 @@ class MusicCog(commands.Cog):
             # WR-01: make_task surfaces a re-raised _play_track failure + holds a
             # strong reference (bare create_task could be GC'd mid-await).
             make_task(self._play_track(interaction.guild, next_track), name="play-after-skip", bot=self.bot)
+            # WR-02: re-render the persistent now-playing message onto the new
+            # track so the slash path matches _do_skip / natural-advance (otherwise
+            # the embed + controls stay frozen on the previous song).
+            await self._refresh_now_playing(interaction.guild, queue)
         else:
             queue.is_playing = False
             voice_client.stop()
