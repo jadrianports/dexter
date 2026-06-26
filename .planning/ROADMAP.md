@@ -48,7 +48,7 @@ Full phase details, success criteria, and decisions archived in
 **Milestone Goal:** Harden Dexter into a trustworthy 24/7-ready bot and give it a real memory — fix the reliability gaps, cover the untested critical paths, then make it smarter (long-term RAG memory) and richer (music/UX polish).
 
 - [x] **Phase 9: Reliability & Ops Hardening** — truthful `/health`, fire-and-forget failure logging, sync-hang guards, DB query timeouts, search/extract self-heal (completed 2026-06-26)
-- [ ] **Phase 10: Critical-Path Test Coverage** — extract + unit-test MusicCog playback, OpsCog/health metrics, EventsCog ambient-roast logic
+- [x] **Phase 10: Critical-Path Test Coverage** — extract + unit-test MusicCog playback, OpsCog/health metrics, EventsCog ambient-roast logic (completed 2026-06-26)
 - [ ] **Phase 11: RAG Long-Term Memory** — `pgvector` on Neon + Gemini embeddings → durable distilled memory and callback roasts; zero new infra
 - [ ] **Phase 12: Richer Music/UX** — per-server playlists, skip-rate analytics, third lyrics fallback, auto-queue hallucination validation
 
@@ -109,7 +109,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 10-04-PLAN.md — Regression gate: full pytest suite green (automated) + manual clean-boot check (TEST-04) — Wave 2
+- [x] 10-04-PLAN.md — Regression gate: full pytest suite green (automated) + manual clean-boot check (TEST-04) — Wave 2
 
 ### Phase 11: RAG Long-Term Memory
 
@@ -173,6 +173,6 @@ Plans:
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete — verified live (07-HUMAN-UAT) | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
-| 10. Critical-Path Test Coverage | v1.2 | 3/4 | In Progress|  |
+| 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete   | 2026-06-26 |
 | 11. RAG Long-Term Memory | v1.2 | 0/6 | Not started | - |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |
