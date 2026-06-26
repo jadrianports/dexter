@@ -16,9 +16,9 @@ Read `dexter-architecture.md` for full context, personality samples, and rationa
 - **AI Chat:** Google Gemini API via `google-genai` (free tier, `gemini-2.5-flash`)
 - **Image Gen:** `gemini-2.5-flash-image` via the Gemini API (free tier)
 - **Database:** PostgreSQL 16 via `asyncpg` 0.31.0 — migrated from SQLite in Phase 4
-- **Containerization:** Docker + Docker Compose (`postgres:16-alpine` + bot image)
+- **Containerization:** Docker + Docker Compose (bot image only; DB is **Neon serverless Postgres**, not a colocated container — the Oracle-era `postgres:16-alpine` service was dropped in Phase 6)
 - **Lyrics:** Genius API via `lyricsgenius` (primary), AZLyrics scrape via `beautifulsoup4` (fallback)
-- **Hosting:** Oracle Cloud Always Free A1 ARM VM — deployed via Docker Compose (Phase 5)
+- **Hosting:** re-targeted Oracle A1 → Koyeb + Neon (Phase 5), then **24/7 deploy parked** (YouTube blocks datacenter IPs → free cloud non-viable). Runs on the user's PC (residential IP) on demand → **Neon serverless Postgres** (Singapore). Code is substrate-agnostic (Dockerfile + `DATABASE_URL`), so the host swap is config-only.
 
 ---
 
@@ -29,7 +29,7 @@ dexter/
 ├── bot.py                         # Entry point, AutoShardedBot init, cogs, background tasks
 ├── config.py                      # All settings (see Configuration section)
 ├── database.py                    # PostgreSQL (asyncpg) init, schema, query helpers, streak logic
-├── docker-compose.yml             # postgres:16-alpine + bot services; named volumes
+├── docker-compose.yml             # bot service only (DB = Neon, no colocated Postgres); named volumes
 ├── Dockerfile                     # bot image build
 ├── cogs/
 │   ├── music.py                   # All music slash commands
@@ -151,7 +151,7 @@ LOG_DIR = BASE_DIR / "logs"
 MAX_SONG_DURATION_SECONDS = 900       # 15 min
 MAX_PLAYLIST_IMPORT = 50
 AUDIO_QUALITY = "192"                  # kbps
-AUDIO_CACHE_MAX_MB = 2048             # 2GB
+AUDIO_CACHE_MAX_MB = 512              # 512MB (K-07; was 2048 pre-v1.1)
 IDLE_TIMEOUT_SECONDS = 600            # 10 min
 DOWNLOAD_TIMEOUT_SECONDS = 10
 SEARCH_RESULTS_COUNT = 5
@@ -401,7 +401,7 @@ Fields: title, artist, duration, progress bar, requested by, loop mode, lyrics s
 ## Logging
 
 ### File Logging
-Location: `/var/log/dexter/`
+Location: `LOG_DIR` = `logs/` (NOT `/var/log/dexter/`), **plus stdout** so Docker/Koyeb log viewers capture output (K-16).
 - `dexter.log`: INFO+ (commands, songs, queries). Daily rotation, 14-day retention.
 - `error.log`: ERROR+ only. Weekly rotation, 30-day retention.
 
@@ -419,7 +419,7 @@ Private channel, bot posts:
 
 Directory: `data/cache/`
 Files: `{video_id}.opus`
-Max size: 2GB. When exceeded, delete by oldest last-access time.
+Max size: 512MB (`AUDIO_CACHE_MAX_MB`). When exceeded, evict **least-played** tracks (lowest `song_history` play_count — NOT `atime`, which is unreliable on `noatime` mounts), skipping any `protected_video_ids` currently in use. (Phase 6 / K-07; was 2GB-by-atime pre-v1.1.)
 Hourly cleanup loop checks total size.
 
 ---
@@ -558,7 +558,15 @@ GENIUS_TOKEN=
 
 **Phases 4–5 (Postgres + deploy):**
 - **asyncpg multi-statement DDL** only works when there are no `$N` params — `SCHEMA_SQL` is plain DDL applied in one `conn.execute()` (Pitfall 1)
-- **`clear_persisted()` must mirror the `/stop` template** at every queue-teardown site (`_play_generation += 1` → `clear()` → `clear_persisted()`) or a ghost queue restores on restart (DEPLOY-06 / IN-02)
+- **`clear_persisted()` must mirror the `/stop` template** at every queue-teardown site (`_play_generation += 1` → `clear()` → `clear_persisted()`) or a ghost queue restores on restart (DEPLOY-06 / IN-02). **Teardown sites include natural queue exhaustion** — when the last track ends with nothing to resume, `current_index` stays parked on the finished track, so without `clear_persisted()` smart-rejoin replays it on the next restart (v1.1 live UAT)
 - **Community-time checks use `ZoneInfo(config.STREAK_TIMEZONE)`**, never naive `datetime.now().hour` — the host VM runs UTC, so naive time fires roasts/streaks on the wrong calendar day (D-06 / D-17)
 - **`restore_queues` must `continue` per-guild, not `return`** — one guild's failed smart-rejoin must not abort restoration for the rest (CR-01)
 - **`pg_restore` runs via `docker compose exec` (version-matched)**, never the host client, to dodge a server/client version mismatch
+- **Neon / serverless Postgres:** the asyncpg pool MUST use `statement_cache_size=0` + `ssl='require'` + a bounded `max_inactive_connection_lifetime` (~240s) — prepared statements break through PgBouncer and the pool must survive Neon's scale-to-zero, else SSL-EOF / `channel_binding` crashes (Phase 5 / K-04)
+
+**Phases 6–8 (speed, player UX, social):**
+- **Gate playback-start on `voice_client.is_playing()`, never the `queue.is_playing` flag** — `_on_track_end` leaves `is_playing=True` and defers to `try_auto_queue` on natural exhaustion ("auto-queue will handle it"), so a `not queue.is_playing` guard never fires and tracks queue but never play (silent auto-queue; v1.1 live UAT). The voice client is the only ground truth for "audio is flowing".
+- **Resolution-cache hits must route through `async_extract`** (full duration/livestream guards), never inline `Track` construction — a stale cached `video_id` would otherwise bypass the validity checks (D-09)
+- **Persistent discord.py views:** `timeout=None` + stable `custom_id`s registered in `setup_hook` (NOT `on_ready`) — otherwise buttons stop responding after a restart (Phase 7)
+- **opus-copy is the default fast path; transcode ONLY when `active_filter` is set** per-track — don't remove the opus-copy path for non-filtered tracks (PERF-02 / PLAYER-07, D-10/D-12)
+- **SponsorBlock PP order** is `SponsorBlock(when=after_filter) → FFmpegExtractAudio → ModifyChapters`; don't hand-write opus-copy — `FFmpegExtractAudioPP` already copies natively, `download()` only adds `postprocessor_hooks` for codec-path logging (D-01)
