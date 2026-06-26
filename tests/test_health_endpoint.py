@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -63,23 +64,24 @@ def _make_fake_bot(
         ready_done:        Whether bot._ready_done is True (post-init complete).
         music_cog_loaded:  Whether "MusicCog" is present in bot.cogs.
     """
-    bot = MagicMock()
-    bot.guilds = []
-    bot.voice_clients = []
-    bot.is_ready.return_value = gateway_ready
-    bot.shard_count = 1
-    bot.cogs = {"MusicCog": MagicMock()} if music_cog_loaded else {}
-    bot.pool = _make_fake_pool(db_ok)
-    # No _start_monotonic → uptime_seconds defaults to 0.0
-    if hasattr(bot, "_start_monotonic"):
-        del bot._start_monotonic
-    # Remove _start_monotonic via spec (MagicMock may expose it via attribute access)
-    # We want hasattr(bot, "_start_monotonic") == False
-    bot._spec_class = None
-    # Use configure_mock to avoid having _start_monotonic
-    type(bot).__contains__ = MagicMock(return_value=False)
-    # Explicitly set _ready_done so getattr(bot, "_ready_done", False) returns the right value
-    bot._ready_done = ready_done
+    # WR-05: a plain SimpleNamespace stub (not MagicMock) so attribute presence
+    # is REAL — hasattr(bot, "_start_monotonic") is genuinely False here, so
+    # gather_bot_metrics keeps uptime_seconds at its 0.0 default. A MagicMock would
+    # auto-create the attribute (hasattr always True) and compute uptime as a
+    # MagicMock. Crucially this also avoids mutating the shared MagicMock class
+    # (the old `type(bot).__contains__ = ...` monkeypatched __contains__ process-wide).
+    cog_value = SimpleNamespace() if music_cog_loaded else None
+    bot = SimpleNamespace(
+        guilds=[],
+        voice_clients=[],
+        is_ready=lambda: gateway_ready,
+        shard_count=1,
+        cogs={"MusicCog": cog_value} if music_cog_loaded else {},
+        pool=_make_fake_pool(db_ok),
+        # _ready_done explicit so getattr(bot, "_ready_done", False) is correct.
+        _ready_done=ready_done,
+        # Intentionally NO _start_monotonic attribute → hasattr is False → 0.0 default.
+    )
     return bot
 
 
@@ -101,6 +103,9 @@ async def test_health_ok():
     )
     assert metrics["db_ok"] is True
     assert metrics["gateway_ready"] is True
+    # WR-05: with no _start_monotonic on the stub, uptime must stay at its 0.0 default
+    # (the old MagicMock fake auto-created the attr and produced a MagicMock here).
+    assert metrics["uptime_seconds"] == 0.0
 
     # Simulate the handler's body-selection logic (same as bot.py health handler)
     reasons = metrics.get("degraded_reasons", [])
