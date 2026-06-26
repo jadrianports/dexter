@@ -139,6 +139,16 @@ PERF_ROLLING_WINDOW = 50            # rolling aggregate sample count (D-18)
 LEADERBOARD_TOP_N = 5               # top-N per leaderboard section (D-13)
 
 
+# --- Phase 9: Reliability & Ops Hardening ---
+HEALTH_STRICT_STATUS: bool = os.getenv("HEALTH_STRICT_STATUS", "true").lower() != "false"  # D-01: 503 when degraded (strict) vs legacy 200
+DB_COMMAND_TIMEOUT_SECONDS: int = 30        # D-07: replaces hardcoded 30 in bot.py create_pool
+INIT_WATCHDOG_TIMEOUT_SECONDS: int = 120    # D-06: asyncio.wait_for wrap on _initialize_once
+SYNC_TIMEOUT_SECONDS: int = 30             # D-05: asyncio.wait_for wrap on bot.tree.sync()
+TASK_ERROR_CHANNEL_COOLDOWN_SECONDS: int = 300   # D-04: dedup window per (task_name, exc_type)
+YTDLP_RETRY_BACKOFF_SECONDS: float = 1.0   # D-08: per-attempt sleep in search/extract retry
+YTDLP_MAX_QUICK_RETRIES: int = 2           # D-08: attempts before falling through to update path
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
