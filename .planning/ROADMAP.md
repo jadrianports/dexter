@@ -47,7 +47,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Milestone Goal:** Harden Dexter into a trustworthy 24/7-ready bot and give it a real memory — fix the reliability gaps, cover the untested critical paths, then make it smarter (long-term RAG memory) and richer (music/UX polish).
 
-- [ ] **Phase 9: Reliability & Ops Hardening** — truthful `/health`, fire-and-forget failure logging, sync-hang guards, DB query timeouts, search/extract self-heal
+- [x] **Phase 9: Reliability & Ops Hardening** — truthful `/health`, fire-and-forget failure logging, sync-hang guards, DB query timeouts, search/extract self-heal (completed 2026-06-26)
 - [ ] **Phase 10: Critical-Path Test Coverage** — extract + unit-test MusicCog playback, OpsCog/health metrics, EventsCog ambient-roast logic
 - [ ] **Phase 11: RAG Long-Term Memory** — `pgvector` on Neon + Gemini embeddings → durable distilled memory and callback roasts; zero new infra
 - [ ] **Phase 12: Richer Music/UX** — per-server playlists, skip-rate analytics, third lyrics fallback, auto-queue hallucination validation
@@ -82,7 +82,7 @@ Full phase details, success criteria, and decisions archived in
 
 - [x] 09-02-PLAN.md - Fire-and-forget `create_task` failure surfacing via `utils/tasks.py` make_task (REL-02) - Wave 2
 - [x] 09-03-PLAN.md - Startup sync recovery + un-wedgeable `on_ready` watchdog + `@loop.error` handlers (REL-03, REL-04, REL-02) - Wave 2
-- [ ] 09-04-PLAN.md - Bounded retry / self-heal for youtube search + extract (REL-06) - Wave 2
+- [x] 09-04-PLAN.md - Bounded retry / self-heal for youtube search + extract (REL-06) - Wave 2
 
 ### Phase 10: Critical-Path Test Coverage
 
@@ -166,7 +166,7 @@ Plans:
 | 6. Speed & Caching | v1.1 | 4/4 | Complete — verified live (06-UAT) | 2026-06-26 |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete — verified live (07-HUMAN-UAT) | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
-| 9. Reliability & Ops Hardening | v1.2 | 3/4 | In Progress|  |
+| 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete   | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 0/4 | Not started | - |
 | 11. RAG Long-Term Memory | v1.2 | 0/6 | Not started | - |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |

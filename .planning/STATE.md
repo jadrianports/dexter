@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
-status: executing
+status: verifying
 stopped_at: Completed 09-03-PLAN.md
-last_updated: "2026-06-26T15:16:34.034Z"
+last_updated: "2026-06-26T15:34:22.397Z"
 last_activity: 2026-06-26 -- Phase 09 execution started
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 25
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 Phase: 09 (reliability-ops-hardening) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-26 -- Phase 09 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09 P01 | 613 | 3 tasks | 5 files |
 | Phase 09 P02 | 620 | 2 tasks | 3 files |
 | Phase 09 P03 | 780 | 3 tasks | 1 files |
+| Phase 09 P04 | 546 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: asyncio.TimeoutError caught before generic except Exception in on_ready — mandatory in Python 3.11+ where TimeoutError is subclass of Exception (REL-04)
 - [Phase ?]: _sync_retry_active module-level bool guard prevents multiple READY shards from spawning concurrent sync-retry chains (Pitfall 5 / REL-03)
 - [Phase ?]: first_run sync failure logs and proceeds to bot.close() without background retry — one-shot CLI op has no running event loop to retry into
+- [Phase ?]: _is_transient_ytdlp_error returns False only for ExtractorError.expected=True — conservative fallback treats all other errors as transient (A1/A2 [ASSUMED])
+- [Phase ?]: async_search/async_extract bounded retry reuses existing update_ytdlp() + _UPDATE_THROTTLE_SECONDS — no second update path added
 
 ### Pending Todos
 
@@ -109,7 +112,7 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-26T15:16:34.026Z
+Last session: 2026-06-26T15:34:22.392Z
 Stopped at: Completed 09-03-PLAN.md
 Next:
 

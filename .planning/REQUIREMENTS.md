@@ -16,7 +16,7 @@ the others derive from the v1.2 codebase-analysis pass.
 - [x] **REL-03**: Command-tree sync on startup (`first_run` / `on_ready`) handles a sync failure or timeout without hanging the bot silently — it logs and recovers
 - [x] **REL-04**: The `on_ready` re-entry guard cannot get permanently stuck (a shard crash mid-init no longer blocks all future ready-handling)
 - [x] **REL-05**: Database queries enforce a timeout so a slow query (e.g. leaderboard on a large guild) cannot block the bot
-- [ ] **REL-06**: `youtube` search/extract self-heal on transient failure (bounded retry), matching the existing download self-heal path
+- [x] **REL-06**: `youtube` search/extract self-heal on transient failure (bounded retry), matching the existing download self-heal path
 
 ### Critical-Path Test Coverage (Phase 10)
 
@@ -91,7 +91,7 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 | REL-03 | Phase 9 | Complete |
 | REL-04 | Phase 9 | Complete |
 | REL-05 | Phase 9 | Complete |
-| REL-06 | Phase 9 | Pending |
+| REL-06 | Phase 9 | Complete |
 | TEST-01 | Phase 10 | Pending |
 | TEST-02 | Phase 10 | Pending |
 | TEST-03 | Phase 10 | Pending |
