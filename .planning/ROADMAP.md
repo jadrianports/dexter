@@ -73,7 +73,8 @@ Full phase details, success criteria, and decisions archived in
 > (both are tiny config-wiring edits to the same `bot.py` + `cogs/ops.py`), which lets Wave 2 run
 > three plans fully in parallel with zero `files_modified` overlap (utils+music vs bot.py vs youtube).
 > REL-02 spans two plans: create_task surfacing (09-02) and `@loop.error` loop surfacing (09-03).
-Plans:
+
+Plans:
 **Wave 1**
 
 - [x] 09-01-PLAN.md - Config foundation + truthful `/health` + enforced DB query-timeout floor (REL-01, REL-05) - Wave 1
@@ -96,14 +97,19 @@ Full phase details, success criteria, and decisions archived in
   3. EventsCog ambient-roast trigger/gating logic (chance, cooldown, eligibility) is pure and unit-tested (TEST-03)
   4. The full test suite stays green and the bot boots clean with no new silent failures in `dexter.log` (regression gate) (TEST-04)
 
-**Plans**: TBD (~4)
+**Plans**: 4 plans (Wave 1 x3 parallel -> Wave 2)
 
 Plans:
 
-- [ ] 10-01: Extract + unit-test MusicCog playback decision logic (TEST-01)
-- [ ] 10-02: Extract + unit-test OpsCog metrics + `/health` status determination, incl. degraded path (TEST-02)
-- [ ] 10-03: Extract + unit-test EventsCog ambient-roast trigger/gating logic (TEST-03)
-- [ ] 10-04: Regression gate — full suite green + clean boot, no new silent failures (TEST-04)
+**Wave 1** *(parallel — disjoint `logic/` modules + test files, zero file overlap)*
+
+- [ ] 10-01-PLAN.md — Extract + unit-test MusicCog playback decision logic into `logic/playback.py`; scar tests #1/#2/#4 (TEST-01) — Wave 1
+- [ ] 10-02-PLAN.md — Extract + unit-test OpsCog metrics + `/health` status determination into `logic/health.py`; REL-01 degraded scar #3 (TEST-02) — Wave 1
+- [ ] 10-03-PLAN.md — Extract + unit-test EventsCog ambient-roast trigger/gating into `logic/roasts.py` (TEST-03) — Wave 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 10-04-PLAN.md — Regression gate: full pytest suite green (automated) + manual clean-boot check (TEST-04) — Wave 2
 
 ### Phase 11: RAG Long-Term Memory
 
