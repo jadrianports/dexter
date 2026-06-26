@@ -219,8 +219,12 @@ class AICog(commands.Cog):
     async def try_auto_queue(self, guild: discord.Guild) -> None:
         """Attempt to auto-queue songs. Called by music cog when queue empties."""
         server_state = get_server_state(self.bot.server_states, guild.id)
+        log.info("auto-queue: invoked for guild %d (round %d/%d)",
+                 guild.id, server_state.auto_queue_rounds, config.AUTO_QUEUE_MAX_ROUNDS)
 
         if server_state.auto_queue_rounds >= config.AUTO_QUEUE_MAX_ROUNDS:
+            log.info("auto-queue: bail — round cap %d reached; resets on next /play (guild %d)",
+                     config.AUTO_QUEUE_MAX_ROUNDS, guild.id)
             channel = self._get_text_channel(guild)
             if channel:
                 await channel.send(pick_random(AUTO_QUEUE_CAP_REACHED))
@@ -229,6 +233,7 @@ class AICog(commands.Cog):
         try:
             recent = await get_recent_songs(self.bot.pool, guild_id=str(guild.id), limit=10)
             if not recent:
+                log.info("auto-queue: bail — no recent song history for guild %d", guild.id)
                 return
 
             # Clean messy YouTube titles/uploaders before the recommender sees them,
@@ -248,6 +253,8 @@ class AICog(commands.Cog):
             response = await self.gemini.chat(prompt, [], priority=2)
 
             if not response:
+                log.info("auto-queue: bail — Gemini returned nothing "
+                         "(priority-2 rejected when limiter wait >10s, e.g. near 15 RPM) (guild %d)", guild.id)
                 return
 
             suggestions = parse_suggestions(response)
@@ -292,10 +299,20 @@ class AICog(commands.Cog):
                 tracks_added.append(track)
 
             if not tracks_added:
+                log.info("auto-queue: bail — %d Gemini suggestion(s) yielded no playable track "
+                         "(no YouTube result or all >%ds) (guild %d)",
+                         len(suggestions), config.MAX_SONG_DURATION_SECONDS, guild.id)
                 return
 
+            # Start playback if no audio is actually flowing. Check the live voice
+            # client state, NOT queue.is_playing: on the natural-exhaustion path
+            # _on_track_end leaves is_playing=True and defers to auto-queue
+            # (music.py "auto-queue will handle it"), so the old `not queue.is_playing`
+            # guard never fired and the freshly-queued tracks sat silent. The track
+            # just ended, so the voice client — the real source of truth — reports
+            # neither playing nor paused here.
             voice_client = guild.voice_client
-            if voice_client and not queue.is_playing:
+            if voice_client and not voice_client.is_playing() and not voice_client.is_paused():
                 queue.current_index = len(queue.tracks) - len(tracks_added)
                 await music_cog._play_track(guild, queue.get_current())
 
@@ -307,6 +324,8 @@ class AICog(commands.Cog):
                     msg = pick_random(AUTO_QUEUE_IGNORED) + "\n\n" + msg
                 await channel.send(msg)
 
+            log.info("auto-queue: queued %d track(s) for guild %d (round %d)",
+                     len(tracks_added), guild.id, server_state.auto_queue_rounds + 1)
             server_state.auto_queue_rounds += 1
             server_state.auto_queue_results = {"played": 0, "skipped": 0}
 
