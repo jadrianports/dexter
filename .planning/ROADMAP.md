@@ -81,7 +81,7 @@ Full phase details, success criteria, and decisions archived in
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 09-02-PLAN.md - Fire-and-forget `create_task` failure surfacing via `utils/tasks.py` make_task (REL-02) - Wave 2
-- [ ] 09-03-PLAN.md - Startup sync recovery + un-wedgeable `on_ready` watchdog + `@loop.error` handlers (REL-03, REL-04, REL-02) - Wave 2
+- [x] 09-03-PLAN.md - Startup sync recovery + un-wedgeable `on_ready` watchdog + `@loop.error` handlers (REL-03, REL-04, REL-02) - Wave 2
 - [ ] 09-04-PLAN.md - Bounded retry / self-heal for youtube search + extract (REL-06) - Wave 2
 
 ### Phase 10: Critical-Path Test Coverage
@@ -166,7 +166,7 @@ Plans:
 | 6. Speed & Caching | v1.1 | 4/4 | Complete — verified live (06-UAT) | 2026-06-26 |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete — verified live (07-HUMAN-UAT) | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
-| 9. Reliability & Ops Hardening | v1.2 | 2/4 | In Progress|  |
+| 9. Reliability & Ops Hardening | v1.2 | 3/4 | In Progress|  |
 | 10. Critical-Path Test Coverage | v1.2 | 0/4 | Not started | - |
 | 11. RAG Long-Term Memory | v1.2 | 0/6 | Not started | - |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |

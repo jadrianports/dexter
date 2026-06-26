@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
 status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-06-26T14:55:29.858Z"
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-06-26T15:16:34.034Z"
 last_activity: 2026-06-26 -- Phase 09 execution started
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 ## Current Position
 
 Phase: 09 (reliability-ops-hardening) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-26 -- Phase 09 execution started
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion. Full v1.1 per-plan timings archived in milestones/v1.1-ROADMAP.md.*
 | Phase 09 P01 | 613 | 3 tasks | 5 files |
 | Phase 09 P02 | 620 | 2 tasks | 3 files |
+| Phase 09 P03 | 780 | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,9 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: asyncio.TimeoutError caught before Exception in DB handlers: asyncpg client-side timeout raises TimeoutError not QueryCanceledError
 - [Phase ?]: Use -inf sentinel in dedup dict: first post always goes through regardless of clock value in tests
 - [Phase ?]: _play_track create_task calls stay as bare asyncio.create_task (Pitfall 4): they handle failures internally, a callback would double-log track errors
+- [Phase ?]: asyncio.TimeoutError caught before generic except Exception in on_ready — mandatory in Python 3.11+ where TimeoutError is subclass of Exception (REL-04)
+- [Phase ?]: _sync_retry_active module-level bool guard prevents multiple READY shards from spawning concurrent sync-retry chains (Pitfall 5 / REL-03)
+- [Phase ?]: first_run sync failure logs and proceeds to bot.close() without background retry — one-shot CLI op has no running event loop to retry into
 
 ### Pending Todos
 
@@ -105,8 +109,8 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-26T14:55:29.853Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-06-26T15:16:34.026Z
+Stopped at: Completed 09-03-PLAN.md
 Next:
 
   Plan the first v1.2 phase: `/gsd-plan-phase 9` (Reliability & Ops Hardening). Phase 11 (RAG) is
