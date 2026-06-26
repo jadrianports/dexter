@@ -8,30 +8,33 @@ Dexter is a sarcastic, personality-driven Discord bot. It plays music from YouTu
 
 A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
 
-## Current Milestone: v1.1 "Live & Lethal"
+## Current State
+
+**Shipped: v1.0 MVP (2026-06-12)** — Phases 1, 2, 2.5, 3, 4. All 45 v1 requirements satisfied at the code/structural level.
+
+**Shipped (code): v1.1 "Live & Lethal" (2026-06-26)** — Phases 5–8, 14 plans, 27 tasks. All 28 v1.1 requirements met at the code level; 24/28 also live-validated. Delivered:
+- **Phase 5 (Ship It Live):** deploy substrate re-targeted Oracle A1 → **Koyeb WEB + Neon serverless Postgres** — Neon-tuned asyncpg pool, `sanitize_database_url`, aiohttp `/health`, de-Oracle'd Dockerfile, stdout logging, `docs/DEPLOY-KOYEB.md`, 22-check live-UAT runbook.
+- **Phase 6 (Speed & Caching):** generation-guarded next-track prefetch (zero inter-song gap), opus-copy codec-path logging + SponsorBlock, a Postgres `resolution_cache` (survives restart, URL-bypass), download-timeout→stream fallback, LFU eviction protecting in-use tracks, `PerfMetrics` in `/stats`.
+- **Phase 7 (Player UX & Filters):** persistent 5-button now-playing view, `/seek` `/previous` `/jump`, four `/filter` presets (opus-passthrough preserved for non-filtered tracks), `user_favorites` + JSONB `user_playlists`.
+- **Phase 8 (Social & Ops):** `/roast @user`, per-guild `/leaderboard`, owner-only `/stats`, degraded-but-always-200 `/health`, central `total_errors` tracking.
+
+**The 24/7 live deploy is PARKED.** YouTube blocks datacenter IPs → free cloud hosting is non-viable, and there is no always-on residential host yet. The bot runs on the **user's PC (residential IP) on demand against Neon Singapore**; Phases 6/7/8 were live-verified that way. The 4 open DEPLOY requirements + remaining live-UAT/verification items (9 total) are deferred until a Pi / always-on residential host is acquired — see STATE.md Deferred Items.
+
+## Next Milestone Goals
+
+v1.2 not yet scoped (run `/gsd-new-milestone`). Candidate streams carried forward:
+- **Resume the parked 24/7 deploy** once an always-on residential host exists (closes DEPLOY-02/03/05/08 + the live-UAT tail).
+- **RAG long-term semantic memory** (pgvector + Gemini embeddings) for callback roasts — wants live data volume + a research spike first.
+- **Vision / multimodal roasting** — Dexter reacts to images posted in chat.
+
+<details>
+<summary>Previous: v1.1 "Live & Lethal" milestone framing (archived)</summary>
 
 **Goal:** Take Dexter from code-complete-on-a-laptop to running 24/7 — fast, polished, and genuinely fun — by deploying it for real, killing playback latency, and surfacing the control, filter, and roast features that make it a joy to use.
 
-**Target features (deploy-first sequencing):**
+Sequenced deploy-first so every speed gain is measured against live numbers. The one tradeoff resolved in the roadmap: `/filter` forces a re-encode, mutually exclusive with opus-copy → opus-copy by default, transcode only when a filter is active per-track. **Reality check:** the deploy-first sequencing was inverted in practice — the live deploy parked behind the YouTube IP block, so speed/UX/social phases shipped and were verified against the on-demand PC run env instead.
 
-1. **Ship it live** — Oracle A1 + Postgres + Docker standup, the standing live-UAT checklist (15 behavioral + 6 human scenarios), the parked voice-reconnect race fix (`cogs/music.py:~609`), queue-restore validation across restart, validated `pg_dump` backups + dead-man cron.
-2. **Speed & caching** — prefetch the next track (kill the inter-song silence gap), opus-copy instead of opus→opus re-encode, query→video_id resolution cache, wire the dead `DOWNLOAD_TIMEOUT_SECONDS`, least-played eviction (don't depend on `atime` on a `noatime` mount), pipeline timing instrumentation, SponsorBlock segment-skip.
-3. **Player UX & filters** — interactive control buttons on the now-playing embed, `/seek`, `/previous`, `/jump`, saveable favorites/personal playlists, `/filter` audio effects (bassboost / nightcore / slowed+reverb / 8d).
-4. **Social & personality** — `/roast @user` and `/leaderboard`, built off the existing `user_profiles` / `user_artist_counts` / streak data.
-5. **Ops & observability** — `/stats` owner dashboard, health endpoint for the dead-man switch, Gemini/Oracle quota visibility, optional web config dashboard.
-
-**Key context:**
-- **Deploy + instrument first** so every speed gain is measured against live numbers, not laptop guesses.
-- **One tradeoff to resolve in the roadmap:** `/filter` forces a re-encode, mutually exclusive with opus-copy → opus-copy by default, transcode only when a filter is active per-track.
-- **Shelved for a future milestone (v1.2/v2.0):** RAG long-term semantic memory, Vision/multimodal roasting. Considered and deliberately deferred, not rejected.
-
-## Current State
-
-**Shipped: v1.0 MVP (2026-06-12)** — Phases 1, 2, 2.5, 3, 4 complete; all 45 v1 requirements satisfied at the code/structural level. ~7,139 Python LOC across 49 modules, 20 test files, 71 commits.
-
-The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Postgres + Discord gateway behavioral UAT) is the outstanding day-1 deployment checklist — see STATE.md Deferred Items.
-
-**v1.1 "Live & Lethal" in progress.** Phase 8 (Social & Ops) and Phase 6 (Speed & Caching) are code-complete and verified at the code level; both carry a live-UAT-pending gate (08-HUMAN-UAT.md, 06-HUMAN-UAT.md). Phase 6 delivered: generation-guarded next-track prefetch (zero inter-song gap), opus-copy codec-path logging + SponsorBlock, a Postgres-backed resolution cache (survives restarts, URL-bypass), download-timeout→stream fallback, LFU cache eviction protecting in-use tracks, and `PerfMetrics` instrumentation surfaced in `/stats`. Phase 7 (Player UX & Filters) is next.
+</details>
 
 ## Requirements
 
@@ -47,18 +50,20 @@ The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Po
 - ✓ Unprompted "alive" behavior: voice-join/leave roasts, late-night roasts, repeat-song roasts, emoji reactions, expanded seasonal awareness — v1.0 (Phase 3)
 - ✓ Status rotation, startup message, idle-loneliness, streak tracking + milestone roasts, `/lyrics` (Genius + AZLyrics), `/history` — v1.0 (Phase 3)
 - ✓ Scale: multi-server hardening, SQLite→PostgreSQL, `AutoShardedBot`, queue persistence, Oracle Cloud A1 hosting decision — v1.0 (Phase 4)
+- ✓ Deploy substrate re-targeted Oracle A1 → Koyeb WEB + Neon serverless Postgres: Neon-tuned asyncpg pool, `sanitize_database_url`, aiohttp `/health`, de-Oracle'd Dockerfile, stdout logging, `docs/DEPLOY-KOYEB.md`, 22-check runbook — v1.1 (Phase 5, code; 24/7 deploy parked)
+- ✓ Speed & caching: next-track prefetch (zero gap), opus-copy codec path + SponsorBlock, Postgres resolution cache, download-timeout→stream fallback, LFU eviction, `PerfMetrics` in `/stats` — v1.1 (Phase 6)
+- ✓ Player UX & filters: persistent control-button view, `/seek` `/previous` `/jump`, four `/filter` presets (opus-passthrough preserved), favorites + named playlists — v1.1 (Phase 7)
+- ✓ Social & ops: `/roast @user`, per-guild `/leaderboard`, owner-only `/stats`, `/health` endpoint, Gemini RPM headroom + `total_errors` visibility — v1.1 (Phase 8)
 
-> Phase 3 & 4 items are code-complete and statically verified; their live-behavioral UAT is carried forward as the deployment checklist (STATE.md Deferred Items), not as open scope.
+> Phase 3 & 4 items (v1.0) and Phase 5–6 live checks (v1.1) are code-complete and statically/locally verified; their live-deploy UAT is carried forward as the deployment checklist (STATE.md Deferred Items), not as open scope. Phases 6/7/8 were live-verified on the user's PC + Neon.
 
 ### Active
 
-<!-- Current scope (v1.1 "Live & Lethal"). High-level streams; detailed REQ-IDs live in REQUIREMENTS.md. -->
+<!-- Current scope. v1.1 shipped; v1.2 not yet scoped (run /gsd-new-milestone). Carried-forward open work below. -->
 
-- [ ] Deploy + live-validate on Oracle A1 (Postgres, Docker, UAT checklist, reconnect race, restart-safe queue restore, backups/cron)
-- [ ] Playback speed & caching (prefetch, opus-copy, resolution cache, download timeout, least-played eviction, instrumentation, SponsorBlock)
-- [ ] Player UX & filters (control buttons, `/seek`, `/previous`, `/jump`, favorites/playlists, `/filter` effects)
-- [ ] Social commands (`/roast @user`, `/leaderboard`)
-- [ ] Ops & observability (`/stats` dashboard, health endpoint, quota visibility)
+- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02 (live-UAT checklist), DEPLOY-03 (6 human-UAT scenarios), DEPLOY-05 (restart-safe queue restore, live), DEPLOY-08 (keepalive cron in production)
+- [ ] (v1.2 candidate) RAG long-term semantic memory — pgvector + Gemini embeddings for callback roasts
+- [ ] (v1.2 candidate) Vision / multimodal roasting — Dexter reacts to images posted in chat
 
 ### Out of Scope
 
@@ -67,13 +72,13 @@ The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Po
 - `/volume` command / `PCMVolumeTransformer` — Discord's per-user volume slider covers it; opus passthrough keeps CPU low
 - Prefix commands / hybrid commands — pure `app_commands` slash commands only, by design
 - Spotify/Apple Music as audio sources — YouTube via yt-dlp is the single source of truth
-- Web config dashboard — listed as "maybe" in Phase 4; not committed scope (reconsider next milestone)
-- Live-concurrency-only bugs (e.g. voice reconnect race at `cogs/music.py:~609`) — parked for a dedicated live `/gsd:debug` session once running 24/7; cannot be verified by local boot
+- Web config dashboard — "maybe" since Phase 4, never committed; `/stats` in-Discord covers the owner need. Deferred to a future milestone, not killed.
+- Datacenter/cloud hosting for the 24/7 deploy — YouTube blocks datacenter IPs, so free cloud is non-viable. Resolution is a residential always-on host (Pi), not a cloud provider.
 
 ## Context
 
-- **v1.0 is code-complete and shipped to `main`.** Layered cog → service → model architecture. Services wired in `bot.py`, attached as bot attributes; cogs access via `self.bot`. CLAUDE.md is the north-star feature spec; `.planning/codebase/` reflects the built state. ~7,139 Python LOC, 49 modules, 20 test files.
-- **Bot has been booted locally only.** Every fix was verified by inspection + local boot. Bugs that only manifest under live concurrency are explicitly parked, not fixed blind. The full live-UAT checklist awaits the Oracle A1 VM standup.
+- **v1.0 + v1.1 are code-complete and shipped to `main`** (tags `v1.0`, `v1.1`). Layered cog → service → model architecture. Services wired in `bot.py`, attached as bot attributes; cogs access via `self.bot`. CLAUDE.md is the north-star feature spec; `.planning/codebase/` reflects the built state. v1.1 added ~23k LOC of diff across 126 files (incl. `.planning/` docs).
+- **The bot runs on the user's PC (residential IP) on demand against Neon Singapore.** Phases 6/7/8 were live-verified that way. A true 24/7 deploy is parked: YouTube blocks datacenter IPs (free cloud non-viable) and there is no always-on residential host yet. The remaining live-UAT/verification tail (9 items) is deferred to that future host — see STATE.md Deferred Items.
 - **Personality is the product.** Lowercase, dry, one-emoji-max. Accuracy first, sarcasm second; sarcasm dials back for serious/emotional questions. Mood shifts with daily command count; seasonal context injected into the Gemini system prompt. All personality output is Gemini-first with a guaranteed template fallback.
 - **Testing convention:** pure logic gets TDD (`tests/`); Discord/process code (cogs, `bot.py`) is untested-by-design, verified by structural review + clean local boot. Regression gate: full suite green + clean boot with no new silent failures in `dexter.log`.
 - **Git convention:** the user handles all git operations (commits, merges, pushes). Do not auto-commit or push.
@@ -86,7 +91,7 @@ The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Po
 - **Music limits**: `MAX_SONG_DURATION_SECONDS = 900` (reject longer), reject livestreams, `MAX_PLAYLIST_IMPORT = 50` (truncate + inform), `IDLE_TIMEOUT_SECONDS = 600` auto-leave, `AUDIO_CACHE_MAX_MB = 2048` (evict oldest by atime, hourly cleanup), `MAX_QUEUE_SIZE_PER_GUILD = 500` (cap enforced in `MusicQueue.add()`)
 - **Reliability**: explicit FFmpeg/voice cleanup on skip/stop/error/leave to avoid orphans; yt-dlp self-heals (daily 04:00 update + on-failure update→retry throttled ≤once/hour→stream fallback→error)
 - **Discord interaction timeout**: must `defer()` or respond within 3s, then do async work via `asyncio.create_task()` / `interaction.followup`
-- **Hosting**: **RESOLVED → Oracle Cloud Always Free A1 ARM** (Docker Compose for Hetzner portability). Keepalive/dead-man cron + `pg_dump` Object Storage backup. (Carries the known Oracle reclamation/termination risk — monitor in production.)
+- **Hosting**: re-targeted Oracle A1 → **Koyeb WEB + Neon serverless Postgres** (v1.1, Phase 5) → **24/7 deploy PARKED** (YouTube blocks datacenter IPs; free cloud non-viable). Current run env: **user's PC (residential IP) on demand → Neon Singapore**. Resume the 24/7 deploy on an always-on residential host (Pi). Code is substrate-agnostic (Dockerfile + `DATABASE_URL`), so the host swap is config-only.
 
 ## Key Decisions
 
@@ -103,6 +108,14 @@ The bot has been **booted locally only**. Live-deploy validation (Oracle A1 + Po
 | Persistence → PostgreSQL via asyncpg 0.31.0 (Phase 4) | SQLite sufficient for v1–v3; multi-server scale needs real concurrency + durable queue persistence; raw `CREATE TABLE IF NOT EXISTS` over Alembic for a start-fresh schema | ✓ Resolved (static); live round-trip pending deploy |
 | Queue cap enforced in `MusicQueue.add()` (Phase 4) | Guard at the source covers the playlist loop and every add path automatically | ✓ Good |
 | Gemini-first personality output with guaranteed template fallback (Phase 3) | Never let rate limits or API errors block a roast/response | ✓ Good |
+| Re-target deploy Oracle A1 → Koyeb WEB + Neon serverless Postgres (Phase 5) | Oracle reclamation risk + no card; Koyeb free WEB + Neon free fit a single-community bot | ⚠️ Revisit — superseded by the parked-deploy decision below |
+| **Park the 24/7 live deploy; run on the user's PC (residential IP) → Neon on demand (v1.1)** | YouTube blocks datacenter IPs, breaking yt-dlp from any free cloud host; no card, no Pi yet | — Pending — resume on an always-on residential host |
+| Neon-tuned asyncpg pool: `ssl='require'`, `statement_cache_size=0`, 240s lifetime (Phase 5) | Survive Neon's scale-to-zero without SSL-EOF / prepared-statement crashes through PgBouncer | ✓ Good |
+| Generation-guarded fire-and-forget next-track prefetch (Phase 6) | Kill the inter-song silence gap without racing skip/stop teardown | ✓ Good |
+| opus-copy by default, transcode only when a `/filter` is active per-track (Phase 6/7) | Resolve the filter-vs-opus-copy tradeoff — keep the fast path for the common case | ✓ Good |
+| LFU cache eviction keyed on `song_history` play counts, with `protected_video_ids` (Phase 6) | `atime` is unreliable on `noatime` mounts; never evict an in-use track | ✓ Good |
+| Persistent views via `timeout=None` + stable `custom_id`s registered in `setup_hook` (Phase 7) | Correct discord.py pattern so buttons survive restarts | ✓ Good |
+| Shared `_do_*` helpers route slash command + button through one path (Phase 7) | Eliminate divergence between the two invocation surfaces | ✓ Good |
 
 ## Evolution
 
@@ -122,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-24 after Phase 6 (Speed & Caching) code completion*
+*Last updated: 2026-06-26 after v1.1 "Live & Lethal" milestone completion*

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Live & Lethal
-status: verifying
-stopped_at: Completed 06-04-PLAN.md (Phase 06 complete)
-last_updated: "2026-06-23T21:24:11.189Z"
-last_activity: 2026-06-23
+status: Awaiting next milestone
+stopped_at: Phase 06 live-verified via UAT (06-UAT.md) — 5 passed, 2 skipped, 1 blocker fixed (Neon SSL/docker-compose) + Now Playing repost-at-bottom shipped.
+last_updated: "2026-06-26T08:54:32.203Z"
+last_activity: 2026-06-26 — Milestone v1.1 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-12)
+See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 06 — speed-caching
+**Current focus:** v1.1 shipped (code) + archived. Planning next milestone (v1.2) — `/gsd-new-milestone`. The 24/7 live deploy stays parked until an always-on residential host exists.
 
 ## Current Position
 
-Phase: 07
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-23
+Phase: Milestone v1.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-26 — Milestone v1.1 completed and archived
 
 ## Accumulated Context
 
@@ -91,31 +91,41 @@ None.
 
 ## Deferred Items
 
-Items acknowledged and deferred at v1.0 milestone close on 2026-06-12. All three are live-deploy
-verification that the Windows dev machine cannot run — they form the day-1 deployment checklist:
+**Acknowledged and deferred at v1.1 milestone close on 2026-06-26.** All 9 are live-Discord /
+live-deploy validation that cannot run without an always-on residential host — the 24/7 deploy is
+**parked** behind the YouTube datacenter-IP block (free cloud non-viable; bot runs on the user's PC
+on demand → Neon Singapore). They resume when a Pi / always-on residential host is acquired.
 
 | Category | Item | Status |
 |----------|------|--------|
-| uat | Phase 04 04-HUMAN-UAT.md — 6 pending live scenarios (Oracle A1 + Postgres + Discord) | superseded by 05-UAT-RUNBOOK.md v2.0 (Koyeb+Neon) |
-| verification | Phase 03 03-VERIFICATION.md — 9 live-Discord behavioral checks | carried into 05-UAT-RUNBOOK.md C1-C11 |
-| verification | Phase 04 04-VERIFICATION.md — 6 live-deploy checks (Docker/Postgres/cron) | carried into 05-UAT-RUNBOOK.md A/B/D groups |
+| requirement | DEPLOY-02 — standing live-UAT checklist executed + passing | Blocked on 24/7 host |
+| requirement | DEPLOY-03 — 6 human-UAT scenarios (`04-HUMAN-UAT.md`) passing | Blocked on 24/7 host |
+| requirement | DEPLOY-05 — queue + position survive restart, validated live | Blocked on 24/7 host |
+| requirement | DEPLOY-08 — keepalive / dead-man cron firing in production | Blocked on 24/7 host |
+| uat | Phase 04 `04-HUMAN-UAT.md` — 6 pending scenarios | Superseded by 05-UAT-RUNBOOK.md v2.0 (Koyeb+Neon) |
+| uat | Phase 05 `05-HUMAN-UAT.md` / `05-UAT-RUNBOOK.md` — 20 / 22 pending live checks | Blocked on 24/7 host |
+| uat | Phase 06 `06-HUMAN-UAT.md` — 6 pending (eviction/SponsorBlock/timeout not reproducible on demand) | Partial; rest blocked on 24/7 host |
+| verification | Phase 03 `03-VERIFICATION.md` — 9 live-Discord behavioral checks | Carried into 05-UAT-RUNBOOK.md C1-C11 |
+| verification | Phase 04 `04-VERIFICATION.md` — 6 live-deploy checks | Carried into 05-UAT-RUNBOOK.md A/B/D groups |
+| verification | Phase 05 `05-VERIFICATION.md` — Koyeb+Neon live deploy (K-17) | Blocked on 24/7 host |
+| verification | Phase 06 `06-VERIFICATION.md` — `human_needed` | Largely covered by 06-UAT.md live run; residual blocked on 24/7 host |
 
 Carried-forward engineering items (not blockers):
 
 | Category | Item | Status |
 |----------|------|--------|
-| reliability | Live-concurrency reconnect race (`cogs/music.py:~609`) | Assigned → Phase 5 (DEPLOY-04); C11 runbook check is the live gate |
+| reliability | Live-concurrency reconnect race (`cogs/music.py:~609`) | Fixed in code (DEPLOY-04 / P-01); C11 runbook check is the live gate |
 | reliability | `clear_persisted()` not called on idle-leave / reconnect-failure (IN-02) | Fixed (P-02, Plan 05-01); B2 runbook check is the live gate |
-| out-of-scope | Web config dashboard ("maybe" only) | Not committed |
+| out-of-scope | Web config dashboard ("maybe" only) | Not committed — deferred to a future milestone |
 
 ## Session Continuity
 
 Last session: 2026-06-26
-Stopped at: Phase 06 live-verified via UAT (06-UAT.md) — 5 passed, 2 skipped, 1 blocker fixed (Neon SSL/docker-compose) + Now Playing repost-at-bottom shipped.
+Stopped at: v1.1 "Live & Lethal" milestone closed + archived (tag v1.1). 9 live-validation items acknowledged + deferred (see Deferred Items) — all blocked on an always-on residential host.
 Next:
 
-  Phase 06 fully verified. Phases 6/7/8 all code-complete; 7 & 8 carry live HUMAN-UAT items.
-  Optional: /gsd-audit-uat to sweep outstanding HUMAN-UAT items, or /gsd-complete-milestone v1.1.
+  Start the next milestone: `/clear` then `/gsd-new-milestone` (v1.2). The 24/7 live deploy + its
+  deferred DEPLOY/UAT items resume whenever a Pi / always-on residential host is acquired.
 
 ## Performance Metrics
 
@@ -134,3 +144,7 @@ Next:
 | Phase 06 P01 | 15 min | 2 tasks | 6 files |
 | Phase 06-speed-caching P02 | 4 min | 2 tasks | 2 files |
 | Phase 06-speed-caching P04 | ~35 min | 3 tasks (3 commits) | 5 files |
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
