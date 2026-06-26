@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Sharper & Smarter
 status: executing
 stopped_at: Phase 10 context gathered
-last_updated: "2026-06-26T20:13:26.917Z"
-last_activity: 2026-06-26 -- Phase 10 planning complete
+last_updated: "2026-06-26T20:43:05.229Z"
+last_activity: 2026-06-26 -- Phase 10 execution started
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 8
+  completed_plans: 5
   percent: 25
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 09 — reliability-ops-hardening
+**Current focus:** Phase 10 — critical-path-test-coverage
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
+Phase: 10 (critical-path-test-coverage) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-26 -- Phase 10 planning complete
+Last activity: 2026-06-26 -- Phase 10 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09 P02 | 620 | 2 tasks | 3 files |
 | Phase 09 P03 | 780 | 3 tasks | 1 files |
 | Phase 09 P04 | 546 | 1 tasks | 2 files |
+| Phase 10 P01 | 30 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,9 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: first_run sync failure logs and proceeds to bot.close() without background retry — one-shot CLI op has no running event loop to retry into
 - [Phase ?]: _is_transient_ytdlp_error returns False only for ExtractorError.expected=True — conservative fallback treats all other errors as transient (A1/A2 [ASSUMED])
 - [Phase ?]: async_search/async_extract bounded retry reuses existing update_ytdlp() + _UPDATE_THROTTLE_SECONDS — no second update path added
+- [Phase ?]: logic/ top-level package established as the pure-logic seam Phase 11 imports from (D-01 / TEST-01)
+- [Phase ?]: Keyword-only primitives for all five playback.py signatures (D-07): each fn stays small, cohesive, and easy to test without mocks
+- [Phase ?]: D-02 true extraction: live cog dispatches on TrackEndAction enum — no duplicated/mirrored logic remains in callers
 
 ### Pending Todos
 
@@ -113,7 +117,7 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-26T19:34:20.584Z
+Last session: 2026-06-26T20:43:05.216Z
 Stopped at: Phase 10 context gathered
 Next:
 

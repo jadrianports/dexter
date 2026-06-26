@@ -103,7 +103,7 @@ Plans:
 
 **Wave 1** *(parallel — disjoint `logic/` modules + test files, zero file overlap)*
 
-- [ ] 10-01-PLAN.md — Extract + unit-test MusicCog playback decision logic into `logic/playback.py`; scar tests #1/#2/#4 (TEST-01) — Wave 1
+- [x] 10-01-PLAN.md — Extract + unit-test MusicCog playback decision logic into `logic/playback.py`; scar tests #1/#2/#4 (TEST-01) — Wave 1
 - [ ] 10-02-PLAN.md — Extract + unit-test OpsCog metrics + `/health` status determination into `logic/health.py`; REL-01 degraded scar #3 (TEST-02) — Wave 1
 - [ ] 10-03-PLAN.md — Extract + unit-test EventsCog ambient-roast trigger/gating into `logic/roasts.py` (TEST-03) — Wave 1
 
@@ -173,6 +173,6 @@ Plans:
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete — verified live (07-HUMAN-UAT) | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
-| 10. Critical-Path Test Coverage | v1.2 | 0/4 | Not started | - |
+| 10. Critical-Path Test Coverage | v1.2 | 1/4 | In Progress|  |
 | 11. RAG Long-Term Memory | v1.2 | 0/6 | Not started | - |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |
