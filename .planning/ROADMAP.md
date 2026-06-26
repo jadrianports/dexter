@@ -30,7 +30,7 @@ Full phase details, success criteria, decisions, and deferred items archived in
 ### v1.1 Live & Lethal (Phases 5–8)
 
 - [~] **Phase 5: Ship It Live** — code-complete + code-verified; ⏸ LIVE 24/7 deploy PARKED (YouTube blocks datacenter IPs → cloud non-viable for free; no credit card; no Raspberry Pi yet). Bot runs on user PC (residential IP) on demand → Neon Singapore. Resume when a Pi / always-on residential host is acquired.
-- [x] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock — code complete 2026-06-24; live verification pending
+- [x] **Phase 6: Speed & Caching** — prefetch, opus-copy, resolution cache, download timeout, frequency eviction, pipeline instrumentation, SponsorBlock — code complete 2026-06-24; verified live 2026-06-26 (5 passed, 2 skipped [eviction/SponsorBlock + download-timeout not reproducible on demand], 1 blocker fixed [Neon SSL vs Oracle-era local Postgres in docker-compose] + Now Playing repost-at-bottom added) → 06-UAT.md
 - [x] **Phase 7: Player UX & Filters** — control buttons, `/seek`, `/previous`, `/jump`, favorites, playlists, `/filter` effects (verified live 2026-06-24; 10 passed + 1 issue fixed, 2 /seek skipped → 07-HUMAN-UAT.md)
 - [x] **Phase 8: Social & Ops** — `/roast @user`, `/leaderboard`, `/stats` dashboard, health endpoint, quota visibility (verified live 2026-06-24; 7 passed, Healthchecks.io dead-man check deferred to 24/7 deploy → 08-HUMAN-UAT.md)
 
@@ -130,6 +130,6 @@ Full phase details, success criteria, decisions, and deferred items archived in
 | 3. Alive | v1.0 | 6/6 | Complete | 2026-06-11 |
 | 4. Scale | v1.0 | 5/5 | Complete | 2026-06-12 |
 | 5. Ship It Live | v1.1 | 3/3 | Code complete — live deploy ⏸ PARKED (YT datacenter-IP block; resume on a Pi) | - |
-| 6. Speed & Caching | v1.1 | 4/4 | Complete    | 2026-06-23 |
+| 6. Speed & Caching | v1.1 | 4/4 | Complete — verified live 2026-06-26 (06-UAT) | 2026-06-23 |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete   | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Code complete + verified — live UAT pending (08-HUMAN-UAT) | 2026-06-19 |

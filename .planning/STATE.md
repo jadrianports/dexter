@@ -110,11 +110,12 @@ Carried-forward engineering items (not blockers):
 
 ## Session Continuity
 
-Last session: 2026-06-24T00:00:00.000Z
-Stopped at: Completed 06-04-PLAN.md (Phase 06 complete)
+Last session: 2026-06-26
+Stopped at: Phase 06 live-verified via UAT (06-UAT.md) — 5 passed, 2 skipped, 1 blocker fixed (Neon SSL/docker-compose) + Now Playing repost-at-bottom shipped.
 Next:
 
-  Phase 06 complete. Run /gsd-verify-work for Phase 06 verification.
+  Phase 06 fully verified. Phases 6/7/8 all code-complete; 7 & 8 carry live HUMAN-UAT items.
+  Optional: /gsd-audit-uat to sweep outstanding HUMAN-UAT items, or /gsd-complete-milestone v1.1.
 
 ## Performance Metrics
 
