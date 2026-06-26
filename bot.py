@@ -195,6 +195,10 @@ def _pick_next_status() -> str:
 # skip a second launch (WR-02) and lets a done-callback surface failures (WR-01).
 _health_server_task = None
 
+# Single-flight guard: only one background sync-retry chain runs at a time (REL-03 / Pitfall 5).
+# Multiple shards each fire READY; without this guard each would spawn its own retry.
+_sync_retry_active: bool = False
+
 
 async def _run_health_server() -> None:
     """Minimal HTTP health check endpoint for Koyeb WEB service.
@@ -437,6 +441,32 @@ async def _post_startup_messages() -> None:
         log.warning("Startup message post failed: %s", exc)
 
 
+async def _background_sync_retry() -> None:
+    """Background retry helper for command-tree sync (REL-03 / D-05).
+
+    Attempts up to 3 syncs with increasing backoff (60s, 120s, 180s between attempts).
+    Resets _sync_retry_active on exit (success or exhaustion) so a future failure
+    can spawn a new chain. Modeled on the _post_startup_messages best-effort pattern.
+    """
+    global _sync_retry_active
+    for attempt in range(1, 4):  # attempts 1, 2, 3
+        await asyncio.sleep(60 * attempt)
+        try:
+            synced = await asyncio.wait_for(
+                bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS
+            )
+            log.info(
+                "Command sync succeeded on retry attempt %d (%d commands)",
+                attempt, len(synced),
+            )
+            _sync_retry_active = False
+            return
+        except Exception as exc:
+            log.warning("Command sync retry %d/3 failed: %s", attempt, exc)
+    log.error("Command sync failed after all retry attempts; slash commands may be stale")
+    _sync_retry_active = False
+
+
 # ──────────────────────────── GLOBAL ERROR HANDLER ────────────────────────────
 
 
@@ -481,6 +511,7 @@ async def on_app_command_error(
 @bot.tree.command(name="sync", description="Sync slash commands (owner only)")
 @app_commands.describe(guild_id="Guild ID to sync to (omit for global)")
 async def sync_commands(interaction: discord.Interaction, guild_id: str | None = None):
+    global _sync_retry_active
     if not await bot.is_owner(interaction.user):
         return await interaction.response.send_message("Not authorized.", ephemeral=True)
 
@@ -489,13 +520,37 @@ async def sync_commands(interaction: discord.Interaction, guild_id: str | None =
     if guild_id:
         guild = discord.Object(id=int(guild_id))
         bot.tree.copy_global_to(guild=guild)
-        synced = await bot.tree.sync(guild=guild)
-        await interaction.followup.send(f"Synced {len(synced)} commands to guild {guild_id}.")
+        try:
+            synced = await asyncio.wait_for(
+                bot.tree.sync(guild=guild), timeout=config.SYNC_TIMEOUT_SECONDS
+            )
+            await interaction.followup.send(f"Synced {len(synced)} commands to guild {guild_id}.")
+            log.info("Synced %d commands to guild %s", len(synced), guild_id)
+        except Exception as exc:
+            log.warning(
+                "Command sync failed (%s); coming online with existing commands; retrying in background",
+                exc,
+            )
+            if not _sync_retry_active:
+                _sync_retry_active = True
+                asyncio.create_task(_background_sync_retry(), name="sync-retry")
+            await interaction.followup.send(f"Sync failed: {exc}. Retrying in background.")
     else:
-        synced = await bot.tree.sync()
-        await interaction.followup.send(f"Synced {len(synced)} commands globally.")
-
-    log.info(f"Synced {len(synced)} commands ({'guild ' + guild_id if guild_id else 'global'})")
+        try:
+            synced = await asyncio.wait_for(
+                bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS
+            )
+            await interaction.followup.send(f"Synced {len(synced)} commands globally.")
+            log.info("Synced %d commands globally", len(synced))
+        except Exception as exc:
+            log.warning(
+                "Command sync failed (%s); coming online with existing commands; retrying in background",
+                exc,
+            )
+            if not _sync_retry_active:
+                _sync_retry_active = True
+                asyncio.create_task(_background_sync_retry(), name="sync-retry")
+            await interaction.followup.send(f"Sync failed: {exc}. Retrying in background.")
 
 
 # ──────────────────────────── BACKGROUND TASKS ────────────────────────────
@@ -655,11 +710,27 @@ async def first_run(guild_id: str | None = None):
         if guild_id:
             guild = discord.Object(id=int(guild_id))
             bot.tree.copy_global_to(guild=guild)
-            synced = await bot.tree.sync(guild=guild)
-            log.info(f"First-run: synced {len(synced)} commands to guild {guild_id}")
+            try:
+                synced = await asyncio.wait_for(
+                    bot.tree.sync(guild=guild), timeout=config.SYNC_TIMEOUT_SECONDS
+                )
+                log.info(f"First-run: synced {len(synced)} commands to guild {guild_id}")
+            except Exception as exc:
+                log.warning(
+                    "First-run: command sync failed (%s); proceeding to close",
+                    exc,
+                )
         else:
-            synced = await bot.tree.sync()
-            log.info(f"First-run: synced {len(synced)} commands globally")
+            try:
+                synced = await asyncio.wait_for(
+                    bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS
+                )
+                log.info(f"First-run: synced {len(synced)} commands globally")
+            except Exception as exc:
+                log.warning(
+                    "First-run: command sync failed (%s); proceeding to close",
+                    exc,
+                )
 
         await bot.close()
 
