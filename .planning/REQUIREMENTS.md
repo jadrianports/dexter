@@ -24,7 +24,7 @@ the others derive from the v1.2 codebase-analysis pass.
 > extract the *decision logic* from the critical paths into pure, importable functions and test those.
 
 - [x] **TEST-01**: The MusicCog playback decision logic (queue-from-selection validity guards, next-track/skip selection, queue-persistence restore selection) is extracted as pure functions and unit-tested
-- [ ] **TEST-02**: The OpsCog metrics aggregation and `/health` status-determination logic is pure and unit-tested (covering the REL-01 degraded path)
+- [x] **TEST-02**: The OpsCog metrics aggregation and `/health` status-determination logic is pure and unit-tested (covering the REL-01 degraded path)
 - [ ] **TEST-03**: The EventsCog ambient-roast trigger/gating logic (chance, cooldown, eligibility) is pure and unit-tested
 - [ ] **TEST-04**: Full suite stays green and the bot boots clean with no new silent failures in `dexter.log` (regression gate)
 
@@ -93,7 +93,7 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 | REL-05 | Phase 9 | Complete |
 | REL-06 | Phase 9 | Complete |
 | TEST-01 | Phase 10 | Complete |
-| TEST-02 | Phase 10 | Pending |
+| TEST-02 | Phase 10 | Complete |
 | TEST-03 | Phase 10 | Pending |
 | TEST-04 | Phase 10 | Pending |
 | MEM-01 | Phase 11 | Pending |

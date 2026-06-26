@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Sharper & Smarter
 status: executing
 stopped_at: Phase 10 context gathered
-last_updated: "2026-06-26T20:43:05.229Z"
+last_updated: "2026-06-26T21:43:44.929Z"
 last_activity: 2026-06-26 -- Phase 10 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 ## Current Position
 
 Phase: 10 (critical-path-test-coverage) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-26 -- Phase 10 execution started
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09 P03 | 780 | 3 tasks | 1 files |
 | Phase 09 P04 | 546 | 1 tasks | 2 files |
 | Phase 10 P01 | 30 | 3 tasks | 6 files |
+| Phase 10 P02 | 12 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: logic/ top-level package established as the pure-logic seam Phase 11 imports from (D-01 / TEST-01)
 - [Phase ?]: Keyword-only primitives for all five playback.py signatures (D-07): each fn stays small, cohesive, and easy to test without mocks
 - [Phase ?]: D-02 true extraction: live cog dispatches on TrackEndAction enum — no duplicated/mirrored logic remains in callers
+- [Phase ?]: D-02 true extraction: logic/health.py is single source of truth for /health status decision and degraded-reason assembly
+- [Phase ?]: logic/health.py keyword-only primitives (D-07): pool_present, db_ok, gateway_ready, ready_done, musiccog_loaded passed from async glue to pure function (D-06 seam)
 
 ### Pending Todos
 
@@ -117,7 +120,7 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-26T20:43:05.216Z
+Last session: 2026-06-26T21:43:14.714Z
 Stopped at: Phase 10 context gathered
 Next:
 
