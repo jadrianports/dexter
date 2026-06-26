@@ -18,6 +18,7 @@ from discord.ext import commands, tasks
 
 import config
 from database import init_db
+from logic.health import determine_health_status
 from models.message_buffer import MessageBuffer
 from models.server_state import ServerState
 from services.audio import AudioService
@@ -222,12 +223,10 @@ async def _run_health_server() -> None:
 
         # D-01: HEALTH_STRICT_STATUS (default True) → 503 when degraded; False → legacy 200.
         # D-27: body exposes ONLY status + generic reason strings (no guild/shard/pool internals).
-        if reasons:
-            body = json.dumps({"status": "degraded", "reasons": reasons})
-            status = 503 if getattr(config, "HEALTH_STRICT_STATUS", True) else 200
-        else:
-            body = '{"status":"ok"}'
-            status = 200
+        # D-02: single source of truth — logic.health.determine_health_status owns the decision.
+        status, body = determine_health_status(
+            reasons, getattr(config, "HEALTH_STRICT_STATUS", True)
+        )
 
         return _aio_web.Response(
             text=body,

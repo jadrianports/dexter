@@ -32,6 +32,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
+from logic.health import assemble_degraded_reasons
 from database import (
     get_leaderboard_songs,
     get_leaderboard_skips,
@@ -92,9 +93,10 @@ async def gather_bot_metrics(bot) -> dict:
     if hasattr(bot, "_start_monotonic"):
         metrics["uptime_seconds"] = time.monotonic() - bot._start_monotonic
 
-    # DB probe — determines db_ok + appends to degraded_reasons on failure
+    # DB probe — determines db_ok (async glue stays here; reason assembly is pure)
     pool = getattr(bot, "pool", None)
-    if pool is not None:
+    pool_present = pool is not None
+    if pool_present:
         # WR-03: bound the whole probe (acquire + SELECT 1) so a cold/scaling Neon
         # instance or an exhausted pool degrades fast (db_ok=False) instead of
         # blocking the health request up to command_timeout — or indefinitely on
@@ -108,20 +110,19 @@ async def gather_bot_metrics(bot) -> dict:
             metrics["db_ok"] = True
         except Exception:
             metrics["db_ok"] = False
-            metrics["degraded_reasons"].append("database unreachable")
     else:
-        metrics["degraded_reasons"].append("database pool not initialized")
+        metrics["db_ok"] = False
 
-    # Gateway check
-    if not metrics["gateway_ready"]:
-        metrics["degraded_reasons"].append("discord gateway not ready")
-
-    # MusicCog load check (REL-01 / D-02)
-    # Guard: only report missing as degraded after full init (_ready_done).
-    # During startup, MusicCog is absent by design — cogs load after pool/services.
-    if getattr(bot, "_ready_done", False):
-        if bot.cogs.get("MusicCog") is None:
-            metrics["degraded_reasons"].append("MusicCog not loaded")
+    # Assemble degraded_reasons via pure function (D-02 single source of truth).
+    # The async DB probe + bot.is_ready() / _ready_done checks remain glue above;
+    # the reason-string mapping belongs entirely to logic.health.assemble_degraded_reasons.
+    metrics["degraded_reasons"] = assemble_degraded_reasons(
+        pool_present=pool_present,
+        db_ok=metrics["db_ok"],
+        gateway_ready=metrics["gateway_ready"],
+        ready_done=getattr(bot, "_ready_done", False),
+        musiccog_loaded=bot.cogs.get("MusicCog") is not None,
+    )
 
     return metrics
 
