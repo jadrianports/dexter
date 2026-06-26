@@ -20,12 +20,20 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 
 **The 24/7 live deploy is PARKED.** YouTube blocks datacenter IPs → free cloud hosting is non-viable, and there is no always-on residential host yet. The bot runs on the **user's PC (residential IP) on demand against Neon Singapore**; Phases 6/7/8 were live-verified that way. The 4 open DEPLOY requirements + remaining live-UAT/verification items (9 total) are deferred until a Pi / always-on residential host is acquired — see STATE.md Deferred Items.
 
-## Next Milestone Goals
+## Current Milestone: v1.2 Sharper & Smarter
 
-v1.2 not yet scoped (run `/gsd-new-milestone`). Candidate streams carried forward:
-- **Resume the parked 24/7 deploy** once an always-on residential host exists (closes DEPLOY-02/03/05/08 + the live-UAT tail).
-- **RAG long-term semantic memory** (pgvector + Gemini embeddings) for callback roasts — wants live data volume + a research spike first.
-- **Vision / multimodal roasting** — Dexter reacts to images posted in chat.
+**Goal:** Harden Dexter into a trustworthy 24/7-ready bot and give it a real memory — fix the reliability gaps, cover the untested critical paths, then make it smarter (long-term RAG memory) and richer (music/UX polish). Continues phase numbering at Phase 9.
+
+**Target features:**
+- **Reliability & ops hardening** — health endpoint can no longer report "ok" while degraded, fire-and-forget tasks log failures, `first_run`/`on_ready` sync no longer hangs silently, DB query timeouts, search/extract retry/self-heal.
+- **Critical-path test coverage** — the untested MusicCog playback flow, OpsCog/health metrics, and EventsCog ambient-roast logic get real tests.
+- **RAG long-term memory** — `pgvector` on the existing Neon Postgres + Gemini `text-embedding-004`, so Dex remembers across restarts and lands callback roasts referencing real history. **Zero new infrastructure or monthly cost.** Includes a research spike.
+- **Richer music/UX** — per-server playlists, skip-rate analytics command, third lyrics fallback, auto-queue hallucination validation.
+
+**Key context:**
+- **No Railway / no cloud.** Datacenter-IP block (YouTube) + $1/mo ≠ 24/7 keeps free cloud non-viable. Run env stays PC (residential IP) → Neon Singapore on demand. Parked DEPLOY-02/03/05/08 + live-UAT tail resume only on a Pi/residential host.
+- **RAG uses Postgres (`pgvector`), not Redis** — a new table on the Neon DB already in use, embeddings via the free Gemini API.
+- **Vision / multimodal roasting deferred to v1.3** — capability + cost confirmed viable on the free tier; deferred because it leans hardest on the 15 RPM budget, needs content-safety guardrails, and pays off most with the parked 24/7 host.
 
 <details>
 <summary>Previous: v1.1 "Live & Lethal" milestone framing (archived)</summary>
@@ -59,11 +67,16 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 
 ### Active
 
-<!-- Current scope. v1.1 shipped; v1.2 not yet scoped (run /gsd-new-milestone). Carried-forward open work below. -->
+<!-- Current scope: v1.2 "Sharper & Smarter" (Phases 9–12). See REQUIREMENTS.md for REQ-IDs. -->
 
-- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02 (live-UAT checklist), DEPLOY-03 (6 human-UAT scenarios), DEPLOY-05 (restart-safe queue restore, live), DEPLOY-08 (keepalive cron in production)
-- [ ] (v1.2 candidate) RAG long-term semantic memory — pgvector + Gemini embeddings for callback roasts
-- [ ] (v1.2 candidate) Vision / multimodal roasting — Dexter reacts to images posted in chat
+- [ ] **Reliability & ops hardening** (Phase 9) — truthful `/health`, fire-and-forget failure logging, sync-hang guards, DB query timeouts, search/extract self-heal
+- [ ] **Critical-path test coverage** (Phase 10) — MusicCog playback flow, OpsCog/health, EventsCog ambient roasts
+- [ ] **RAG long-term memory** (Phase 11) — `pgvector` on Neon + Gemini embeddings → callback roasts; zero new infra
+- [ ] **Richer music/UX** (Phase 12) — per-server playlists, skip-rate analytics, third lyrics fallback, auto-queue validation
+
+Carried forward (not in v1.2 scope, host-gated / deferred):
+- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the live-UAT tail
+- [ ] (v1.3 candidate) Vision / multimodal roasting — Dexter reacts to images posted in chat
 
 ### Out of Scope
 
@@ -135,4 +148,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-26 after v1.1 "Live & Lethal" milestone completion*
+*Last updated: 2026-06-26 after starting milestone v1.2 "Sharper & Smarter"*
