@@ -259,6 +259,41 @@ async def _run_health_server() -> None:
 # ──────────────────────────── SERVICE WIRING ────────────────────────────
 
 
+async def _cleanup_partial_init() -> None:
+    """Tear down a partially-initialized boot so the next READY retries cleanly (WR-04).
+
+    _initialize_once starts the background loops + health server BEFORE the
+    fail-prone steps (DB ready, restore_queues). If init then hangs (watchdog
+    TimeoutError) or raises, leaving those loops running keeps firing them against
+    the about-to-be-closed pool — e.g. idle_check → queue_persistence.clear_persisted()
+    raises every 60s until a retry succeeds, and live cogs reading self.bot.pool
+    hit AttributeError. Stop the pool-bound loops and drop the pool-bound service
+    so the retry re-wires everything atomically. The health server is intentionally
+    left running: it reads bot.pool live and degrades gracefully when it is absent.
+    """
+    # Stop loops bound to the dying pool (each guarded — may not have started).
+    for _loop in (idle_check, cache_cleanup, ytdlp_update, status_rotation):
+        try:
+            if _loop.is_running():
+                _loop.cancel()
+        except Exception:
+            pass
+
+    # Drop the pool-bound persistence service; _initialize_once recreates it.
+    if hasattr(bot, "queue_persistence"):
+        del bot.queue_persistence
+
+    # Close + drop the pool last, after nothing else references it.
+    _pool = getattr(bot, "pool", None)
+    if _pool is not None:
+        try:
+            await _pool.close()
+        except Exception:
+            pass
+        if hasattr(bot, "pool"):
+            del bot.pool
+
+
 @bot.event
 async def on_ready():
     """Initialize services, database, and cogs once the bot is connected."""
@@ -281,28 +316,14 @@ async def on_ready():
         bot._ready_done = True
     except asyncio.TimeoutError:
         log.error(
-            "on_ready init hung for %ss; cleaning up pool to retry on next READY event",
+            "on_ready init hung for %ss; cleaning up to retry on next READY event",
             config.INIT_WATCHDOG_TIMEOUT_SECONDS,
         )
-        _pool = getattr(bot, "pool", None)
-        if _pool is not None:
-            try:
-                await _pool.close()
-            except Exception:
-                pass
-            if hasattr(bot, "pool"):
-                del bot.pool
+        await _cleanup_partial_init()
         return
     except Exception:
         log.exception("on_ready init failed; cleaning up to retry on next ready event")
-        _pool = getattr(bot, "pool", None)
-        if _pool is not None:
-            try:
-                await _pool.close()
-            except Exception:
-                pass
-            if hasattr(bot, "pool"):
-                del bot.pool
+        await _cleanup_partial_init()
         return
     finally:
         bot._ready_initializing = False
