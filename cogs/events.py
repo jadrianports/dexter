@@ -9,6 +9,7 @@ import discord
 from discord.ext import commands
 
 import config
+from logic.roasts import RoastScenario, cooldown_elapsed, decide_ambient_roast
 from models.user_profile import get_user_summary
 from personality import roasts
 from personality.prompts import build_chat_prompt
@@ -38,7 +39,7 @@ class EventsCog(commands.Cog):
         """Return True if roast is allowed (ceiling_seconds has elapsed since last roast)."""
         now = asyncio.get_event_loop().time()
         last = self._ambient_roast_times.get(user_id, 0.0)
-        return (now - last) >= ceiling_seconds
+        return cooldown_elapsed(now - last, ceiling_seconds)
 
     def _mark_ambient_roast(self, user_id: int) -> None:
         """Record that a roast just fired for this user."""
@@ -199,49 +200,63 @@ class EventsCog(commands.Cog):
 
         # JOIN: before.channel is None, after.channel is not None
         if before.channel is None and after.channel is not None:
-            if random.random() < config.UNPROMPTED_ROAST_CHANCE:
-                if self._check_ambient_cooldown(
-                    member.id, config.AMBIENT_ROAST_CEILING_SECONDS
-                ):
-                    if roasts.is_late_night(local_hour):
-                        # Late-night chance is a second roll
-                        if random.random() < config.LATE_NIGHT_ROAST_CHANCE:
-                            scenario = "it's late night (1-5am) and {name} just joined voice"
-                            fallback_pool = roasts.LATE_NIGHT_ROASTS
-                        else:
-                            return  # Late-night roll failed — no roast this time
-                    else:
-                        scenario = "{name} just joined the voice channel"
-                        fallback_pool = roasts.VOICE_JOIN_ROASTS
-
-                    line = await self._generate_ambient_roast(member, scenario, fallback_pool)
-                    channel = await self._get_ambient_channel(guild)
-                    if channel:
-                        await channel.send(
-                            line,
-                            allowed_mentions=discord.AllowedMentions.none(),
-                        )
-                    self._mark_ambient_roast(member.id)
+            chance_roll = random.random()
+            late_night_roll = random.random()
+            seconds_since_last_roast = (
+                asyncio.get_event_loop().time()
+                - self._ambient_roast_times.get(member.id, 0.0)
+            )
+            scenario_result = decide_ambient_roast(
+                event="join",
+                chance_roll=chance_roll,
+                late_night_roll=late_night_roll,
+                local_hour=local_hour,
+                seconds_since_last_roast=seconds_since_last_roast,
+            )
+            if scenario_result != RoastScenario.NONE:
+                if scenario_result == RoastScenario.LATE_NIGHT:
+                    scenario = "it's late night (1-5am) and {name} just joined voice"
+                    fallback_pool = roasts.LATE_NIGHT_ROASTS
+                else:  # JOIN
+                    scenario = "{name} just joined the voice channel"
+                    fallback_pool = roasts.VOICE_JOIN_ROASTS
+                line = await self._generate_ambient_roast(member, scenario, fallback_pool)
+                channel = await self._get_ambient_channel(guild)
+                if channel:
+                    await channel.send(
+                        line,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                self._mark_ambient_roast(member.id)
             return
 
         # LEAVE: before.channel is not None, after.channel is None
         if before.channel is not None and after.channel is None:
-            if random.random() < config.UNPROMPTED_ROAST_CHANCE:
-                if self._check_ambient_cooldown(
-                    member.id, config.AMBIENT_ROAST_CEILING_SECONDS
-                ):
-                    line = await self._generate_ambient_roast(
-                        member,
-                        "{name} just left the voice channel",
-                        roasts.VOICE_LEAVE_ROASTS,
+            chance_roll = random.random()
+            seconds_since_last_roast = (
+                asyncio.get_event_loop().time()
+                - self._ambient_roast_times.get(member.id, 0.0)
+            )
+            scenario_result = decide_ambient_roast(
+                event="leave",
+                chance_roll=chance_roll,
+                late_night_roll=0.0,
+                local_hour=local_hour,
+                seconds_since_last_roast=seconds_since_last_roast,
+            )
+            if scenario_result != RoastScenario.NONE:
+                line = await self._generate_ambient_roast(
+                    member,
+                    "{name} just left the voice channel",
+                    roasts.VOICE_LEAVE_ROASTS,
+                )
+                channel = await self._get_ambient_channel(guild)
+                if channel:
+                    await channel.send(
+                        line,
+                        allowed_mentions=discord.AllowedMentions.none(),
                     )
-                    channel = await self._get_ambient_channel(guild)
-                    if channel:
-                        await channel.send(
-                            line,
-                            allowed_mentions=discord.AllowedMentions.none(),
-                        )
-                    self._mark_ambient_roast(member.id)
+                self._mark_ambient_roast(member.id)
             return
 
         # Channel switch (both non-None, different) — NOT a roast trigger per D-12
