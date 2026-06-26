@@ -64,14 +64,18 @@ Full phase details, success criteria, and decisions archived in
   3. A failed or slow command-tree sync on startup logs and recovers, and a shard crash mid-init can no longer permanently wedge the `on_ready` re-entry guard — the bot always finishes coming online (REL-03, REL-04)
   4. A slow DB query (e.g. leaderboard on a large guild) hits an enforced timeout and is handled instead of blocking the bot (REL-05)
   5. A transient `youtube` search/extract failure retries within a bounded budget and recovers, matching the existing download self-heal path (REL-06)
-**Plans**: TBD (~5)
+**Plans**: 4 plans (Wave 1 -> Wave 2 x3 parallel)
+
+> Planned as 4 (not the suggested 5): REL-01 + REL-05 merged into the Wave-1 config-foundation plan
+> (both are tiny config-wiring edits to the same `bot.py` + `cogs/ops.py`), which lets Wave 2 run
+> three plans fully in parallel with zero `files_modified` overlap (utils+music vs bot.py vs youtube).
+> REL-02 spans two plans: create_task surfacing (09-02) and `@loop.error` loop surfacing (09-03).
 
 Plans:
-- [ ] 09-01: Truthful `/health` — degraded (non-200) status when a critical cog/subsystem is down (REL-01)
-- [ ] 09-02: Done-callback failure logging for all fire-and-forget background tasks (REL-02)
-- [ ] 09-03: Startup sync hang/timeout recovery + un-wedgeable `on_ready` re-entry guard (REL-03, REL-04)
-- [ ] 09-04: Enforced DB query timeouts (REL-05)
-- [ ] 09-05: Bounded retry / self-heal for youtube search + extract (REL-06)
+- [ ] 09-01-PLAN.md - Config foundation + truthful `/health` + enforced DB query-timeout floor (REL-01, REL-05) - Wave 1
+- [ ] 09-02-PLAN.md - Fire-and-forget `create_task` failure surfacing via `utils/tasks.py` make_task (REL-02) - Wave 2
+- [ ] 09-03-PLAN.md - Startup sync recovery + un-wedgeable `on_ready` watchdog + `@loop.error` handlers (REL-03, REL-04, REL-02) - Wave 2
+- [ ] 09-04-PLAN.md - Bounded retry / self-heal for youtube search + extract (REL-06) - Wave 2
 
 ### Phase 10: Critical-Path Test Coverage
 **Goal**: The untested critical-path decision logic — playback, health/metrics, ambient roasts — is extracted into pure importable functions and unit-tested, respecting the convention that Discord/process glue stays untested-by-design, with the regression gate green.
@@ -143,7 +147,7 @@ Plans:
 | 6. Speed & Caching | v1.1 | 4/4 | Complete — verified live (06-UAT) | 2026-06-26 |
 | 7. Player UX & Filters | v1.1 | 4/4 | Complete — verified live (07-HUMAN-UAT) | 2026-06-18 |
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
-| 9. Reliability & Ops Hardening | v1.2 | 0/5 | Not started | - |
+| 9. Reliability & Ops Hardening | v1.2 | 0/4 | Not started | - |
 | 10. Critical-Path Test Coverage | v1.2 | 0/4 | Not started | - |
 | 11. RAG Long-Term Memory | v1.2 | 0/6 | Not started | - |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |
