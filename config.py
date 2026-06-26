@@ -147,6 +147,7 @@ SYNC_TIMEOUT_SECONDS: int = 30             # D-05: asyncio.wait_for wrap on bot.
 TASK_ERROR_CHANNEL_COOLDOWN_SECONDS: int = 300   # D-04: dedup window per (task_name, exc_type)
 YTDLP_RETRY_BACKOFF_SECONDS: float = 1.0   # D-08: per-attempt sleep in search/extract retry
 YTDLP_MAX_QUICK_RETRIES: int = 2           # D-08: attempts before falling through to update path
+HEALTH_DB_PROBE_TIMEOUT: float = 3.0       # WR-03: bound the /health DB probe (acquire+SELECT 1) so a cold/exhausted Neon pool degrades fast instead of hanging
 
 
 def sanitize_database_url(dsn: str) -> str:

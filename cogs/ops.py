@@ -95,9 +95,16 @@ async def gather_bot_metrics(bot) -> dict:
     # DB probe — determines db_ok + appends to degraded_reasons on failure
     pool = getattr(bot, "pool", None)
     if pool is not None:
-        try:
+        # WR-03: bound the whole probe (acquire + SELECT 1) so a cold/scaling Neon
+        # instance or an exhausted pool degrades fast (db_ok=False) instead of
+        # blocking the health request up to command_timeout — or indefinitely on
+        # acquire(). A timeout raises asyncio.TimeoutError, caught below as degraded.
+        async def _db_probe() -> None:
             async with pool.acquire() as conn:
                 await conn.execute("SELECT 1")
+
+        try:
+            await asyncio.wait_for(_db_probe(), timeout=config.HEALTH_DB_PROBE_TIMEOUT)
             metrics["db_ok"] = True
         except Exception:
             metrics["db_ok"] = False
