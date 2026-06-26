@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
-status: planning
-last_updated: "2026-06-26T11:37:41.629Z"
+status: roadmapped
+last_updated: "2026-06-26T12:10:00.000Z"
 last_activity: 2026-06-26
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 19
   completed_plans: 0
   percent: 0
 ---
@@ -20,63 +20,45 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** v1.1 shipped (code) + archived. Planning next milestone (v1.2) — `/gsd-new-milestone`. The 24/7 live deploy stays parked until an always-on residential host exists.
+**Current focus:** v1.2 "Sharper & Smarter" roadmapped — Phases 9–12 (reliability hardening → critical-path tests → RAG long-term memory → richer music/UX). Ready to plan Phase 9. The 24/7 live deploy stays parked until an always-on residential host exists.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-26 — Milestone v1.2 started
+Phase: 9 of 12 (Reliability & Ops Hardening) — not yet planned
+Plan: — of ~5 in Phase 9
+Status: Ready to plan
+Last activity: 2026-06-26 — v1.2 roadmap created (Phases 9–12, 21/21 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed (v1.2): 0
+- v1.0 + v1.1: 33 plans shipped across Phases 3–8 (pre-v1.2)
+
+**By Phase (v1.2):**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 9. Reliability & Ops Hardening | 0/5 | - | - |
+| 10. Critical-Path Test Coverage | 0/4 | - | - |
+| 11. RAG Long-Term Memory | 0/6 | - | - |
+| 12. Richer Music/UX | 0/4 | - | - |
+
+*Updated after each plan completion. Full v1.1 per-plan timings archived in milestones/v1.1-ROADMAP.md.*
 
 ## Accumulated Context
 
 ### Decisions
 
-Full decision log lives in PROJECT.md Key Decisions and milestones/v1.0-ROADMAP.md. Highlights:
+Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. Highlights most relevant to v1.2:
 
-- Hosting RESOLVED → Oracle Cloud Always Free A1 ARM; Docker Compose for portability (Phase 4)
-- Persistence migrated SQLite → PostgreSQL via asyncpg 0.31.0 (Phase 4)
-- Queue cap (500) enforced in `MusicQueue.add()`; `log_track_batch` single-transaction logging (Phase 4)
-- Gemini-first personality output with guaranteed template fallback; `priority=2` for all background AI (Phase 3)
-- [Phase ?]: Mirror /stop template at clear_persisted() gap sites to close ghost-queue-on-restart bug (DEPLOY-06)
-- [Phase ?]: DEBUG level for hot per-play _play_track logs, INFO for low-frequency reconnect path
-- [Phase ?]: ZoneInfo(config.STREAK_TIMEZONE) for all community-time hour checks; bot.py yt-dlp loop tzinfo deferred (D-06)
-- [Phase 05-02]: deploy.sh uses --build bot (not bare --build) — only bot image rebuilt; Postgres never rebuilt
-- [Phase 05-02]: pg_restore via docker compose exec (Option B) — version-matched with pg_dump server; avoids host client mismatch
-- [Phase 05-02]: build_seed_rows() pure/importable function pattern — separates testable logic from async IO in scripts
-- [Phase 05-03]: Strict A→B→C→D runbook ordering — destructive restore (D1) always last; source docs by-reference only, not maintained in parallel
-- [Phase 05 review]: 7 of 14 review findings fixed pre-verification (CR-01 restore-loop continue; CR-02 seed-row live-DB teardown; WR-01 backup temp+size-guard; WR-02 deploy dirty-tree/ff-only; WR-05/06 seed-test cleanup; WR-07 /sync owner_id wiring). WR-03 deferred to DEPLOY-04 live debug; WR-04 + 5 Info advisory
-- [Phase 05-01]: sanitize_database_url strips entire query string (not per-param) — simpler + safe; SSL handled via ssl='require' kwarg (K-05)
-- [Phase 05-01]: DB_POOL_MAX=5, AUDIO_CACHE_MAX_MB=512, DB_MAX_INACTIVE_CONN_LIFETIME=240, DB_STATEMENT_CACHE_SIZE=0 (K-04/K-07)
-- [Phase 05-01]: _run_health_server uses asyncio.Event().wait() for cancellable keep-alive on 0.0.0.0:8000 (K-02 amendment)
-- [Phase 05-03]: Runbook version 2.0 (Koyeb+Neon) — 22 checks across A(7)/B(3)/C(11)/D(1); verified-live bar is K-17 (all 22 pass on Koyeb+Neon, reported via /gsd-verify-work)
-- [Phase ?]: clock-injectable elapsed tracking via now: float | None param — enables pure unit tests without real time.monotonic() calls
-- [Phase ?]: _build_ffmpeg_opts is module-level pure function so test_audio.py imports/tests it without mocking AudioService
-- [Phase ?]: get_source default path preserved: opus passthrough for no-seek no-filter playback (D-12)
-- [Phase 07-02]: NowPlayingView uses timeout=None + stable custom_ids registered in setup_hook (not on_ready) — correct discord.py persistent-view pattern
-- [Phase 07-02]: _do_* shared helper pattern — slash command + button both route through one code path, eliminating divergence risk
-- [Phase 07-02]: now_playing() derives elapsed from queue.elapsed_seconds() internally — callers don't need to pass it
-- [Phase 07]: user_favorites uses count-before/count-after dedupe detection — avoids race window, keeps check atomic with insert
-- [Phase 07]: FavoritesView: Select + Queue + Remove 3-widget design — explicit intent selection before queuing or removing prevents accidental queue on remove-intent
-- [Phase ?]: user_playlists upsert-exempt cap: count_playlists only blocks genuinely new names
-- [Phase ?]: delete_playlist returns bool via asyncpg execute() status string ('DELETE N') — no extra SELECT, avoids race window
-- [Phase ?]: list_playlists uses jsonb_array_length(snapshot) for track_count — eliminates a separate COUNT query, keeps metadata atomic
-- [Phase ?]: [Phase 07-04]: playlist load idle-start sets current_index to first newly added track before _play_track — mirrors queue_persistence restore pattern
-- [Phase ?]: ROAST_COOLDOWN_SECONDS=30 for slash command (D-04); ambient ceiling in AMBIENT_ROAST_CEILING_SECONDS=300
-- [Phase ?]: Leaderboard SQL aggregates: COUNT(*) FROM song_history WHERE guild_id=$1 (not global total_songs_queued, D-14)
-- [Phase ?]: rpm_usage()/rpm_headroom() are synchronous on _RateLimiter — benign read race acceptable for dashboard (D-24)
-- [Phase ?]: GROUP BY includes first_seen_at in get_leaderboard_songs for valid tie-break ORDER BY without Postgres error
-- [Phase 08-02]: /roast resolves edge cases (bot/self/zero-history) BEFORE mood/Gemini setup — fallback pool always set before async DB calls
-- [Phase 08-02]: Test invocation of slash commands uses cog.cmd.callback(cog, interaction, ...) — @app_commands.command wraps coroutine in Command object
-- [Phase ?]: Phase 6-01: SCHEMA_SQL DDL-only (no dollar-N params) for resolution_cache - asyncpg multi-statement path requires it (Pitfall 1/7)
-- [Phase ?]: Phase 6-01: set_resolution_cache ON CONFLICT updates expires_at on re-write to keep TTL fresh (Pitfall 5)
-- [Phase ?]: Phase 6-01: conftest pool fixture pytest.skip on asyncpg.create_pool failure instead of raising (Rule 1 fix)
-- [Phase ?]: Phase 06-02: DOWNLOAD_OPTS 3-PP order: SponsorBlock(when=after_filter) first, FFmpegExtractAudio second, ModifyChapters last (Pitfall 1 / Anti-Pattern in 06-RESEARCH.md)
-- [Phase ?]: Phase 06-02: copy-when-opus NOT rewritten — FFmpegExtractAudioPP already handles natively; download() only adds postprocessor_hooks for codec-path logging (06-RESEARCH.md critical finding / D-01)
-- [Phase ?]: Phase 06-04: resolution cache hit routes through async_extract (full guards) not inline Track construction — prevents duration/livestream bypass on cached stale video
-- [Phase ?]: Phase 06-04: SongSelectView orig_query param threads query through callback via getattr; URL branch never sets orig_query so it never writes cache (D-09)
-- [Phase ?]: Phase 06-04: cache_cleanup protected set built from MusicCog.queues via cog reference (bot.cogs.get("MusicCog"))
+- Layered cog → service → model architecture; services wired in `bot.py:_initialize_once`, attached as bot attributes, accessed via `self.bot.*` — Phase 11 `MemoryService` slots in here, no redesign.
+- Global Gemini 15 RPM limiter with priority tiers (sliding-window deque) — Phase 11 embeddings get a **separate** ~60 RPM `_embed_limiter`, never this shared budget.
+- Neon-tuned asyncpg pool: `ssl='require'`, `statement_cache_size=0`, 240s lifetime (K-04) — Phase 11 registers the pgvector codec via `init=` (a per-connection codec, NOT a prepared statement, so `statement_cache_size=0` is a verified non-issue).
+- Gemini-first personality output with guaranteed template fallback; `priority=2` for all background AI — Phase 11 memory writes are priority-2 background work.
+- Pure-logic TDD seam: clock-injectable / module-level pure functions (mirrors `compute_streak`, `_build_ffmpeg_opts`) — the convention Phase 10 extracts to and Phase 11's rerank/dedup functions follow.
 
 ### Pending Todos
 
@@ -84,9 +66,9 @@ None.
 
 ### Blockers/Concerns
 
-- [Production risk] Koyeb free WEB service sleep-after-1h requires UptimeRobot keep-alive; K-10 runner swap (HeavenCloud/Wispbyte) is the contingency if pings prove ineffective (K-02 amended).
-- [Parked] Live-concurrency reconnect race (`cogs/music.py:~609`) needs a live `/gsd:debug` session — cannot be verified by local boot. Assigned to Phase 5 (DEPLOY-04 / P-01); C11 + C2 runbook checks are the live-observation gate.
-- [Human-check pending] User must create Neon project, Koyeb WEB service, UptimeRobot monitor, and run the 05-UAT-RUNBOOK.md end-to-end on live infra before Phase 5 is verified (K-17).
+- [Phase 11 / research flag] Numeric retrieval defaults (top-k=8, 0.70 similarity floor, 0.90 dedup, ~150 per-user cap, 90-day decay, rerank weights) are MEDIUM-confidence tuned priors — validate via a short spike at the START of Phase 11 before retrieval lands.
+- [Phase 11 / correction] PROJECT.md + CLAUDE.md still name the deprecated `text-embedding-004` (sunset 2026-01-14) — Phase 11 uses `gemini-embedding-001` @ 768d; correct the stale references during planning.
+- [Parked] All v1.1 deploy/UAT blockers (Koyeb sleep + UptimeRobot, reconnect race, live Neon/Koyeb human-check) remain parked behind the YouTube datacenter-IP block — out of v1.2 scope, resume on a residential host. See Deferred Items.
 
 ## Deferred Items
 
@@ -101,49 +83,23 @@ on demand → Neon Singapore). They resume when a Pi / always-on residential hos
 | requirement | DEPLOY-03 — 6 human-UAT scenarios (`04-HUMAN-UAT.md`) passing | Blocked on 24/7 host |
 | requirement | DEPLOY-05 — queue + position survive restart, validated live | Blocked on 24/7 host |
 | requirement | DEPLOY-08 — keepalive / dead-man cron firing in production | Blocked on 24/7 host |
-| uat | Phase 04 `04-HUMAN-UAT.md` — 6 pending scenarios | Superseded by 05-UAT-RUNBOOK.md v2.0 (Koyeb+Neon) |
-| uat | Phase 05 `05-HUMAN-UAT.md` / `05-UAT-RUNBOOK.md` — 20 / 22 pending live checks | Blocked on 24/7 host |
-| uat | Phase 06 `06-HUMAN-UAT.md` — 6 pending (eviction/SponsorBlock/timeout not reproducible on demand) | Partial; rest blocked on 24/7 host |
-| verification | Phase 03 `03-VERIFICATION.md` — 9 live-Discord behavioral checks | Carried into 05-UAT-RUNBOOK.md C1-C11 |
-| verification | Phase 04 `04-VERIFICATION.md` — 6 live-deploy checks | Carried into 05-UAT-RUNBOOK.md A/B/D groups |
-| verification | Phase 05 `05-VERIFICATION.md` — Koyeb+Neon live deploy (K-17) | Blocked on 24/7 host |
-| verification | Phase 06 `06-VERIFICATION.md` — `human_needed` | Largely covered by 06-UAT.md live run; residual blocked on 24/7 host |
+| uat | Phase 04/05/06 `*-HUMAN-UAT` / `05-UAT-RUNBOOK.md` — pending live checks | Blocked on 24/7 host |
+| verification | Phase 03/04/05/06 `*-VERIFICATION.md` — live-Discord / live-deploy checks | Carried into 05-UAT-RUNBOOK.md; blocked on 24/7 host |
 
-Carried-forward engineering items (not blockers):
+Carried-forward engineering items (fixed in code; live gate only):
 
 | Category | Item | Status |
 |----------|------|--------|
 | reliability | Live-concurrency reconnect race (`cogs/music.py:~609`) | Fixed in code (DEPLOY-04 / P-01); C11 runbook check is the live gate |
-| reliability | `clear_persisted()` not called on idle-leave / reconnect-failure (IN-02) | Fixed (P-02, Plan 05-01); B2 runbook check is the live gate |
-| out-of-scope | Web config dashboard ("maybe" only) | Not committed — deferred to a future milestone |
+| reliability | `clear_persisted()` on idle-leave / reconnect-failure (IN-02) | Fixed (P-02); B2 runbook check is the live gate |
+| out-of-scope | Web config dashboard ("maybe" only) | Deferred to a future milestone |
 
 ## Session Continuity
 
 Last session: 2026-06-26
-Stopped at: v1.1 "Live & Lethal" milestone closed + archived (tag v1.1). 9 live-validation items acknowledged + deferred (see Deferred Items) — all blocked on an always-on residential host.
+Stopped at: v1.2 roadmap created — Phases 9–12 mapped to all 21 requirements (REL/TEST/MEM/UX), ROADMAP.md + REQUIREMENTS.md traceability written.
 Next:
 
-  Start the next milestone: `/clear` then `/gsd-new-milestone` (v1.2). The 24/7 live deploy + its
-  deferred DEPLOY/UAT items resume whenever a Pi / always-on residential host is acquired.
-
-## Performance Metrics
-
-| Phase | Plan | Duration | Notes |
-|-------|------|----------|-------|
-| Phase 05-ship-it-live P01 (Koyeb+Neon re-planned) | ~8 min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
-| Phase 05-ship-it-live P02 (deploy packaging) | ~12 min | 2 tasks (2 commits) | 9 files (5 created/moved, 4 modified) |
-| Phase 05-ship-it-live P03 (runbook re-target) | ~4 min | 2 tasks (1 commit) | 1 file modified |
-| Phase 07-player-ux-filters P01 | 9 min | 5 tasks | 9 files |
-| Phase 07-player-ux-filters P02 | ~25 min | 5 tasks (4 commits) | 4 files modified |
-| Phase 07 P03 | ~20 min | 2 tasks | 5 files |
-| Phase 07-player-ux-filters P04 | ~15 min | 2 tasks | 3 files |
-| Phase 08-social-ops P01 | 6min | 3 tasks | 5 files |
-| Phase 08-social-ops P02 | 12min | 2 tasks (3 commits incl. TDD RED) | 3 files (1 created, 2 modified) |
-| Phase 08-social-ops P03 | 18min | 3 tasks | 6 files |
-| Phase 06 P01 | 15 min | 2 tasks | 6 files |
-| Phase 06-speed-caching P02 | 4 min | 2 tasks | 2 files |
-| Phase 06-speed-caching P04 | ~35 min | 3 tasks (3 commits) | 5 files |
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
+  Plan the first v1.2 phase: `/gsd-plan-phase 9` (Reliability & Ops Hardening). Phase 11 (RAG) is
+  the research-backed flagship — open it with the numeric-defaults validation spike. The 24/7 live
+  deploy + its deferred DEPLOY/UAT items resume whenever a Pi / always-on residential host is acquired.

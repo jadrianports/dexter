@@ -82,7 +82,7 @@ Explicitly excluded for v1.2. Documented to prevent scope creep.
 
 ## Traceability
 
-Populated during roadmap creation.
+Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -110,9 +110,9 @@ Populated during roadmap creation.
 
 **Coverage:**
 - v1.2 requirements: 21 total
-- Mapped to phases: 21 (pending roadmap confirmation)
+- Mapped to phases: 21 (100% — confirmed by roadmap)
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-26*
-*Last updated: 2026-06-26 after starting milestone v1.2*
+*Last updated: 2026-06-26 after v1.2 roadmap creation (Phases 9–12 mapped, 21/21 coverage)*
