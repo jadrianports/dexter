@@ -44,6 +44,7 @@ from services.lyrics import chunk_lyrics
 from utils import embeds
 from utils.formatters import parse_time, format_duration
 from utils.logger import log
+from utils.tasks import make_task
 
 if TYPE_CHECKING:
     from services.youtube import YouTubeService
@@ -618,14 +619,14 @@ class MusicCog(commands.Cog):
         # Auto-lyrics (off the playback path): post this song's lyrics to the
         # lyrics thread if enabled. Never awaited — must not delay playback.
         if queue.auto_lyrics:
-            asyncio.create_task(self._post_auto_lyrics(guild, track))
+            make_task(self._post_auto_lyrics(guild, track), name="auto-lyrics", bot=self.bot)
 
         # Prefetch the next track so the inter-song gap is zero (PERF-01 / D-04).
         # Fire-and-forget — must not block or delay current playback.
         # Use the in-scope current_gen captured above; never re-read the generation.
         next_tracks = queue.upcoming()
         if next_tracks:
-            asyncio.create_task(self._prefetch_next_track(guild, next_tracks[0], current_gen))
+            make_task(self._prefetch_next_track(guild, next_tracks[0], current_gen), name="prefetch", bot=self.bot)
 
     async def _prefetch_next_track(
         self,
@@ -760,7 +761,7 @@ class MusicCog(commands.Cog):
                             "auto-queue: queue empty with %d human(s) in voice — triggering (guild %d)",
                             len(human_members), guild.id,
                         )
-                        asyncio.create_task(ai_cog.try_auto_queue(guild))
+                        make_task(ai_cog.try_auto_queue(guild), name="auto-queue", bot=self.bot)
                         return  # Don't set is_playing = False; auto-queue will handle it
                     log.info("auto-queue: NOT triggered — AICog not loaded (guild %d)", guild.id)
                 else:
