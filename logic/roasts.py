@@ -10,7 +10,7 @@ pattern from ``personality/roasts.py`` ``is_late_night(hour)`` (D-06).
 Decision functions here are the single source of truth for the following live code paths
 (D-01/D-02):
   - ``cogs/events.py`` ``on_voice_state_update``  — chance/cooldown/late-night/event dispatch
-  - ``cogs/events.py`` ``_check_ambient_cooldown`` — delegates to ``cooldown_elapsed``
+    (the inline cooldown glue computes ``seconds_since_last_roast`` and calls ``cooldown_elapsed``)
 
 Phase 10 coverage locked by tests/test_roast_logic.py (D-03/TEST-03).
 """
@@ -52,7 +52,6 @@ class RoastScenario(enum.Enum):
 def cooldown_elapsed(seconds_since_last: float, ceiling_seconds: float) -> bool:
     """Return True if enough time has elapsed since the last ambient roast.
 
-    Mirrors the comparison in ``EventsCog._check_ambient_cooldown`` exactly:
     ``>=`` means exactly-at-ceiling is allowed (a roast fired exactly 300 s ago
     is eligible again immediately).
 

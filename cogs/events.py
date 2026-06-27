@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 
 import config
-from logic.roasts import RoastScenario, cooldown_elapsed, decide_ambient_roast
+from logic.roasts import RoastScenario, decide_ambient_roast
 from models.user_profile import get_user_summary
 from personality import roasts
 from personality.prompts import build_chat_prompt
@@ -34,12 +34,6 @@ class EventsCog(commands.Cog):
         self._idle_loneliness_posted: bool = False
 
     # ──────────────────────────── COOLDOWN HELPERS ────────────────────────────
-
-    def _check_ambient_cooldown(self, user_id: int, ceiling_seconds: int) -> bool:
-        """Return True if roast is allowed (ceiling_seconds has elapsed since last roast)."""
-        now = asyncio.get_event_loop().time()
-        last = self._ambient_roast_times.get(user_id, 0.0)
-        return cooldown_elapsed(now - last, ceiling_seconds)
 
     def _mark_ambient_roast(self, user_id: int) -> None:
         """Record that a roast just fired for this user."""
@@ -191,7 +185,6 @@ class EventsCog(commands.Cog):
             return
 
         guild = member.guild
-        hour = discord.utils.utcnow().hour  # Use UTC; late-night check uses local hour below
 
         # Use the member's local guild time via Python's datetime (TZ-explicit via STREAK_TIMEZONE)
         import datetime as _dt
