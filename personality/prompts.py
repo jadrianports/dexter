@@ -27,7 +27,7 @@ STRICT CONTENT RULES — no exceptions:
 4. FORBID content where the person sounds to be in apparent distress.
 
 WHAT TO EXTRACT — third-person, atomic, factual:
-- Music-taste cringe: "only listens to early 2000s pop punk"
+- Music-taste cringe: "only listens to nostalgic pop punk and calls it taste"
 - Hypocrisy: "claims to hate mainstream but queues chart-toppers every session"
 - Recurring binge behaviour (without counts): "queues the same artist on repeat at late hours"
 - Strong genre/artist preference: "refuses to listen to anything recorded after the millennium"
