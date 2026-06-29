@@ -131,7 +131,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 11-01-PLAN.md — Foundation: `CREATE EXTENSION` + `user_memories(vector(768))` in `SCHEMA_SQL`, extension-first bootstrap + `init=_register_vector`, Phase 11 config priors, stale `text-embedding-004` → `gemini-embedding-001` correction, Wave-0 test scaffold; pgvector install legitimacy gate (MEM-01) — Wave 1
+- [x] 11-01-PLAN.md — Foundation: `CREATE EXTENSION` + `user_memories(vector(768))` in `SCHEMA_SQL`, extension-first bootstrap + `init=_register_vector`, Phase 11 config priors, stale `text-embedding-004` → `gemini-embedding-001` correction, Wave-0 test scaffold; pgvector install legitimacy gate (MEM-01) — Wave 1
 
 **Wave 2** *(blocked on 11-01)*
 
@@ -192,5 +192,5 @@ Plans:
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete    | 2026-06-27 |
-| 11. RAG Long-Term Memory | v1.2 | 0/7 | Not started | - |
+| 11. RAG Long-Term Memory | v1.2 | 1/7 | In Progress|  |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |
