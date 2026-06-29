@@ -815,6 +815,164 @@ async def search_memories(
         )
 
 
+async def insert_memory(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    guild_id: str | None,
+    kind: str,
+    fact: str,
+    embedding: list[float],
+    salience: float,
+    expires_at: datetime,
+) -> int:
+    """Insert a new user_memories row and return its id.
+
+    Embedding is passed as a plain list[float]; the pgvector codec registered
+    via register_vector() in bot.py:_initialize_once handles the Postgres
+    vector(768) type encoding (T-11-04b — no SQL injection path for embeddings).
+
+    All parameters are bound via $N positional placeholders — never string-built
+    SQL (T-11-04b / ASVS V5). Scoped insert: user_id is always from the
+    authenticated session, not from fact text (T-11-04c).
+
+    Args:
+        pool:       asyncpg connection pool with pgvector codec registered.
+        user_id:    Discord user ID (TEXT) — owner of this memory.
+        guild_id:   Guild context for the event; None for cross-guild facts.
+        kind:       Event kind (config.MEMORY_SALIENCE_BASE_WEIGHTS key).
+        fact:       Already-distilled atomic fact sentence (11-05 produces this).
+        embedding:  768d float vector from GeminiService.embed (RETRIEVAL_DOCUMENT).
+        salience:   Hybrid salience score from compute_salience() (D-07).
+        expires_at: UTC datetime after which the row may be swept (decay horizon).
+
+    Returns:
+        The BIGSERIAL id of the newly inserted row.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "INSERT INTO user_memories"
+            " (user_id, guild_id, kind, fact, embedding, salience, expires_at)"
+            " VALUES ($1, $2, $3, $4, $5, $6, $7)"
+            " RETURNING id",
+            user_id, guild_id, kind, fact, embedding, salience, expires_at,
+        )
+    return row["id"]
+
+
+async def bump_memory_hit(pool: asyncpg.Pool, memory_id: int) -> None:
+    """Increment hit_count and refresh last_seen_at for a near-duplicate memory.
+
+    Called by MemoryService.remember() when dedup_decision() returns True —
+    the incoming fact is nearly identical to an existing row, so we record the
+    repeat observation rather than inserting a duplicate.
+
+    A small salience nudge (±0.02, clamped to 1.0) rewards frequently observed
+    facts, keeping them above low-frequency facts during eviction ranking (D-07).
+
+    Args:
+        pool:      asyncpg connection pool.
+        memory_id: The id of the existing user_memories row to bump.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE user_memories"
+            " SET hit_count = hit_count + 1,"
+            "     last_seen_at = now(),"
+            "     salience = LEAST(1.0, salience + 0.02)"
+            " WHERE id = $1",
+            memory_id,
+        )
+
+
+async def count_user_memories(pool: asyncpg.Pool, user_id: str) -> int:
+    """Return the current count of active memory rows for a user.
+
+    Called by MemoryService.remember() immediately after a successful insert to
+    check whether the per-user cap (config.MEMORY_MAX_PER_USER) has been exceeded.
+    When count > cap, remember() triggers eviction via choose_eviction +
+    evict_lowest_salience (D-08 / T-11-04a).
+
+    Args:
+        pool:    asyncpg connection pool.
+        user_id: Discord user ID (TEXT) — scoped to this user only.
+
+    Returns:
+        Number of rows in user_memories for this user_id.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS cnt FROM user_memories WHERE user_id = $1",
+            user_id,
+        )
+    return int(row["cnt"]) if row else 0
+
+
+async def get_user_memories_for_eviction(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+) -> list[asyncpg.Record]:
+    """Fetch all memory rows for a user (fields needed for choose_eviction).
+
+    Returns rows with: id, salience, hit_count, created_at, fact, last_seen_at,
+    last_surfaced_at, surface_count. The caller (MemoryService.remember) maps
+    these to MemoryFact objects and passes them to models.memory.choose_eviction.
+
+    Ordered ascending by eviction priority (lowest-value first) so the caller can
+    pass the result directly to choose_eviction without re-sorting.
+
+    Security (T-11-04c): WHERE user_id = $1 ensures eviction candidates never
+    include rows belonging to another user.
+
+    Args:
+        pool:    asyncpg connection pool.
+        user_id: Discord user ID — scope guard, same as insert path.
+
+    Returns:
+        All asyncpg.Record rows for this user (may be empty).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT id, fact, salience, hit_count, created_at,"
+            "       last_seen_at, last_surfaced_at, surface_count"
+            " FROM user_memories"
+            " WHERE user_id = $1"
+            " ORDER BY salience ASC, created_at ASC, hit_count ASC",
+            user_id,
+        )
+
+
+async def evict_lowest_salience(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    ids: list[int],
+) -> None:
+    """Delete the given memory ids — scoped to user_id (T-11-04c cross-user guard).
+
+    The DELETE is guarded by BOTH ``id = ANY($2)`` AND ``user_id = $1``, so a
+    bug in the eviction id list can NEVER delete rows belonging to another user
+    (T-11-04c information-disclosure threat mitigation).
+
+    Called by MemoryService.remember() after choose_eviction() returns the ids
+    to remove. No-op when ids is empty ([] from choose_eviction when at/under cap).
+
+    Args:
+        pool:    asyncpg connection pool.
+        user_id: Discord user ID — ownership scope guard.
+        ids:     List of user_memories.id values to delete (from choose_eviction).
+                 Passed via ANY($2) array binding — no string interpolation.
+    """
+    if not ids:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM user_memories WHERE user_id = $1 AND id = ANY($2)",
+            user_id, ids,
+        )
+
+
 async def bump_surfaced(pool: asyncpg.Pool, ids: list[int]) -> None:
     """Mark memories as surfaced: set last_surfaced_at = now(), increment surface_count.
 
