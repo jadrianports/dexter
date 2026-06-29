@@ -151,7 +151,7 @@ Plans:
 
 **Wave 6** *(blocked on 11-05; parallel — disjoint files)*
 
-- [ ] 11-06-PLAN.md — Prompt injection + callback-roast integration (capstone): backward-compatible `build_chat_prompt(memories=...)`, wire `recall()` into `/ask`, `/roast`, ambient + music roasts; candidate-ammo framing, the stat × episode payoff, numbers from live SQL (MEM-06) — Wave 6
+- [x] 11-06-PLAN.md — Prompt injection + callback-roast integration (capstone): backward-compatible `build_chat_prompt(memories=...)`, wire `recall()` into `/ask`, `/roast`, ambient + music roasts; candidate-ammo framing, the stat × episode payoff, numbers from live SQL (MEM-06) — Wave 6
 - [ ] 11-07-PLAN.md — Hygiene & ops: `delete_expired_memories` decay sweep as a daily background task + pure `decay_predicate` + `MemoryService.sweep()` (per-user cap eviction lands in 11-04) (MEM-07) — Wave 6
 
 ### Phase 12: Richer Music/UX
@@ -192,5 +192,5 @@ Plans:
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete    | 2026-06-27 |
-| 11. RAG Long-Term Memory | v1.2 | 5/7 | In Progress|  |
+| 11. RAG Long-Term Memory | v1.2 | 6/7 | In Progress|  |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |

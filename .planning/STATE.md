@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
 status: executing
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-06-29T13:32:56.744Z"
+stopped_at: Completed 11-06-PLAN.md
+last_updated: "2026-06-29T13:47:07.255Z"
 last_activity: 2026-06-29 -- Phase 11 execution started
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 ## Current Position
 
 Phase: 11 (rag-long-term-memory) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-06-29 -- Phase 11 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 11 P03 | 35 | 3 tasks | 5 files |
 | Phase 11 P04 | 14 | 3 tasks | 6 files |
 | Phase 11-rag-long-term-memory P05 | 1680 | 3 tasks | 8 files |
+| Phase 11 P06 | 10 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,8 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: 11-04
 - [Phase ?]: 11-04
 - [Phase ?]: 11-04
+- [Phase ?]: memories=None renders byte-identical prompt; {memory_context} slot with empty-string fallback, no whitespace artifact (T-11-06d)
+- [Phase ?]: Cadence gate (random.random() < MEMORY_CALLBACK_CHANCE=0.35) applied per-surface for occasional stat x episode callback (D-04); guild_id='' safe in _build_roast_line (ANN scopes to user_id only)
 
 ### Pending Todos
 
@@ -132,8 +135,8 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-29T13:32:56.731Z
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-06-29T13:47:07.245Z
+Stopped at: Completed 11-06-PLAN.md
 Next:
 
   Plan the first v1.2 phase: `/gsd-plan-phase 9` (Reliability & Ops Hardening). Phase 11 (RAG) is
