@@ -62,6 +62,7 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 - ✓ Speed & caching: next-track prefetch (zero gap), opus-copy codec path + SponsorBlock, Postgres resolution cache, download-timeout→stream fallback, LFU eviction, `PerfMetrics` in `/stats` — v1.1 (Phase 6)
 - ✓ Player UX & filters: persistent control-button view, `/seek` `/previous` `/jump`, four `/filter` presets (opus-passthrough preserved), favorites + named playlists — v1.1 (Phase 7)
 - ✓ Social & ops: `/roast @user`, per-guild `/leaderboard`, owner-only `/stats`, `/health` endpoint, Gemini RPM headroom + `total_errors` visibility — v1.1 (Phase 8)
+- ✓ RAG long-term memory: `pgvector` on Neon + `gemini-embedding-001` @ 768d, scoped cosine recall with rerank/dedup, constrained distillation with sensitivity/number safety gates, prompt injection at four roast surfaces, per-user cap + daily decay sweep — v1.2 (Phase 11; 3 live-runtime UAT items tracked in 11-HUMAN-UAT.md)
 
 > Phase 3 & 4 items (v1.0) and Phase 5–6 live checks (v1.1) are code-complete and statically/locally verified; their live-deploy UAT is carried forward as the deployment checklist (STATE.md Deferred Items), not as open scope. Phases 6/7/8 were live-verified on the user's PC + Neon.
 
@@ -71,7 +72,7 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 
 - [ ] **Reliability & ops hardening** (Phase 9) — truthful `/health`, fire-and-forget failure logging, sync-hang guards, DB query timeouts, search/extract self-heal
 - [ ] **Critical-path test coverage** (Phase 10) — MusicCog playback flow, OpsCog/health, EventsCog ambient roasts
-- [ ] **RAG long-term memory** (Phase 11) — `pgvector` on Neon + Gemini embeddings → callback roasts; zero new infra
+- [x] **RAG long-term memory** (Phase 11) — ✓ complete 2026-06-29; `pgvector` on Neon + Gemini embeddings → callback roasts; zero new infra (3 live-runtime UAT items pending)
 - [ ] **Richer music/UX** (Phase 12) — per-server playlists, skip-rate analytics, third lyrics fallback, auto-queue validation
 
 Carried forward (not in v1.2 scope, host-gated / deferred):
@@ -148,4 +149,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-26 after starting milestone v1.2 "Sharper & Smarter"*
+*Last updated: 2026-06-29 after completing Phase 11 (RAG Long-Term Memory)*
