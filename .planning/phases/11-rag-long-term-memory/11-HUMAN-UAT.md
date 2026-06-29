@@ -26,14 +26,14 @@ result: [pending]
 
 ### 4. WR-02 is_sensitive word-boundary backstop
 expected: `"marvin gaye"` and `"grape soda"` are NOT blocked (is_sensitive → False), while `"is gay"` and `"mentions rape"` ARE blocked (is_sensitive → True) via the new word-boundary regex.
-result: [pending]
+result: passed — verified locally 2026-06-29 (pure function): marvin gaye/grape soda/gayle → False; "is gay"/"mentions rape" → True.
 
 ## Summary
 
 total: 4
-passed: 0
+passed: 1
 issues: 0
-pending: 4
+pending: 3
 skipped: 0
 blocked: 0
 
