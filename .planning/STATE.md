@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Sharper & Smarter
 status: executing
 stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-06-29T09:30:17.870Z"
+last_updated: "2026-06-29T09:51:11.076Z"
 last_activity: 2026-06-29 -- Phase 11 execution started
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 ## Current Position
 
 Phase: 11 (rag-long-term-memory) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-06-29 -- Phase 11 execution started
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 10 P02 | 12 | 2 tasks | 4 files |
 | Phase 11 P02 | 17 | 3 tasks | 2 files |
 | Phase 11 P03 | 35 | 3 tasks | 5 files |
+| Phase 11 P04 | 14 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,10 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: MEMORY_DEDUP_THRESHOLD raised 0.90→0.92: near-dup pairs 0.937/0.955, distinct max 0.79
 - [Phase ?]: MEMORY_SIMILARITY_FLOOR kept 0.70 (high-precision): gemini-embedding-001 compresses scores, strict floor over recall
 - [Phase ?]: EMBED_DIM=768 confirmed (keep-768): scoped cosine ANN sufficient — 11-03 uses vector(768), no migration
+- [Phase ?]: 11-04
+- [Phase ?]: 11-04
+- [Phase ?]: 11-04
+- [Phase ?]: 11-04
 
 ### Pending Todos
 
@@ -126,7 +131,7 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-29T09:30:17.860Z
+Last session: 2026-06-29T09:51:11.056Z
 Stopped at: Completed 11-02-PLAN.md
 Next:
 
