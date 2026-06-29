@@ -117,8 +117,24 @@ class AICog(commands.Cog):
                 "content": f"{interaction.user.display_name}: {question}",
             })
 
+            # Phase 11 / MEM-06: occasional recall to surface a stat×episode callback.
+            # Cadence gate (D-04) keeps callbacks rare and avoids extra embed calls
+            # on every /ask. recall() degrades to [] on any error (Pitfall 8).
+            memories: list[str] = []
+            if random.random() < config.MEMORY_CALLBACK_CHANCE:
+                _memory_svc = getattr(self.bot, "memory_service", None)
+                if _memory_svc is not None:
+                    try:
+                        memories = await _memory_svc.recall(
+                            str(interaction.user.id),
+                            str(interaction.guild_id),
+                            question,   # /ask question text is the recall anchor
+                        )
+                    except Exception as _mem_err:
+                        log.debug("memory.recall failed (non-fatal): %s", _mem_err)
+
             # Build prompt and call Gemini
-            system_prompt = build_chat_prompt(mood, user_summary, seasonal)
+            system_prompt = build_chat_prompt(mood, user_summary, seasonal, memories=memories or None)
             response = await self.gemini.chat(system_prompt, conversation, priority=1)
 
             if not response:
@@ -178,7 +194,24 @@ class AICog(commands.Cog):
         # 3. Mood + seasonal context injection (D-08) — same as /ask
         mood = await get_mood(self.bot.pool)
         seasonal = get_seasonal_context()
-        system_prompt = build_chat_prompt(mood, user_summary, seasonal)
+
+        # Phase 11 / MEM-06: occasional recall for stat×episode callback (D-04).
+        # Recall the TARGET (the person being roasted) — their stored episodes
+        # are the ammo. Degrades to [] on any error; numbers stay in user_summary.
+        roast_memories: list[str] = []
+        if random.random() < config.MEMORY_CALLBACK_CHANCE:
+            _memory_svc = getattr(self.bot, "memory_service", None)
+            if _memory_svc is not None:
+                try:
+                    roast_memories = await _memory_svc.recall(
+                        str(target.id),
+                        str(interaction.guild_id),
+                        scenario,   # roast scenario string is the recall anchor
+                    )
+                except Exception as _mem_err:
+                    log.debug("memory.recall failed (non-fatal): %s", _mem_err)
+
+        system_prompt = build_chat_prompt(mood, user_summary, seasonal, memories=roast_memories or None)
 
         # 4. Gemini call at priority=1 (D-05) + guaranteed template fallback
         try:
