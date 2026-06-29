@@ -167,6 +167,17 @@ MEMORY_RERANK_NOVELTY_WEIGHT = 0.5              # tuned via 11-02 spike 2026-06-
 MEMORY_CALLBACK_CHANCE = 0.35                   # D-04 occasional-payoff cadence; tuned via 11-02 spike 2026-06-29
 MEMORY_DISTILL_BATCH_HOUR = 3                   # daily distill-batch hour (UTC)
 
+# Ordinal salience base weights for each memory event kind (D-07 hybrid salience).
+# These are intentionally ordinal — not finely tuned (RESEARCH.md Q3 / A5).
+# milestone > late_night > repeat_song > auto_queue_ignored >= daily_batch.
+MEMORY_SALIENCE_BASE_WEIGHTS: dict[str, float] = {
+    "milestone":           1.0,   # crossed a song/streak milestone — high personal significance
+    "late_night":          0.7,   # activity at 1–5am — notable behavioural signal
+    "repeat_song":         0.5,   # same song queued 3+ times in a day — strong preference signal
+    "auto_queue_ignored":  0.4,   # user skipped AI auto-queued track — negative taste signal
+    "daily_batch":         0.2,   # background distill from message buffer — lower-confidence
+}
+
 
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.

@@ -1,4 +1,5 @@
-"""Pure memory scoring functions: apply_floor, rerank, recency_score, novelty_score.
+"""Pure memory scoring functions: apply_floor, rerank, recency_score, novelty_score,
+dedup_decision, compute_salience, choose_eviction.
 
 All functions are deterministic and side-effect-free: no asyncio, no Discord imports,
 no database calls, no random, no datetime.now().
@@ -7,7 +8,7 @@ Any nondeterministic value (clock) is computed by the calling service and passed
 as a primitive — following the established seam pattern from logic/roasts.py and
 database.py:compute_streak.
 
-Phase 11 coverage locked by tests/test_memory.py (MEM-02 / MEM-03).
+Phase 11 coverage locked by tests/test_memory.py (MEM-02 / MEM-03 / MEM-04 / MEM-07).
 """
 
 from __future__ import annotations
@@ -166,3 +167,95 @@ def rerank(
         )
 
     return sorted(facts, key=_composite, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# dedup_decision  (MEM-04)
+# ---------------------------------------------------------------------------
+
+
+def dedup_decision(existing_sim: float, threshold: float) -> bool:
+    """Return True (bump existing row) when existing_sim is at or above threshold.
+
+    Used by MemoryService.remember() to decide whether a new fact is a near-
+    duplicate of the user's closest existing memory. True → bump hit_count on
+    the existing row, skip the insert. False → insert a new row.
+
+    The threshold is config.MEMORY_DEDUP_THRESHOLD (0.92 — tuned via 11-02 spike).
+    Near-dup pairs scored 0.937/0.955; distinct facts maxed at 0.79, so a threshold
+    of 0.92 gives a clean separation with zero ambiguous region.
+
+    Args:
+        existing_sim: Cosine similarity of the new fact against the nearest
+                      existing memory (``1 - (embedding <=> query)``).
+        threshold:    Dedup threshold; use config.MEMORY_DEDUP_THRESHOLD.
+
+    Returns:
+        True  — near-duplicate: bump existing row, do NOT insert.
+        False — distinct fact: insert new row.
+    """
+    return existing_sim >= threshold
+
+
+# ---------------------------------------------------------------------------
+# compute_salience  (MEM-07 / D-07)
+# ---------------------------------------------------------------------------
+
+
+def compute_salience(base_weight: float, distiller_bump: float = 0.0) -> float:
+    """Return the hybrid salience score for a memory: base event weight + optional bump.
+
+    D-07 hybrid salience: the base weight comes from the event kind (see
+    config.MEMORY_SALIENCE_BASE_WEIGHTS) and the distiller bump is an optional
+    uplift from the distillation pass (11-05) when the distiller judges a fact
+    particularly significant. Both are additive, result clamped to [0.0, 1.0].
+
+    Ordinal ladder (milestone highest, daily_batch lowest) is enforced by the
+    config dict — this function only computes the sum+clamp, not the ordering.
+
+    Args:
+        base_weight:    Event-kind base from config.MEMORY_SALIENCE_BASE_WEIGHTS.
+        distiller_bump: Optional uplift from the distillation pass (default 0.0).
+
+    Returns:
+        Combined salience score in [0.0, 1.0].
+    """
+    return max(0.0, min(1.0, base_weight + distiller_bump))
+
+
+# ---------------------------------------------------------------------------
+# choose_eviction  (MEM-07 / D-08)
+# ---------------------------------------------------------------------------
+
+
+def choose_eviction(facts: list[MemoryFact], cap: int) -> list[int]:
+    """Return the ids of the lowest-value memories to remove when over cap.
+
+    Called by MemoryService.remember() after a count_user_memories check shows
+    the user has exceeded config.MEMORY_MAX_PER_USER. Returns the ids of the
+    (len(facts) - cap) facts to delete.
+
+    Eviction ranking (D-08 — "low-salience-old-cold ages out first"):
+      1. Lowest salience first (primary — most important).
+      2. Oldest created_at (secondary tie-break — stale memories go first).
+      3. Lowest hit_count (tertiary tie-break — cold / rarely-surfaced goes first).
+
+    Args:
+        facts: All of the user's current memory facts (MemoryFact dataclass).
+               Only id, salience, created_at, hit_count fields are used.
+        cap:   config.MEMORY_MAX_PER_USER — the maximum allowed count.
+
+    Returns:
+        List of memory ids to delete. Empty list when len(facts) <= cap.
+        Length is exactly max(0, len(facts) - cap).
+    """
+    if len(facts) <= cap:
+        return []
+
+    n_evict = len(facts) - cap
+    # Sort ascending: lowest salience → oldest → fewest hits (first = worst)
+    candidates = sorted(
+        facts,
+        key=lambda f: (f.salience, f.created_at, f.hit_count),
+    )
+    return [f.id for f in candidates[:n_evict]]
