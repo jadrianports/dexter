@@ -407,6 +407,16 @@ async def _initialize_once() -> None:
     else:
         log.warning("GEMINI_API_KEY not set — AI features disabled")
 
+    # Phase 11 / CR-01: long-term memory service (depends on Gemini for embeddings).
+    # Guarded on gemini_service so memory features are silently disabled when no key.
+    # Constructed (pool, gemini_service) per services/memory.py and 11-PATTERNS.md;
+    # the asyncpg pool already has the pgvector codec registered via init=_register_vector,
+    # and statement_cache_size=0 (Neon/K-04) is set on the pool above.
+    if hasattr(bot, "gemini_service"):
+        from services.memory import MemoryService
+        bot.memory_service = MemoryService(bot.pool, bot.gemini_service)
+        log.info("Memory service initialized")
+
     # Phase 3: Lyrics service (wired unconditionally — LyricsService degrades
     # gracefully when GENIUS_TOKEN is missing: Genius path disabled, AZLyrics still works)
     # SECURITY (T-03-18): token passed to LyricsService(); never logged here.
