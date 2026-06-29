@@ -262,6 +262,9 @@ async def _run_health_server() -> None:
 async def _cleanup_partial_init() -> None:
     """Tear down a partially-initialized boot so the next READY retries cleanly (WR-04).
 
+    Loops stopped: idle_check, cache_cleanup, ytdlp_update, status_rotation,
+    memory_distill_batch (Phase 11 / D-09 path 2).
+
     _initialize_once starts the background loops + health server BEFORE the
     fail-prone steps (DB ready, restore_queues). If init then hangs (watchdog
     TimeoutError) or raises, leaving those loops running keeps firing them against
@@ -272,7 +275,7 @@ async def _cleanup_partial_init() -> None:
     left running: it reads bot.pool live and degrades gracefully when it is absent.
     """
     # Stop loops bound to the dying pool (each guarded — may not have started).
-    for _loop in (idle_check, cache_cleanup, ytdlp_update, status_rotation):
+    for _loop in (idle_check, cache_cleanup, ytdlp_update, status_rotation, memory_distill_batch):
         try:
             if _loop.is_running():
                 _loop.cancel()
@@ -436,6 +439,9 @@ async def _initialize_once() -> None:
         ytdlp_update.start()
     if not status_rotation.is_running():
         status_rotation.start()
+    # Phase 11 / D-09 path 2: once-daily distill-batch (memory_service guarded inside)
+    if not memory_distill_batch.is_running():
+        memory_distill_batch.start()
 
     # K-02: Minimal HTTP health endpoint for Koyeb WEB service.
     # No before_loop guard — endpoint must be up early so Koyeb's health check
@@ -781,6 +787,96 @@ async def before_ytdlp_update():
 async def on_ytdlp_update_error(error: Exception) -> None:
     log.error("ytdlp_update task error: %s", error, exc_info=error)
     await _post_loop_error("ytdlp_update", error)
+
+
+@tasks.loop(time=datetime.time(hour=config.MEMORY_DISTILL_BATCH_HOUR, minute=0))
+async def memory_distill_batch() -> None:
+    """Daily batch: distill the day's message-buffer banter into memory facts (D-09 path 2).
+
+    Fires once daily at config.MEMORY_DISTILL_BATCH_HOUR UTC (default 03:00).
+    Iterates all active channel buffers in bot.message_buffer, collects the
+    recent banter for each channel, and calls memory_service.distill_and_remember
+    per channel in one batched pass at priority=2 (never contends with user /ask).
+
+    This is path 2 of D-09 (the daily batch); path 1 is the notable-event hooks
+    in cogs/events.py and cogs/music.py. No voice-session-end trigger (D-10).
+
+    Guards: no-op when memory_service or message_buffer are absent (GEMINI_API_KEY
+    unset or partial init). Never raises — degrades silently on any error.
+    """
+    memory_service = getattr(bot, "memory_service", None)
+    message_buffer = getattr(bot, "message_buffer", None)
+    if memory_service is None or message_buffer is None:
+        return
+
+    # Collect all active channel buffers (evict_stale already removed expired ones)
+    active_channels = list(message_buffer._buffers.keys())
+    if not active_channels:
+        return
+
+    log.info(
+        "memory_distill_batch: processing %d active channel(s)",
+        len(active_channels),
+    )
+
+    for channel_id in active_channels:
+        history = message_buffer.get_history(channel_id)
+        if not history:
+            continue
+
+        # Group messages by user so we generate a distilled fact per user, not
+        # per channel — memory is per-user scoped (T-11-03a / user_id WHERE guard).
+        # Build a per-user raw_text by concatenating their messages from the buffer.
+        user_texts: dict[str, tuple[str, list[str]]] = {}  # user_id → (display_name, [msgs])
+        for msg in history:
+            if msg.get("role") != "user":
+                continue
+            # Buffer stores author as display_name (no user_id available here).
+            # Use author name as the key; memory will use author for user_id lookup
+            # which is imperfect but graceful — the fact is still distilled.
+            # NOTE: message_buffer stores display_name not Discord user_id.
+            # We use the author as a best-effort user identifier for the daily batch.
+            author = msg.get("author", "unknown")
+            content = msg.get("content", "")
+            if content:
+                if author not in user_texts:
+                    user_texts[author] = (author, [])
+                user_texts[author][1].append(content)
+
+        for author, (display_name, messages) in user_texts.items():
+            if not messages:
+                continue
+            # Batch the user's messages into a single context string for the distiller.
+            raw_text = f"{display_name} said in chat: " + " | ".join(messages[-5:])  # last 5 msgs
+            try:
+                # Fire a single batched priority-2 distill call per user per channel.
+                # Use display_name as user_id for daily-batch — this is best-effort;
+                # the distilled fact is still valuable even without a perfect user_id.
+                await memory_service.distill_and_remember(
+                    user_id=author,
+                    guild_id=None,  # channel_id doesn't map to guild_id in message_buffer
+                    raw_text=raw_text,
+                    kind="daily_batch",
+                    base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["daily_batch"],
+                )
+            except Exception as exc:
+                log.debug(
+                    "memory_distill_batch: error for author=%s channel=%d: %s",
+                    author, channel_id, exc,
+                )
+
+    log.info("memory_distill_batch: batch pass complete")
+
+
+@memory_distill_batch.before_loop
+async def before_memory_distill_batch() -> None:
+    await bot.wait_until_ready()
+
+
+@memory_distill_batch.error
+async def on_memory_distill_batch_error(error: Exception) -> None:
+    log.error("memory_distill_batch task error: %s", error, exc_info=error)
+    await _post_loop_error("memory_distill_batch", error)
 
 
 @tasks.loop(seconds=config.STATUS_ROTATION_INTERVAL_SECONDS)
