@@ -226,9 +226,11 @@ class EventsCog(commands.Cog):
                 if scenario_result == RoastScenario.LATE_NIGHT:
                     scenario = "it's late night (1-5am) and {name} just joined voice"
                     fallback_pool = roasts.LATE_NIGHT_ROASTS
+                    mem_kind = "late_night"
                 else:  # JOIN
                     scenario = "{name} just joined the voice channel"
                     fallback_pool = roasts.VOICE_JOIN_ROASTS
+                    mem_kind = "daily_batch"  # WR-01: a daytime join is not a late_night event
                 line = await self._generate_ambient_roast(member, scenario, fallback_pool)
                 channel = await self._get_ambient_channel(guild)
                 if channel:
@@ -250,8 +252,8 @@ class EventsCog(commands.Cog):
                             user_id=str(member.id),
                             guild_id=str(guild.id),
                             raw_text=raw_text,
-                            kind="late_night",
-                            base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["late_night"],
+                            kind=mem_kind,
+                            base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS[mem_kind],
                         )
                     )
             return
