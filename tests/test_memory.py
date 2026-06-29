@@ -1115,6 +1115,38 @@ def test_trigger_write_hook_uses_create_task_in_music_cog() -> None:
 
 
 # ---------------------------------------------------------------------------
+# memory_sweep task registration tests (11-07 Task 3)
+# ---------------------------------------------------------------------------
+
+
+def test_memory_sweep_task_defined_in_bot() -> None:
+    """memory_sweep must be a module-level @tasks.loop defined in bot.py (MEM-07)."""
+    import bot as b
+
+    assert hasattr(b, "memory_sweep"), (
+        "bot.py must define memory_sweep as a module-level @tasks.loop (11-07 Task 3)"
+    )
+
+
+def test_memory_sweep_started_in_initialize_once() -> None:
+    """_initialize_once must call memory_sweep.start() behind is_running() guard (MEM-07)."""
+    src = open("bot.py", encoding="utf-8").read()
+    assert "memory_sweep.start()" in src, (
+        "bot.py _initialize_once must call memory_sweep.start() (MEM-07 / REL-02)"
+    )
+
+
+def test_memory_sweep_in_cleanup_partial_init() -> None:
+    """memory_sweep must be in the _cleanup_partial_init loop list (T-11-07c / WR-04)."""
+    src = open("bot.py", encoding="utf-8").read()
+    # The cleanup loop list appears after _cleanup_partial_init definition
+    tail = src.split("_cleanup_partial_init")[1][:900]
+    assert "memory_sweep" in tail, (
+        "memory_sweep must appear in the _cleanup_partial_init loop-cancel list (T-11-07c)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # TestDecayPredicate — 11-07: MEM-07 expiry selection (decay + salience)
 # ---------------------------------------------------------------------------
 

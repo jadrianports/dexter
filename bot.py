@@ -263,7 +263,7 @@ async def _cleanup_partial_init() -> None:
     """Tear down a partially-initialized boot so the next READY retries cleanly (WR-04).
 
     Loops stopped: idle_check, cache_cleanup, ytdlp_update, status_rotation,
-    memory_distill_batch (Phase 11 / D-09 path 2).
+    memory_distill_batch (Phase 11 / D-09 path 2), memory_sweep (Phase 11 / MEM-07).
 
     _initialize_once starts the background loops + health server BEFORE the
     fail-prone steps (DB ready, restore_queues). If init then hangs (watchdog
@@ -275,7 +275,10 @@ async def _cleanup_partial_init() -> None:
     left running: it reads bot.pool live and degrades gracefully when it is absent.
     """
     # Stop loops bound to the dying pool (each guarded — may not have started).
-    for _loop in (idle_check, cache_cleanup, ytdlp_update, status_rotation, memory_distill_batch):
+    # Loops stopped: idle_check, cache_cleanup, ytdlp_update, status_rotation,
+    # memory_distill_batch (Phase 11 / D-09 path 2), memory_sweep (Phase 11 / MEM-07).
+    for _loop in (idle_check, cache_cleanup, ytdlp_update, status_rotation,
+                  memory_distill_batch, memory_sweep):
         try:
             if _loop.is_running():
                 _loop.cancel()
@@ -442,6 +445,9 @@ async def _initialize_once() -> None:
     # Phase 11 / D-09 path 2: once-daily distill-batch (memory_service guarded inside)
     if not memory_distill_batch.is_running():
         memory_distill_batch.start()
+    # Phase 11 / MEM-07: once-daily decay sweep (memory_service guarded inside)
+    if not memory_sweep.is_running():
+        memory_sweep.start()
 
     # K-02: Minimal HTTP health endpoint for Koyeb WEB service.
     # No before_loop guard — endpoint must be up early so Koyeb's health check
@@ -877,6 +883,38 @@ async def before_memory_distill_batch() -> None:
 async def on_memory_distill_batch_error(error: Exception) -> None:
     log.error("memory_distill_batch task error: %s", error, exc_info=error)
     await _post_loop_error("memory_distill_batch", error)
+
+
+@tasks.loop(time=datetime.time(hour=2, minute=30))
+async def memory_sweep() -> None:
+    """Daily decay sweep: delete expired low-salience memories (MEM-07 / D-08).
+
+    Fires once daily at 02:30 UTC — distinct from cache_cleanup (hourly),
+    ytdlp_update (04:00 UTC), and memory_distill_batch (03:00 UTC) to avoid
+    thundering-herd on the Neon pool.
+
+    Calls MemoryService.sweep() which removes user_memories rows where
+    expires_at < now() AND salience < MEMORY_DECAY_SALIENCE_FLOOR. High-salience
+    episodes (milestone, late_night, repeat_song) are retained regardless of age.
+
+    Guards: no-op when memory_service is absent (GEMINI_API_KEY unset or partial
+    init). sweep() itself swallows all errors — this loop never raises (T-11-07c).
+    """
+    memory_service = getattr(bot, "memory_service", None)
+    if memory_service is None:
+        return
+    await memory_service.sweep()
+
+
+@memory_sweep.before_loop
+async def before_memory_sweep() -> None:
+    await bot.wait_until_ready()
+
+
+@memory_sweep.error
+async def on_memory_sweep_error(error: Exception) -> None:
+    log.error("memory_sweep task error: %s", error, exc_info=error)
+    await _post_loop_error("memory_sweep", error)
 
 
 @tasks.loop(seconds=config.STATUS_ROTATION_INTERVAL_SECONDS)
