@@ -12,6 +12,7 @@ import time
 
 import asyncpg
 import discord
+from pgvector.asyncpg import register_vector
 from aiohttp import web as _aio_web
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -330,12 +331,41 @@ async def on_ready():
     await _post_startup_messages()
 
 
+async def _register_vector(conn) -> None:
+    """Per-connection pgvector codec registration (Phase 11 / T-11-01).
+
+    Passed as `init=` to asyncpg.create_pool so every pooled connection has the
+    vector type codec registered. This is a per-connection set_type_codec call —
+    NOT a prepared statement — so it is fully compatible with statement_cache_size=0
+    (K-04 / Pitfall 2). Must run AFTER CREATE EXTENSION vector (see extension-first
+    throwaway connect in _initialize_once).
+    """
+    await register_vector(conn)
+
+
 async def _initialize_once() -> None:
     """One-time boot init: pool, services, cogs, queue restore.
 
     Raises on failure so on_ready can clean up and allow a retry (WR-01). Cog
     loads are idempotent so a retry after a partial init never double-loads.
     """
+    # Phase 11 / T-11-01: Extension-first boot ordering.
+    # Open a throwaway connection and ensure the vector extension exists BEFORE
+    # creating the pool. This prevents "unknown type: public.vector" ValueErrors
+    # that would otherwise fire on the first pooled connection that hits user_memories
+    # (Pitfall 1). The throwaway is closed in a finally block so it never leaks.
+    _ext_dsn = config.sanitize_database_url(config.DATABASE_URL)
+    _ext_conn = await asyncpg.connect(
+        dsn=_ext_dsn,
+        ssl='require',                   # K-04: match pool ssl setting
+        statement_cache_size=0,          # K-04: disable prepared stmts for PgBouncer
+    )
+    try:
+        await _ext_conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        log.info("pgvector extension ensured (CREATE EXTENSION IF NOT EXISTS vector)")
+    finally:
+        await _ext_conn.close()
+
     # Database — asyncpg connection pool (Phase 4 / SCALE-02)
     # SECURITY (T-04-05): DSN comes from config.DATABASE_URL (env, git-ignored);
     # the pool object and DSN string are never logged here.
@@ -347,6 +377,7 @@ async def _initialize_once() -> None:
         ssl='require',                         # K-05: explicit ssl, not via DSN string
         max_inactive_connection_lifetime=config.DB_MAX_INACTIVE_CONN_LIFETIME,  # K-04: 240s
         statement_cache_size=config.DB_STATEMENT_CACHE_SIZE,                     # K-04: 0
+        init=_register_vector,                 # Phase 11: register vector codec on every pooled connection
     )
     await init_db(bot.pool)
 

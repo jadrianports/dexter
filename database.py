@@ -65,6 +65,26 @@ def compute_streak(
 # ---------------------------------------------------------------------------
 
 SCHEMA_SQL = """
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS user_memories (
+    id               BIGSERIAL PRIMARY KEY,
+    user_id          TEXT NOT NULL,
+    guild_id         TEXT,
+    kind             TEXT,
+    fact             TEXT NOT NULL,
+    embedding        vector(768) NOT NULL,
+    salience         REAL DEFAULT 0,
+    hit_count        INTEGER DEFAULT 1,
+    created_at       TIMESTAMPTZ DEFAULT now(),
+    last_seen_at     TIMESTAMPTZ DEFAULT now(),
+    last_surfaced_at TIMESTAMPTZ,
+    surface_count    INTEGER DEFAULT 0,
+    expires_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_memories_user ON user_memories(user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id             TEXT PRIMARY KEY,
     username            TEXT NOT NULL,
