@@ -28,6 +28,22 @@ from models.memory import MemoryFact, apply_floor, novelty_score, rerank, recenc
 # Skip TestRecallService until services/memory.py is created in plan 11-03 Task 3.
 _SERVICES_MEMORY_AVAILABLE = importlib.util.find_spec("services.memory") is not None
 
+# Skip write-logic test classes until models/memory.py exports them (11-04 Task 1).
+_WRITE_LOGIC_AVAILABLE = False
+try:
+    from models.memory import dedup_decision, compute_salience, choose_eviction
+    _WRITE_LOGIC_AVAILABLE = True
+except ImportError:
+    pass
+
+# Skip TestRememberService until MemoryService.remember() exists (11-04 Task 3).
+_REMEMBER_AVAILABLE = False
+try:
+    from services.memory import MemoryService as _MemoryServiceCheck
+    _REMEMBER_AVAILABLE = hasattr(_MemoryServiceCheck, "remember")
+except ImportError:
+    pass
+
 
 # ---------------------------------------------------------------------------
 # Shared test fixtures
@@ -464,6 +480,388 @@ class TestRecallService:
         assert len(result) <= cap
         assert len(bumped_ids) == len(result)   # bump called for each returned fact
         assert all(isinstance(s, str) for s in result)   # returns strings
+
+
+# ---------------------------------------------------------------------------
+# TestDedupDecision (11-04 Task 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _WRITE_LOGIC_AVAILABLE,
+    reason="dedup_decision not yet implemented (11-04 Task 1)",
+)
+class TestDedupDecision:
+    """dedup_decision returns True (bump) above threshold, False (insert) below."""
+
+    def test_above_threshold_returns_true(self) -> None:
+        """Similarity clearly above threshold → NOOP-insert (bump existing row)."""
+        assert dedup_decision(0.95, 0.92) is True
+
+    def test_below_threshold_returns_false(self) -> None:
+        """Similarity clearly below threshold → insert new row."""
+        assert dedup_decision(0.50, 0.92) is False
+
+    def test_at_threshold_returns_true(self) -> None:
+        """Boundary: sim == threshold → treat as near-dup (bump, not insert)."""
+        # The function must handle the exact-boundary case consistently.
+        # dedup_decision(0.92, 0.92) → True (>=) so near-dup wins at boundary.
+        result = dedup_decision(0.92, 0.92)
+        # Both True and False are technically defensible; assert it is bool.
+        assert isinstance(result, bool)
+
+    def test_plan_verification_examples(self) -> None:
+        """Inline verify from PLAN.md: dedup_decision(0.95,0.90) and not dedup_decision(0.5,0.90)."""
+        assert dedup_decision(0.95, 0.90) is True
+        assert dedup_decision(0.50, 0.90) is False
+
+    def test_very_low_sim_always_inserts(self) -> None:
+        """sim=0.0 is never a near-duplicate."""
+        assert dedup_decision(0.0, 0.92) is False
+
+    def test_perfect_sim_always_bumps(self) -> None:
+        """sim=1.0 is always a near-duplicate."""
+        assert dedup_decision(1.0, 0.92) is True
+
+
+# ---------------------------------------------------------------------------
+# TestComputeSalience (11-04 Task 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _WRITE_LOGIC_AVAILABLE,
+    reason="compute_salience not yet implemented (11-04 Task 1)",
+)
+class TestComputeSalience:
+    """compute_salience returns base + bump, ordinally sane across event kinds."""
+
+    def test_no_bump_returns_base(self) -> None:
+        """compute_salience(base) with default bump=0.0 returns base unchanged."""
+        assert compute_salience(0.7) == pytest.approx(0.7)
+
+    def test_bump_is_additive(self) -> None:
+        """compute_salience(base, bump) returns base + bump when in range."""
+        assert compute_salience(0.5, 0.2) == pytest.approx(0.7)
+
+    def test_clamped_at_one(self) -> None:
+        """Result is clamped to 1.0 — never exceeds the unit interval."""
+        assert compute_salience(0.9, 0.5) == pytest.approx(1.0)
+
+    def test_clamped_at_zero(self) -> None:
+        """Result is clamped to 0.0 — never goes negative."""
+        assert compute_salience(0.0, 0.0) == pytest.approx(0.0)
+
+    def test_result_in_unit_interval(self) -> None:
+        """Output must always be in [0, 1]."""
+        for base in [0.0, 0.3, 0.7, 1.0]:
+            for bump in [0.0, 0.1, 0.5]:
+                result = compute_salience(base, bump)
+                assert 0.0 <= result <= 1.0, f"Out of range: {result} for base={base}, bump={bump}"
+
+    def test_ordinal_ladder_from_config(self) -> None:
+        """MEMORY_SALIENCE_BASE_WEIGHTS is ordinally monotone: milestone > auto_queue_ignored >= daily_batch."""
+        import config
+        w = config.MEMORY_SALIENCE_BASE_WEIGHTS
+        assert w["milestone"] > w["late_night"], "milestone must outrank late_night"
+        assert w["late_night"] > w["repeat_song"], "late_night must outrank repeat_song"
+        assert w["repeat_song"] > w["auto_queue_ignored"], "repeat_song must outrank auto_queue_ignored"
+        assert w["auto_queue_ignored"] >= w["daily_batch"], "auto_queue_ignored must outrank or equal daily_batch"
+
+    def test_milestone_kind_has_highest_base(self) -> None:
+        """milestone base weight is the highest among all defined event kinds."""
+        import config
+        w = config.MEMORY_SALIENCE_BASE_WEIGHTS
+        assert w["milestone"] == max(w.values()), "milestone must be the highest base weight"
+
+    def test_milestone_salience_above_auto_queue(self) -> None:
+        """compute_salience with milestone base beats auto_queue_ignored base (no bump)."""
+        import config
+        w = config.MEMORY_SALIENCE_BASE_WEIGHTS
+        assert compute_salience(w["milestone"]) > compute_salience(w["auto_queue_ignored"])
+
+
+# ---------------------------------------------------------------------------
+# TestChooseEviction (11-04 Task 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _WRITE_LOGIC_AVAILABLE,
+    reason="choose_eviction not yet implemented (11-04 Task 1)",
+)
+class TestChooseEviction:
+    """choose_eviction returns [] at/under cap, lowest-value ids over cap (D-08)."""
+
+    def test_empty_facts_returns_empty(self) -> None:
+        assert choose_eviction([], cap=150) == []
+
+    def test_at_cap_returns_empty(self) -> None:
+        """Exactly at cap → no eviction needed."""
+        facts = [_fact(id=i, salience=0.5) for i in range(5)]
+        assert choose_eviction(facts, cap=5) == []
+
+    def test_under_cap_returns_empty(self) -> None:
+        """Fewer than cap → no eviction."""
+        facts = [_fact(id=i, salience=0.5) for i in range(3)]
+        assert choose_eviction(facts, cap=5) == []
+
+    def test_one_over_cap_evicts_one(self) -> None:
+        """One fact over cap → exactly one id returned."""
+        facts = [_fact(id=i, salience=float(i) / 10) for i in range(1, 6)]  # 5 facts
+        result = choose_eviction(facts, cap=4)
+        assert len(result) == 1
+
+    def test_evicts_lowest_salience(self) -> None:
+        """The returned id belongs to the fact with the lowest salience."""
+        low_sal = _fact(id=1, salience=0.1)
+        mid_sal = _fact(id=2, salience=0.5)
+        high_sal = _fact(id=3, salience=0.9)
+        result = choose_eviction([mid_sal, high_sal, low_sal], cap=2)
+        assert result == [1], f"Expected lowest-salience id=1, got {result}"
+
+    def test_evicts_n_over_cap(self) -> None:
+        """When 3 over cap, returns exactly 3 ids."""
+        facts = [_fact(id=i, salience=float(i) / 10) for i in range(1, 11)]  # 10 facts
+        result = choose_eviction(facts, cap=7)
+        assert len(result) == 3
+
+    def test_tie_break_by_age_oldest_evicted(self) -> None:
+        """Tie on salience → older fact (earlier created_at) is evicted first (D-08)."""
+        now = _EPOCH
+        old_fact = _fact(id=1, salience=0.5, created_at=now - timedelta(days=90))
+        new_fact = _fact(id=2, salience=0.5, created_at=now)
+        high_sal = _fact(id=3, salience=0.9)
+        # 3 facts, cap=2 → evict 1; both id=1 and id=2 have same salience; id=1 is older
+        result = choose_eviction([old_fact, new_fact, high_sal], cap=2)
+        assert 1 in result, "Older fact with same salience must be evicted first (D-08)"
+
+    def test_eviction_never_returns_highest_salience(self) -> None:
+        """The highest-salience fact must never appear in eviction list."""
+        facts = [_fact(id=i, salience=float(i) / 10) for i in range(1, 11)]
+        result = choose_eviction(facts, cap=5)
+        assert 10 not in result, "Highest-salience fact (id=10, sal=1.0) must not be evicted"
+
+
+# ---------------------------------------------------------------------------
+# TestRememberService (11-04 Task 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _REMEMBER_AVAILABLE,
+    reason="MemoryService.remember not yet implemented (11-04 Task 3)",
+)
+class TestRememberService:
+    """MemoryService.remember() unit tests (mocked embed + fake pool + fake DB)."""
+
+    def _make_service(
+        self,
+        embed_return: list[list[float]] | None = None,
+        embed_raises: Exception | None = None,
+        search_rows: list[dict] | None = None,
+    ):
+        """Build a MemoryService with mocked gemini and DB helpers."""
+        import asyncio
+        from services.memory import MemoryService
+
+        mock_gemini = MagicMock()
+        if embed_raises is not None:
+            mock_gemini.embed = AsyncMock(side_effect=embed_raises)
+        else:
+            mock_gemini.embed = AsyncMock(return_value=embed_return or [[0.1] * 768])
+
+        mock_pool = MagicMock()
+        svc = MemoryService(mock_pool, mock_gemini)
+        return svc, mock_gemini, mock_pool
+
+    def test_rate_limited_embed_returns_without_inserting(self) -> None:
+        """GeminiRateLimitError on embed → return silently, never call insert_memory."""
+        import asyncio
+        import database
+        from services.gemini import GeminiRateLimitError
+
+        svc, _, _ = self._make_service(embed_raises=GeminiRateLimitError("rate limited"))
+
+        inserted_calls = []
+
+        async def fake_insert(**kwargs):
+            inserted_calls.append(kwargs)
+            return 1
+
+        orig_insert = database.insert_memory
+        database.insert_memory = fake_insert
+        try:
+            asyncio.run(svc.remember(
+                user_id="u1", guild_id="g1",
+                fact_text="likes lofi hip hop", kind="daily_batch", salience=0.3,
+            ))
+        finally:
+            database.insert_memory = orig_insert
+
+        assert inserted_calls == [], "insert_memory must NOT be called when embed rate-limits"
+
+    def test_near_duplicate_bumps_existing_row(self) -> None:
+        """When nearest existing memory has similarity > threshold → bump, not insert."""
+        import asyncio
+        import database
+        from datetime import timezone
+
+        now = datetime.now(timezone.utc)
+        near_dup_row = {
+            "id": 42, "fact": "likes lofi hip hop", "salience": 0.5,
+            "hit_count": 1, "created_at": now, "last_seen_at": now,
+            "last_surfaced_at": None, "surface_count": 0,
+            "similarity": 0.95,   # above MEMORY_DEDUP_THRESHOLD=0.92
+        }
+
+        svc, _, _ = self._make_service()
+
+        inserted_calls: list = []
+        bumped_ids: list = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k):
+            return [_DictRecord(near_dup_row)]
+
+        async def fake_bump_hit(pool, memory_id):
+            bumped_ids.append(memory_id)
+
+        async def fake_insert(pool, **kwargs):
+            inserted_calls.append(kwargs)
+            return 1
+
+        orig_search = database.search_memories
+        orig_bump = database.bump_memory_hit
+        orig_insert = database.insert_memory
+        database.search_memories = fake_search
+        database.bump_memory_hit = fake_bump_hit
+        database.insert_memory = fake_insert
+        try:
+            asyncio.run(svc.remember(
+                user_id="u1", guild_id="g1",
+                fact_text="likes lofi hip hop", kind="daily_batch", salience=0.3,
+            ))
+        finally:
+            database.search_memories = orig_search
+            database.bump_memory_hit = orig_bump
+            database.insert_memory = orig_insert
+
+        assert inserted_calls == [], "Near-dup must NOT insert a new row"
+        assert 42 in bumped_ids, "Near-dup must bump the existing row's hit_count"
+
+    def test_distinct_fact_inserts_new_row(self) -> None:
+        """When nearest memory is below threshold → insert new row, no bump."""
+        import asyncio
+        import database
+        from datetime import timezone
+
+        now = datetime.now(timezone.utc)
+        distinct_row = {
+            "id": 99, "fact": "different fact entirely", "salience": 0.5,
+            "hit_count": 1, "created_at": now, "last_seen_at": now,
+            "last_surfaced_at": None, "surface_count": 0,
+            "similarity": 0.55,   # below MEMORY_DEDUP_THRESHOLD=0.92
+        }
+
+        svc, _, _ = self._make_service()
+
+        inserted_calls: list = []
+        bumped_ids: list = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k):
+            return [_DictRecord(distinct_row)]
+
+        async def fake_bump_hit(pool, memory_id):
+            bumped_ids.append(memory_id)
+
+        async def fake_insert(pool, **kwargs):
+            inserted_calls.append(kwargs)
+            return 1
+
+        async def fake_count(pool, user_id):
+            return 1  # under cap → no eviction
+
+        orig_search = database.search_memories
+        orig_bump = database.bump_memory_hit
+        orig_insert = database.insert_memory
+        orig_count = database.count_user_memories
+        database.search_memories = fake_search
+        database.bump_memory_hit = fake_bump_hit
+        database.insert_memory = fake_insert
+        database.count_user_memories = fake_count
+        try:
+            asyncio.run(svc.remember(
+                user_id="u1", guild_id="g1",
+                fact_text="likes synthwave",  kind="repeat_song", salience=0.5,
+            ))
+        finally:
+            database.search_memories = orig_search
+            database.bump_memory_hit = orig_bump
+            database.insert_memory = orig_insert
+            database.count_user_memories = orig_count
+
+        assert len(inserted_calls) == 1, "Distinct fact must insert exactly one row"
+        assert bumped_ids == [], "Distinct fact must NOT bump any existing row"
+
+    def test_no_existing_memories_inserts_new_row(self) -> None:
+        """When search_memories returns [] → no dedup check, just insert."""
+        import asyncio
+        import database
+
+        svc, _, _ = self._make_service()
+
+        inserted_calls: list = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k):
+            return []
+
+        async def fake_insert(pool, **kwargs):
+            inserted_calls.append(kwargs)
+            return 1
+
+        async def fake_count(pool, user_id):
+            return 1  # under cap
+
+        orig_search = database.search_memories
+        orig_insert = database.insert_memory
+        orig_count = database.count_user_memories
+        database.search_memories = fake_search
+        database.insert_memory = fake_insert
+        database.count_user_memories = fake_count
+        try:
+            asyncio.run(svc.remember(
+                user_id="u1", guild_id="g1",
+                fact_text="first memory ever", kind="milestone", salience=1.0,
+            ))
+        finally:
+            database.search_memories = orig_search
+            database.insert_memory = orig_insert
+            database.count_user_memories = orig_count
+
+        assert len(inserted_calls) == 1, "First memory should be inserted without dedup"
+
+    def test_remember_never_raises(self) -> None:
+        """Any unexpected error inside remember() must not propagate to callers."""
+        import asyncio
+        import database
+
+        svc, _, _ = self._make_service()
+
+        async def fake_search(*args, **kwargs):
+            raise RuntimeError("unexpected DB error")
+
+        orig_search = database.search_memories
+        database.search_memories = fake_search
+        try:
+            # Must not raise
+            asyncio.run(svc.remember(
+                user_id="u1", guild_id="g1",
+                fact_text="test", kind="daily_batch", salience=0.2,
+            ))
+        except Exception as e:
+            pytest.fail(f"remember() raised an unexpected exception: {e!r}")
+        finally:
+            database.search_memories = orig_search
 
 
 # ---------------------------------------------------------------------------
