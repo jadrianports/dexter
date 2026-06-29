@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Sharper & Smarter
 status: verifying
 stopped_at: Completed 11-07-PLAN.md (Phase 11 complete)
-last_updated: "2026-06-29T14:03:14.948Z"
-last_activity: 2026-06-29 -- Phase 11 execution started
+last_updated: "2026-06-29T14:48:09.429Z"
+last_activity: 2026-06-29
 progress:
   total_phases: 4
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 ## Current Position
 
-Phase: 11 (rag-long-term-memory) — EXECUTING
-Plan: 7 of 7
+Phase: 12
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-29 -- Phase 11 execution started
+Last activity: 2026-06-29
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | 12. Richer Music/UX | 0/4 | - | - |
 | 09 | 4 | - | - |
 | 10 | 4 | - | - |
+| 11 | 7 | - | - |
 
 *Updated after each plan completion. Full v1.1 per-plan timings archived in milestones/v1.1-ROADMAP.md.*
 | Phase 09 P01 | 613 | 3 tasks | 5 files |
