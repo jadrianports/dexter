@@ -99,7 +99,7 @@ MOOD:
 USER CONTEXT:
 {user_context}
 
-{seasonal_context}"""
+{memory_context}{seasonal_context}"""
 
 MUSIC_RECOMMENDATION_PROMPT = """\
 You are a music recommendation engine. Based on the recently played songs listed below, \
@@ -130,19 +130,53 @@ MOOD_CONTEXTS: dict[str, str] = {
 }
 
 
-def build_chat_prompt(mood: str, user_summary: str | None, seasonal: str) -> str:
-    """Assemble the full system prompt for /ask."""
+def build_chat_prompt(
+    mood: str,
+    user_summary: str | None,
+    seasonal: str,
+    memories: list[str] | None = None,
+) -> str:
+    """Assemble the full system prompt for /ask.
+
+    Args:
+        mood:         Mood key from MOOD_CONTEXTS (e.g. "normal", "tired").
+        user_summary: Optional SQL-derived taste summary string.
+        seasonal:     Optional seasonal context sentence (empty string = omit).
+        memories:     Optional list of recalled episode/opinion facts from the
+                      pgvector store (Phase 11 / MEM-06).  None or [] renders
+                      byte-identical to today's prompt (T-11-06d).  A non-empty
+                      list appends an accuracy-safe candidate-ammo sub-block:
+                      the recalled facts are labelled episodes/opinions (not
+                      stats), and a hard instruction pins all numbers/counts to
+                      USER CONTEXT (live SQL) rather than memory (D-06 / T-11-06b).
+    """
     import config
 
     mood_context = MOOD_CONTEXTS.get(mood, MOOD_CONTEXTS["normal"])
     user_context = user_summary or "No data on this user yet."
     seasonal_context = seasonal if seasonal else ""
 
+    # Phase 11 / MEM-06: optional candidate-ammo memory block.
+    # Empty string when memories is falsy → byte-identical to pre-Phase-11 output.
+    # Non-empty string ends with \n\n to maintain blank-line spacing before
+    # seasonal_context (mirrors the no-triple-newline guarantee of the seasonal slot).
+    if memories:
+        memory_context = (
+            "THINGS YOU REMEMBER ABOUT THIS USER (episodes/opinions, not stats):\n"
+            + "\n".join(f"- {m}" for m in memories)
+            + "\nUse at most one of these, and only if it genuinely lands."
+              " Do NOT invent details beyond these lines."
+              " All numbers/counts come from USER CONTEXT above — never from these memories.\n\n"
+        )
+    else:
+        memory_context = ""
+
     return DEXTER_SYSTEM_PROMPT.format(
         max_length=config.MAX_AI_RESPONSE_LENGTH,
         mood_context=mood_context,
         user_context=user_context,
         seasonal_context=seasonal_context,
+        memory_context=memory_context,
     ).rstrip()
 
 

@@ -43,9 +43,12 @@ class TestBuildChatPrompt:
 class TestDexterSystemPromptStructure:
     """Assertions that the rewritten DEXTER_SYSTEM_PROMPT meets D-06 requirements."""
 
-    def test_contains_all_four_format_placeholders(self):
-        """build_chat_prompt depends on all four placeholder tokens."""
-        for token in ["{max_length}", "{mood_context}", "{user_context}", "{seasonal_context}"]:
+    def test_contains_all_format_placeholders(self):
+        """build_chat_prompt depends on all five placeholder tokens."""
+        for token in [
+            "{max_length}", "{mood_context}", "{user_context}",
+            "{seasonal_context}", "{memory_context}",
+        ]:
             assert token in DEXTER_SYSTEM_PROMPT, (
                 f"Missing placeholder {token!r} in DEXTER_SYSTEM_PROMPT"
             )
@@ -71,10 +74,10 @@ class TestDexterSystemPromptStructure:
         ), "Banned-mode rules not found in DEXTER_SYSTEM_PROMPT"
 
     def test_build_chat_prompt_no_unfilled_placeholders(self):
-        """build_chat_prompt must not leave any of the four known keys unfilled."""
+        """build_chat_prompt must not leave any of the five known keys unfilled."""
         result = build_chat_prompt("normal", "top artist: drake", "It's December.")
         assert result, "build_chat_prompt returned empty string"
-        for key in ["max_length", "mood_context", "user_context", "seasonal_context"]:
+        for key in ["max_length", "mood_context", "user_context", "seasonal_context", "memory_context"]:
             assert "{" + key + "}" not in result, (
                 f"Unfilled placeholder {{{key}}} in build_chat_prompt output"
             )
