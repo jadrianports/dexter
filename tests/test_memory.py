@@ -44,6 +44,22 @@ try:
 except ImportError:
     pass
 
+# Skip 11-05 gate tests until is_sensitive / contains_number are added (11-05 Task 1).
+_DISTILL_GATE_AVAILABLE = False
+try:
+    from models.memory import is_sensitive, contains_number  # noqa: F401
+    _DISTILL_GATE_AVAILABLE = True
+except ImportError:
+    pass
+
+# Skip 11-05 distill service tests until MemoryService.distill() exists (11-05 Task 1).
+_DISTILL_SVC_AVAILABLE = False
+try:
+    from services.memory import MemoryService as _MemSvc2
+    _DISTILL_SVC_AVAILABLE = hasattr(_MemSvc2, "distill")
+except ImportError:
+    pass
+
 
 # ---------------------------------------------------------------------------
 # Shared test fixtures
@@ -862,6 +878,231 @@ class TestRememberService:
             pytest.fail(f"remember() raised an unexpected exception: {e!r}")
         finally:
             database.search_memories = orig_search
+
+
+# ---------------------------------------------------------------------------
+# TestIsSensitive (11-05 Task 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _DISTILL_GATE_AVAILABLE,
+    reason="is_sensitive not yet implemented (11-05 Task 1)",
+)
+class TestIsSensitive:
+    """is_sensitive() blocks D-01 categories and passes D-02 music-cringe content."""
+
+    def test_blocks_mental_health_depression(self) -> None:
+        """Explicit mental health keyword → blocked (D-01)."""
+        assert is_sensitive("i have been really depressed lately")
+
+    def test_passes_music_taste_cringe(self) -> None:
+        """Music-taste cringe with no sensitive content → passes (D-02)."""
+        assert not is_sensitive("he only listens to drake and calls it taste")
+
+    def test_blocks_pii_email(self) -> None:
+        """Email address in fact → PII gate blocks it (D-01)."""
+        assert is_sensitive("contact him at user@example.com for his playlist")
+
+    def test_blocks_self_harm_reference(self) -> None:
+        """Self-harm keyword → blocked (D-01)."""
+        assert is_sensitive("mentioned self-harm in passing")
+
+    def test_passes_binge_session_fact(self) -> None:
+        """3am binge session with no sensitive content → passes (D-02)."""
+        assert not is_sensitive("queued mr brightside at 3am")
+
+    def test_passes_hypocrisy_fact(self) -> None:
+        """Music hypocrisy with no sensitive content → passes (D-02)."""
+        assert not is_sensitive("swore he was done with the killers")
+
+    def test_blocks_grief_keyword(self) -> None:
+        """Grief / bereavement keyword → blocked (D-01)."""
+        assert is_sensitive("still grieving and listening to sad music")
+
+    def test_blocks_suicide_keyword(self) -> None:
+        """Suicidal ideation phrase → blocked (D-01)."""
+        assert is_sensitive("said something about wanting to die")
+
+
+# ---------------------------------------------------------------------------
+# TestContainsNumber (11-05 Task 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _DISTILL_GATE_AVAILABLE,
+    reason="contains_number not yet implemented (11-05 Task 1)",
+)
+class TestContainsNumber:
+    """contains_number() accuracy firewall: flags SQL-known figures, passes episodes."""
+
+    def test_flags_digit_count(self) -> None:
+        """Text with a digit (play count) → True (accuracy firewall, Rule 5)."""
+        assert contains_number("queued mr brightside 14 times")
+
+    def test_passes_number_free_episode(self) -> None:
+        """Episode fact with no digit or count word → False."""
+        assert not contains_number("swore he was done with the killers")
+
+    def test_flags_written_count(self) -> None:
+        """Written count word like 'fourteen' → True (accuracy firewall)."""
+        assert contains_number("queued it fourteen times")
+
+    def test_passes_music_taste_fact(self) -> None:
+        """Music taste fact with no numbers → False."""
+        assert not contains_number("only listens to drake and calls it taste")
+
+    def test_flags_streak_day_count(self) -> None:
+        """Streak days (SQL-known figure) in text → True."""
+        assert contains_number("has a 30-day streak")
+
+    def test_passes_no_numbers_in_roast_fact(self) -> None:
+        """A distilled roast fact with no numbers → False."""
+        assert not contains_number("prefers lo-fi hip hop at late hours")
+
+    def test_flags_any_digit(self) -> None:
+        """Any digit at all → True (conservative backstop)."""
+        assert contains_number("had 1 good song out of many")
+
+
+# ---------------------------------------------------------------------------
+# TestDistillService (11-05 Task 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _DISTILL_SVC_AVAILABLE,
+    reason="distill not yet implemented (11-05 Task 1)",
+)
+class TestDistillService:
+    """MemoryService.distill() drops sensitive and number-bearing facts; never raises."""
+
+    def _make_service(
+        self,
+        chat_return: str | None = None,
+        chat_raises: Exception | None = None,
+    ):
+        """Build a MemoryService with a mocked gemini.chat."""
+        from services.memory import MemoryService
+
+        mock_gemini = MagicMock()
+        if chat_raises is not None:
+            mock_gemini.chat = AsyncMock(side_effect=chat_raises)
+        else:
+            mock_gemini.chat = AsyncMock(return_value=chat_return or "[]")
+        mock_pool = MagicMock()
+        return MemoryService(mock_pool, mock_gemini)
+
+    def test_distill_drops_number_bearing_fact(self) -> None:
+        """A fact with a digit is dropped by the contains_number backstop."""
+        import asyncio
+
+        svc = self._make_service(
+            chat_return='["only listens to drake", "queued it 14 times"]'
+        )
+        result = asyncio.run(svc.distill("some banter context"))
+        # Digit-bearing fact must be dropped
+        assert not any("14" in f for f in result)
+        # Safe fact should survive
+        assert any("drake" in f for f in result)
+
+    def test_distill_drops_sensitive_fact(self) -> None:
+        """A fact matching a blocked D-01 category is dropped by the is_sensitive backstop."""
+        import asyncio
+
+        svc = self._make_service(
+            chat_return='["has been really depressed lately", "likes indie pop"]'
+        )
+        result = asyncio.run(svc.distill("some banter context"))
+        # Sensitive fact dropped
+        assert not any("depress" in f.lower() for f in result)
+        # Safe fact survives
+        assert any("indie pop" in f for f in result)
+
+    def test_distill_returns_empty_on_invalid_json(self) -> None:
+        """Non-JSON model response → distill returns []."""
+        import asyncio
+
+        svc = self._make_service(chat_return="not valid json at all here")
+        result = asyncio.run(svc.distill("some context"))
+        assert result == []
+
+    def test_distill_returns_empty_on_rate_limit(self) -> None:
+        """GeminiRateLimitError from chat → distill returns [] (priority-2 degrade)."""
+        import asyncio
+        from services.gemini import GeminiRateLimitError
+
+        svc = self._make_service(chat_raises=GeminiRateLimitError("rate limited"))
+        result = asyncio.run(svc.distill("some context"))
+        assert result == []
+
+    def test_distill_caps_at_three_facts(self) -> None:
+        """Model output with 5 safe facts is capped to at most 3."""
+        import asyncio
+
+        svc = self._make_service(
+            chat_return='["fact one", "fact two", "fact three", "fact four", "fact five"]'
+        )
+        result = asyncio.run(svc.distill("some context"))
+        assert len(result) <= 3
+
+    def test_distill_returns_empty_list_from_empty_model_response(self) -> None:
+        """Model returns [] → distill returns []."""
+        import asyncio
+
+        svc = self._make_service(chat_return="[]")
+        result = asyncio.run(svc.distill("nothing notable here"))
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Trigger regression tests (11-05 Task 2)
+# D-09: no per-message write; cog hooks use asyncio.create_task
+# These run as module-level functions so -k "per_message or trigger" catches them.
+# ---------------------------------------------------------------------------
+
+
+def test_per_message_write_absent_from_on_message() -> None:
+    """on_message in EventsCog must NOT call distill_and_remember (D-09 guarantee)."""
+    import inspect
+    import cogs.events as e
+
+    src = inspect.getsource(e.EventsCog.on_message)
+    assert "distill_and_remember" not in src, (
+        "on_message must NEVER call distill_and_remember (D-09: no per-message write)"
+    )
+    assert "memory_service" not in src, (
+        "on_message must NEVER reference memory_service (D-09: no per-message write)"
+    )
+
+
+def test_trigger_write_hook_uses_create_task_in_events_cog() -> None:
+    """Events cog notable-event hooks must use asyncio.create_task (3-second rule)."""
+    import inspect
+    import cogs.events as e
+
+    src = inspect.getsource(e)
+    assert "distill_and_remember" in src, (
+        "cogs/events.py must wire distill_and_remember at notable-event sites (D-09 path 1)"
+    )
+    assert "create_task" in src, (
+        "cogs/events.py must use asyncio.create_task for memory hooks (3s rule / T-11-05e)"
+    )
+
+
+def test_trigger_write_hook_uses_create_task_in_music_cog() -> None:
+    """Music cog notable-event hooks must use asyncio.create_task (3-second rule)."""
+    import inspect
+    import cogs.music as m
+
+    src = inspect.getsource(m)
+    assert "distill_and_remember" in src, (
+        "cogs/music.py must wire distill_and_remember at notable-event sites (D-09 path 1)"
+    )
+    assert "create_task" in src, (
+        "cogs/music.py must use asyncio.create_task for memory hooks (3s rule / T-11-05e)"
+    )
 
 
 # ---------------------------------------------------------------------------
