@@ -999,6 +999,42 @@ async def bump_surfaced(pool: asyncpg.Pool, ids: list[int]) -> None:
         )
 
 
+async def delete_expired_memories(pool: asyncpg.Pool, *, now: datetime) -> int:
+    """Delete expired low-salience memories. Returns the number of rows deleted.
+
+    Called by MemoryService.sweep() daily to keep the store bounded over time
+    (MEM-07 — time-based decay backstop, paired with the 11-04 write-time cap).
+
+    Deletion condition (both must hold — T-11-07b over-broad-delete guard):
+      - expires_at IS NOT NULL AND expires_at < now  — past the decay horizon
+      - salience < config.MEMORY_DECAY_SALIENCE_FLOOR  — low-value fact only
+
+    High-salience memories (milestone, late_night, repeat_song) survive even
+    when past their expiry date, mirroring the decay_predicate logic in
+    models/memory.py. The DELETE is bounded by two $N params — no string
+    interpolation (T-11-07b parameterization requirement).
+
+    Args:
+        pool: asyncpg connection pool.
+        now:  Reference clock (UTC); injected by MemoryService.sweep() so that
+              test helpers can override without patching datetime.now().
+
+    Returns:
+        Number of rows deleted (0 when no expired low-salience rows exist).
+    """
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM user_memories"
+            " WHERE expires_at IS NOT NULL"
+            "   AND expires_at < $1"
+            "   AND salience < $2",
+            now,
+            config.MEMORY_DECAY_SALIENCE_FLOOR,
+        )
+    # asyncpg returns a string like "DELETE 5"; extract the count
+    return int(result.split()[-1])
+
+
 # ---------------------------------------------------------------------------
 # Phase 6: Resolution cache helpers (PERF-03, D-07/D-09, T-06-01)
 # ---------------------------------------------------------------------------

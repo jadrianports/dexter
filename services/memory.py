@@ -458,3 +458,41 @@ class MemoryService:
                 f"memory.distill_and_remember: error swallowed "
                 f"({type(e).__name__}: {e}) user={user_id} kind={kind}"
             )
+
+    # -------------------------------------------------------------------------
+    # sweep — daily decay backstop (MEM-07 / D-08 / T-11-07a,b,c)
+    # -------------------------------------------------------------------------
+
+    async def sweep(self) -> int:
+        """Delete expired low-salience memories; return the count deleted.
+
+        Called daily by bot.py:memory_sweep @tasks.loop (2:30 UTC) to enforce
+        the time-based decay backstop (MEM-07). Pairs with the write-time cap
+        eviction in remember() (11-04) to keep the store permanently bounded.
+
+        Sweeps rows where expires_at < now() AND salience < MEMORY_DECAY_SALIENCE_FLOOR
+        — mirroring the decay_predicate logic in models/memory.py. High-salience
+        facts (milestone, late_night, repeat_song) survive even when past expiry (D-08).
+
+        Error handling (T-11-07c): all exceptions are caught and 0 is returned.
+        The sweep NEVER raises into the daily loop — a transient DB error must not
+        kill the background task (REL-02 discipline, mirrors ytdlp_update pattern).
+
+        Returns:
+            Number of rows deleted (0 on error or when nothing is eligible).
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            deleted = await database.delete_expired_memories(self._pool, now=now)
+            if deleted:
+                log.info("memory.sweep: deleted %d expired low-salience memories", deleted)
+            else:
+                log.debug("memory.sweep: no expired memories found")
+            return deleted
+        except Exception as e:
+            log.warning(
+                "memory.sweep: error swallowed (%s: %s) — sweep will retry tomorrow",
+                type(e).__name__,
+                e,
+            )
+            return 0

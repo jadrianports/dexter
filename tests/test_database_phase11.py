@@ -104,6 +104,34 @@ class TestWriteHelpersExist:
         src = inspect.getsource(database.count_user_memories)
         assert "user_id" in src, "count_user_memories must filter by user_id"
 
+    # 11-07 sweep helper checks
+    def test_delete_expired_memories_exists(self) -> None:
+        """delete_expired_memories must exist in database.py (MEM-07 sweep helper)."""
+        assert hasattr(database, "delete_expired_memories"), (
+            "delete_expired_memories must exist — needed by MemoryService.sweep() (11-07)"
+        )
+
+    def test_delete_expired_memories_targets_user_memories(self) -> None:
+        """delete_expired_memories must DELETE FROM user_memories."""
+        src = inspect.getsource(database.delete_expired_memories)
+        assert "DELETE FROM user_memories" in src, (
+            "delete_expired_memories must DELETE FROM user_memories"
+        )
+
+    def test_delete_expired_memories_uses_expires_at(self) -> None:
+        """delete_expired_memories must filter on expires_at (time-based decay)."""
+        src = inspect.getsource(database.delete_expired_memories)
+        assert "expires_at" in src, (
+            "delete_expired_memories must include expires_at in the WHERE clause"
+        )
+
+    def test_delete_expired_memories_is_parameterized(self) -> None:
+        """delete_expired_memories must use $N params — no string interpolation (T-11-07b)."""
+        src = inspect.getsource(database.delete_expired_memories)
+        assert "$1" in src, (
+            "delete_expired_memories must use $1 positional param (T-11-07b parameterization)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Phase 11 schema tests (wired in 11-01)
@@ -282,8 +310,59 @@ async def test_evict_lowest_salience(pool) -> None:
     assert count_other == 1, "id_other must NOT be deleted (T-11-04c cross-user guard)"
 
 
-@pytest.mark.skip(reason="Stub — wired in 11-07 once delete_expired_memories sweep lands")
+@pytest.mark.skipif(_SKIP_LIVE, reason=_skip_reason)
 @pytest.mark.asyncio
 async def test_delete_expired(pool) -> None:
-    """Insert a row with past expires_at; confirm sweep removes it."""
-    raise NotImplementedError("Stub — implement in 11-07")
+    """Insert-expired → sweep → count-zero round-trip (11-07 delete_expired_memories).
+
+    Inserts one row with an already-past expires_at and low salience (below
+    MEMORY_DECAY_SALIENCE_FLOOR) — it must be deleted by delete_expired_memories.
+    Also inserts one high-salience row with the same expired timestamp — it must
+    survive (T-11-07b over-broad-delete guard).
+    """
+    from datetime import datetime, timezone, timedelta
+    import config
+
+    now = datetime.now(timezone.utc)
+    past = now - timedelta(days=1)           # already expired
+    embedding = [0.4] * config.EMBED_DIM
+
+    user_id = "test-phase11-sweep"
+
+    # Low-salience expired row — should be swept
+    id_low = await database.insert_memory(
+        pool,
+        user_id=user_id,
+        guild_id=None,
+        kind="daily_batch",
+        fact="low salience expired fact",
+        embedding=embedding,
+        salience=0.2,          # below MEMORY_DECAY_SALIENCE_FLOOR (0.5)
+        expires_at=past,       # already past
+    )
+    assert isinstance(id_low, int) and id_low > 0
+
+    # High-salience expired row — must be retained (T-11-07b)
+    id_high = await database.insert_memory(
+        pool,
+        user_id=user_id,
+        guild_id=None,
+        kind="milestone",
+        fact="high salience expired fact",
+        embedding=embedding,
+        salience=1.0,          # above floor — must survive
+        expires_at=past,       # also past, but salience guards it
+    )
+    assert isinstance(id_high, int) and id_high > 0
+
+    count_before = await database.count_user_memories(pool, user_id)
+    assert count_before == 2, f"Expected 2 rows before sweep, got {count_before}"
+
+    deleted = await database.delete_expired_memories(pool, now=now)
+
+    count_after = await database.count_user_memories(pool, user_id)
+
+    assert deleted >= 1, "At least one expired low-salience row should be swept"
+    assert count_after == 1, (
+        "High-salience expired row must survive sweep (T-11-07b); only low-salience swept"
+    )

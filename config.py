@@ -160,6 +160,7 @@ MEMORY_DEDUP_THRESHOLD = 0.92                   # tuned via 11-02 spike 2026-06-
 MEMORY_INJECT_CAP = 3                           # tuned via 11-02 spike 2026-06-29
 MEMORY_MAX_PER_USER = 150                       # tuned via 11-02 spike 2026-06-29
 MEMORY_DECAY_DAYS = 90                          # tuned via 11-02 spike 2026-06-29
+MEMORY_DECAY_SALIENCE_FLOOR = 0.5              # sweep threshold: facts below this salience are eligible for expiry (D-08 / T-11-07b); retains repeat_song=0.5+, sweeps auto_queue_ignored=0.4/daily_batch=0.2
 MEMORY_RERANK_RELEVANCE_WEIGHT = 1.0            # tuned via 11-02 spike 2026-06-29
 MEMORY_RERANK_RECENCY_WEIGHT = 0.5              # tuned via 11-02 spike 2026-06-29
 MEMORY_RERANK_SALIENCE_WEIGHT = 0.7             # tuned via 11-02 spike 2026-06-29
