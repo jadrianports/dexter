@@ -150,6 +150,24 @@ YTDLP_MAX_QUICK_RETRIES: int = 2           # D-08: attempts before falling throu
 HEALTH_DB_PROBE_TIMEOUT: float = 3.0       # WR-03: bound the /health DB probe (acquire+SELECT 1) so a cold/exhausted Neon pool degrades fast instead of hanging
 
 
+# --- Phase 11: RAG Long-Term Memory ---
+EMBEDDING_MODEL = "gemini-embedding-001"        # canonical model @ 768d (text-embedding-004 sunset 2026-01-14)
+EMBED_DIM = 768                                 # embedding vector dimension
+EMBED_RPM_LIMIT = 60                            # embedding quota — SEPARATE from the 15 RPM GEMINI_RPM_LIMIT (A2 / Critical Rule 1)
+MEMORY_TOP_K = 8                                # prior — validate via 11-02 spike
+MEMORY_SIMILARITY_FLOOR = 0.70                  # prior — validate via 11-02 spike
+MEMORY_DEDUP_THRESHOLD = 0.90                   # prior — validate via 11-02 spike
+MEMORY_INJECT_CAP = 3                           # prior — validate via 11-02 spike
+MEMORY_MAX_PER_USER = 150                       # prior — validate via 11-02 spike
+MEMORY_DECAY_DAYS = 90                          # prior — validate via 11-02 spike
+MEMORY_RERANK_RELEVANCE_WEIGHT = 1.0            # prior — validate via 11-02 spike
+MEMORY_RERANK_RECENCY_WEIGHT = 0.5              # prior — validate via 11-02 spike
+MEMORY_RERANK_SALIENCE_WEIGHT = 0.7             # prior — validate via 11-02 spike
+MEMORY_RERANK_NOVELTY_WEIGHT = 0.5             # prior — validate via 11-02 spike
+MEMORY_CALLBACK_CHANCE = 0.35                   # D-04 occasional-payoff cadence; prior — validate via 11-02 spike
+MEMORY_DISTILL_BATCH_HOUR = 3                   # daily distill-batch hour (UTC)
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 

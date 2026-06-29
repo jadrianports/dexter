@@ -27,7 +27,7 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 **Target features:**
 - **Reliability & ops hardening** — health endpoint can no longer report "ok" while degraded, fire-and-forget tasks log failures, `first_run`/`on_ready` sync no longer hangs silently, DB query timeouts, search/extract retry/self-heal.
 - **Critical-path test coverage** — the untested MusicCog playback flow, OpsCog/health metrics, and EventsCog ambient-roast logic get real tests.
-- **RAG long-term memory** — `pgvector` on the existing Neon Postgres + Gemini `text-embedding-004`, so Dex remembers across restarts and lands callback roasts referencing real history. **Zero new infrastructure or monthly cost.** Includes a research spike.
+- **RAG long-term memory** — `pgvector` on the existing Neon Postgres + Gemini `gemini-embedding-001` @ 768d, so Dex remembers across restarts and lands callback roasts referencing real history. **Zero new infrastructure or monthly cost.** Includes a research spike.
 - **Richer music/UX** — per-server playlists, skip-rate analytics command, third lyrics fallback, auto-queue hallucination validation.
 
 **Key context:**

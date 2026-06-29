@@ -11,3 +11,4 @@ tzdata
 lyricsgenius
 beautifulsoup4
 aiohttp>=3.9.0
+pgvector>=0.3.6,<0.5
