@@ -1,4 +1,4 @@
-"""Pure-logic unit tests for Phase 11 RAG long-term memory (MEM-02 / MEM-03).
+"""Pure-logic unit tests for Phase 11 RAG long-term memory (MEM-02 / MEM-03 / MEM-07).
 
 Covers: models/memory.py pure scoring functions and services/memory.py recall().
 
@@ -13,6 +13,7 @@ Test classes:
   - TestNoveltyScore  — novelty_score(): None=1.0 (max), just-surfaced=0 (D-05 anti-repeat)
   - TestRerank        — rerank() composite ordering with injectable weights + clock
   - TestRecallService — MemoryService.recall() integration (mocked embed + fake pool)
+  - TestDecayPredicate — decay_predicate() selects expired low-salience, retains high/recent (MEM-07)
 """
 
 from __future__ import annotations
@@ -24,6 +25,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from models.memory import MemoryFact, apply_floor, novelty_score, rerank, recency_score
+
+# 11-07: guard so the file collects cleanly at the RED commit boundary
+try:
+    from models.memory import decay_predicate as decay_predicate  # type: ignore[assignment]
+    _DECAY_PREDICATE_AVAILABLE = True
+except ImportError:
+    decay_predicate = None  # type: ignore[assignment]
+    _DECAY_PREDICATE_AVAILABLE = False
 
 # Skip TestRecallService until services/memory.py is created in plan 11-03 Task 3.
 _SERVICES_MEMORY_AVAILABLE = importlib.util.find_spec("services.memory") is not None
@@ -1103,6 +1112,105 @@ def test_trigger_write_hook_uses_create_task_in_music_cog() -> None:
     assert "create_task" in src, (
         "cogs/music.py must use asyncio.create_task for memory hooks (3s rule / T-11-05e)"
     )
+
+
+# ---------------------------------------------------------------------------
+# TestDecayPredicate — 11-07: MEM-07 expiry selection (decay + salience)
+# ---------------------------------------------------------------------------
+
+# Reference clock for all decay tests (deterministic — never calls datetime.now())
+_DECAY_NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def _make_decay_fact(
+    *,
+    salience: float = 0.2,
+    age_days: float = 100.0,
+    hit_count: int = 1,
+) -> MemoryFact:
+    """Build a MemoryFact whose created_at is `age_days` before _DECAY_NOW."""
+    created_at = _DECAY_NOW - timedelta(days=age_days)
+    return MemoryFact(
+        id=1,
+        fact="test fact",
+        salience=salience,
+        hit_count=hit_count,
+        created_at=created_at,
+        last_seen_at=created_at,
+        last_surfaced_at=None,
+        surface_count=0,
+        similarity=0.0,
+    )
+
+
+@pytest.mark.skipif(
+    not _DECAY_PREDICATE_AVAILABLE,
+    reason="decay_predicate not yet implemented — RED phase guard (11-07 Task 1)",
+)
+class TestDecayPredicate:
+    """decay_predicate selects expired low-salience facts; retains high-salience / recent ones.
+
+    D-08: low-salience facts age out first. High-salience episodes survive.
+    Pure + clock-injectable: no datetime.now() calls, no I/O (MEM-07 / T-11-07b).
+    """
+
+    def test_old_low_salience_selected(self) -> None:
+        """Fact older than decay window + below salience floor → selected for sweep."""
+        fact = _make_decay_fact(salience=0.2, age_days=100.0)
+        result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
+        assert result is True, (
+            "An expired (100 days > 90) low-salience (0.2) fact must be selected for sweep"
+        )
+
+    def test_old_high_salience_retained(self) -> None:
+        """Fact past decay window but high-salience → retained (D-08 guarantee)."""
+        fact = _make_decay_fact(salience=0.7, age_days=100.0)
+        result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
+        assert result is False, (
+            "An expired high-salience (0.7) fact must be retained regardless of age (D-08)"
+        )
+
+    def test_recent_low_salience_retained(self) -> None:
+        """Fact below salience floor but still within decay window → retained."""
+        fact = _make_decay_fact(salience=0.2, age_days=5.0)
+        result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
+        assert result is False, (
+            "A recent (5 days < 90) low-salience fact must be retained — too new to sweep"
+        )
+
+    def test_salience_at_floor_boundary_retained(self) -> None:
+        """Fact with salience exactly at the default floor (0.5) is retained (inclusive >= check)."""
+        fact = _make_decay_fact(salience=0.5, age_days=100.0)
+        result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
+        assert result is False, (
+            "Salience exactly at the floor (0.5 >= 0.5) must be retained (boundary test)"
+        )
+
+    def test_age_exactly_at_decay_boundary_retained(self) -> None:
+        """Fact aged exactly decay_days is retained (boundary — strictly > decay_days needed)."""
+        fact = _make_decay_fact(salience=0.2, age_days=90.0)
+        result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
+        assert result is False, (
+            "Age of exactly 90 days (== decay_days) must be retained; sweep requires age > decay_days"
+        )
+
+    def test_custom_salience_floor_selects_higher_salience(self) -> None:
+        """A higher custom floor selects facts that the default floor would retain."""
+        fact = _make_decay_fact(salience=0.6, age_days=100.0)
+        # With default floor 0.5: 0.6 >= 0.5 → retained
+        assert decay_predicate(fact, _DECAY_NOW, decay_days=90) is False
+        # With custom floor 0.8: 0.6 < 0.8 → selected
+        assert decay_predicate(fact, _DECAY_NOW, decay_days=90, salience_floor=0.8) is True
+
+    def test_daily_batch_salience_selected_when_old(self) -> None:
+        """daily_batch weight (0.2) fact aged past window is swept (lowest-value category)."""
+        fact = _make_decay_fact(salience=0.2, age_days=95.0)
+        assert decay_predicate(fact, _DECAY_NOW, decay_days=90) is True
+
+    def test_milestone_salience_retained_when_old(self) -> None:
+        """milestone weight (1.0) fact is never swept — highest-salience episode."""
+        fact = _make_decay_fact(salience=1.0, age_days=365.0)
+        assert decay_predicate(fact, _DECAY_NOW, decay_days=90) is False
 
 
 # ---------------------------------------------------------------------------
