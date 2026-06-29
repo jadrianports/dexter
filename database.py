@@ -767,6 +767,81 @@ async def count_playlists(pool: asyncpg.Pool, *, user_id: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Phase 11: Memory helpers (MEM-02 / MEM-03 / T-11-03a / T-11-03d)
+# ---------------------------------------------------------------------------
+
+
+async def search_memories(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    query_embedding: list[float],
+    k: int,
+) -> list[asyncpg.Record]:
+    """Cosine ANN search scoped to user_id. Returns up to k rows.
+
+    Uses pgvector ``<=>`` (cosine distance) operator ordered ascending (smallest
+    distance = highest similarity). The ``1 - (embedding <=> $2)`` expression
+    converts distance to cosine similarity for apply_floor + rerank.
+
+    Security (T-11-03a / V4): ``WHERE user_id = $1`` is the first filter — the
+    ANN ORDER BY fires inside that scope only, so cross-user leakage is impossible
+    regardless of the embedding neighbourhood.
+
+    Security (T-11-03d): all parameters are $N positional asyncpg bindings;
+    ``query_embedding`` is a plain list[float] passed via the pgvector codec
+    registered at pool-creation time (register_vector) — no SQL injection path.
+
+    Args:
+        pool:            asyncpg connection pool (with pgvector codec registered).
+        user_id:         Caller's user_id — scope guard (never cross-user).
+        query_embedding: 768d float vector from GeminiService.embed (RETRIEVAL_QUERY).
+        k:               Max rows to return (config.MEMORY_TOP_K = 8).
+
+    Returns:
+        List of asyncpg.Record rows with columns: id, fact, salience, hit_count,
+        created_at, last_seen_at, last_surfaced_at, surface_count, similarity.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT id, fact, salience, hit_count, created_at, last_seen_at,"
+            "       last_surfaced_at, surface_count,"
+            "       1 - (embedding <=> $2) AS similarity"
+            " FROM user_memories"
+            " WHERE user_id = $1"
+            " ORDER BY embedding <=> $2"
+            " LIMIT $3",
+            user_id, query_embedding, k,
+        )
+
+
+async def bump_surfaced(pool: asyncpg.Pool, ids: list[int]) -> None:
+    """Mark memories as surfaced: set last_surfaced_at = now(), increment surface_count.
+
+    Called by MemoryService.recall() after selecting the top-k facts to inject.
+    Updating last_surfaced_at is what drives the novelty_score D-05 anti-repeat
+    penalty — without this update, the same memories would surface every call.
+
+    Args:
+        pool: asyncpg connection pool.
+        ids:  List of user_memories.id values to update. No-op if empty.
+
+    Security (T-11-03d): ids is passed via the ``ANY($1)`` array binding — no
+    SQL injection path. asyncpg encodes the Python list as a Postgres array.
+    """
+    if not ids:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE user_memories"
+            " SET last_surfaced_at = now(),"
+            "     surface_count = surface_count + 1"
+            " WHERE id = ANY($1)",
+            ids,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Phase 6: Resolution cache helpers (PERF-03, D-07/D-09, T-06-01)
 # ---------------------------------------------------------------------------
 

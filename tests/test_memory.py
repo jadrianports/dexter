@@ -279,6 +279,58 @@ class TestRerank:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# TestEmbedLimiter
+# ---------------------------------------------------------------------------
+
+
+class TestEmbedLimiter:
+    """GeminiService.embed() uses _embed_limiter, not _rate_limiter (MEM-02 / T-11-03b)."""
+
+    def test_embed_acquires_embed_limiter_not_rate_limiter(self) -> None:
+        """embed() must call self._embed_limiter.acquire, never self._rate_limiter.acquire."""
+        import inspect
+        import services.gemini as g
+
+        src = inspect.getsource(g.GeminiService.embed)
+        assert "_embed_limiter" in src, "embed() must reference _embed_limiter"
+        assert "_rate_limiter" not in src, (
+            "embed() must NOT reference _rate_limiter (T-11-03b: never consume chat budget)"
+        )
+
+    def test_embed_uses_configured_embedding_model(self) -> None:
+        """embed() must use config.EMBEDDING_MODEL (gemini-embedding-001), not GEMINI_MODEL."""
+        import inspect
+        import services.gemini as g
+        import config
+
+        src = inspect.getsource(g.GeminiService.embed)
+        assert "EMBEDDING_MODEL" in src, "embed() must reference config.EMBEDDING_MODEL"
+        # Must NOT hardcode the model name; must use the config constant
+        assert config.EMBEDDING_MODEL == "gemini-embedding-001"
+
+    def test_embed_uses_correct_output_dimensionality(self) -> None:
+        """embed() must pass output_dimensionality=config.EMBED_DIM (768)."""
+        import inspect
+        import services.gemini as g
+        import config
+
+        src = inspect.getsource(g.GeminiService.embed)
+        assert "output_dimensionality" in src
+        assert config.EMBED_DIM == 768
+
+    def test_embed_limiter_is_separate_instance(self) -> None:
+        """GeminiService must have two separate _RateLimiter instances."""
+        from services.gemini import GeminiService
+
+        svc = GeminiService(api_key="fake-key-for-test")
+        assert hasattr(svc, "_embed_limiter"), "GeminiService must have _embed_limiter"
+        assert hasattr(svc, "_rate_limiter"), "GeminiService must still have _rate_limiter"
+        assert svc._embed_limiter is not svc._rate_limiter, (
+            "_embed_limiter and _rate_limiter must be distinct instances"
+        )
+
+
 @pytest.mark.skipif(
     not _SERVICES_MEMORY_AVAILABLE,
     reason="services.memory not yet implemented (added in 11-03 Task 3)",

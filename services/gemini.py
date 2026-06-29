@@ -128,6 +128,10 @@ class GeminiService:
             ),
         )
         self._rate_limiter = _RateLimiter()
+        # Separate embedding quota — ~60 RPM endpoint vs 15 RPM for chat/image.
+        # MUST NOT share _rate_limiter: embedding calls never consume the chat budget
+        # (MEM-02 / Critical Rule 1 / A2 / T-11-03b).
+        self._embed_limiter = _RateLimiter(max_requests=config.EMBED_RPM_LIMIT)
 
     @property
     def rpm_usage(self) -> int:
@@ -242,3 +246,58 @@ class GeminiService:
                 return part.inline_data.data
 
         return None
+
+    async def embed(
+        self,
+        texts: list[str],
+        *,
+        task_type: str,
+        priority: int = 2,
+    ) -> list[list[float]]:
+        """Embed a batch of texts via gemini-embedding-001 @ 768d.
+
+        Uses the SEPARATE ``_embed_limiter`` (~60 RPM) — never the shared 15 RPM
+        chat budget. This satisfies MEM-02 / T-11-03b: embedding calls must not
+        starve /ask and /imagine (Critical Rule 1 / A2).
+
+        Args:
+            texts:     List of strings to embed in a single API call.
+            task_type: Gemini task-type hint — ``"RETRIEVAL_DOCUMENT"`` for writes,
+                       ``"RETRIEVAL_QUERY"`` for recall queries (affects embedding space).
+            priority:  1 = user critical path (recall); 2 = background write (default).
+                       Priority 2 raises GeminiRateLimitError if wait > 10s.
+
+        Returns:
+            List of 768-dimensional float vectors, one per input text.
+
+        Raises:
+            GeminiRateLimitError: _embed_limiter slot unavailable (priority-2 timeout).
+            GeminiAPIError:       API error (network, server overload, 4xx/5xx).
+        """
+        await self._embed_limiter.acquire(priority)
+
+        log.info(
+            f"── Gemini embed request (priority={priority}, task_type={task_type},"
+            f" texts={len(texts)}) ──"
+        )
+
+        try:
+            resp = await self._client.aio.models.embed_content(
+                model=config.EMBEDDING_MODEL,
+                contents=texts,
+                config=types.EmbedContentConfig(
+                    output_dimensionality=config.EMBED_DIM,
+                    task_type=task_type,
+                ),
+            )
+        except errors.APIError as e:
+            log.error(f"Embed API error (code={e.code}): {e.message}")
+            if e.code == 429:
+                raise GeminiRateLimitError("Gemini embed rate limit hit") from e
+            raise GeminiAPIError(f"Embed API error: {e.message}") from e
+        except Exception as e:
+            log.error(f"Embed unexpected error ({type(e).__name__}): {e}", exc_info=True)
+            raise GeminiAPIError(str(e)) from e
+
+        log.info(f"Gemini embed response: {len(resp.embeddings)} vectors @ {config.EMBED_DIM}d")
+        return [e.values for e in resp.embeddings]
