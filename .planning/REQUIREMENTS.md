@@ -37,7 +37,7 @@ the others derive from the v1.2 codebase-analysis pass.
 - [x] **MEM-02**: A `MemoryService.embed()` path uses `gemini-embedding-001` @ 768d behind a **separate** embedding rate limiter — never the shared 15 RPM chat budget — and runs off the 3s command-defer critical path
 - [x] **MEM-03**: Retrieval returns the top-k semantically-relevant memories above a similarity floor, reranked (relevance + recency + salience + novelty), capped to 1–3 injected memories
 - [x] **MEM-04**: A write path distills and stores roast-worthy facts on event/session-end triggers (NOT per-message), with near-duplicate dedup at write time
-- [ ] **MEM-05**: A sensitivity/PII gate prevents storing genuinely sensitive content, and the system never embeds facts SQL already knows (play counts, streaks) — preserving Critical Rule 5 (accuracy-first)
+- [x] **MEM-05**: A sensitivity/PII gate prevents storing genuinely sensitive content, and the system never embeds facts SQL already knows (play counts, streaks) — preserving Critical Rule 5 (accuracy-first)
 - [ ] **MEM-06**: Retrieved memories are injected into the personality prompt as optional "candidate ammo" (backward-compatible) for callback roasts; any hard numbers in the output come from live SQL, not from memory
 - [x] **MEM-07**: Memory hygiene ships in v1.2 — a per-user memory cap (~150) and a decay/expiry sweep for low-salience facts
 
@@ -100,7 +100,7 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 | MEM-02 | Phase 11 | Complete |
 | MEM-03 | Phase 11 | Complete |
 | MEM-04 | Phase 11 | Complete |
-| MEM-05 | Phase 11 | Pending |
+| MEM-05 | Phase 11 | Complete |
 | MEM-06 | Phase 11 | Pending |
 | MEM-07 | Phase 11 | Complete |
 | UX-01 | Phase 12 | Pending |

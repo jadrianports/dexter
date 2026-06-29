@@ -147,7 +147,7 @@ Plans:
 
 **Wave 5** *(blocked on 11-04)*
 
-- [ ] 11-05-PLAN.md — Distillation triggers + sensitivity/PII stop-ship gate + accuracy firewall: `DISTILL_PROMPT`, pure `is_sensitive`/`contains_number`, notable-event + daily-batch write hooks (D-09 two paths, never per-message; no voice-session-end D-10) (MEM-04, MEM-05) — Wave 5
+- [x] 11-05-PLAN.md — Distillation triggers + sensitivity/PII stop-ship gate + accuracy firewall: `DISTILL_PROMPT`, pure `is_sensitive`/`contains_number`, notable-event + daily-batch write hooks (D-09 two paths, never per-message; no voice-session-end D-10) (MEM-04, MEM-05) — Wave 5
 
 **Wave 6** *(blocked on 11-05; parallel — disjoint files)*
 
@@ -192,5 +192,5 @@ Plans:
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete    | 2026-06-27 |
-| 11. RAG Long-Term Memory | v1.2 | 4/7 | In Progress|  |
+| 11. RAG Long-Term Memory | v1.2 | 5/7 | In Progress|  |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |
