@@ -17,12 +17,16 @@ Test classes:
 
 from __future__ import annotations
 
+import importlib
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from models.memory import MemoryFact, apply_floor, novelty_score, rerank, recency_score
+
+# Skip TestRecallService until services/memory.py is created in plan 11-03 Task 3.
+_SERVICES_MEMORY_AVAILABLE = importlib.util.find_spec("services.memory") is not None
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +279,10 @@ class TestRerank:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    not _SERVICES_MEMORY_AVAILABLE,
+    reason="services.memory not yet implemented (added in 11-03 Task 3)",
+)
 class TestRecallService:
     """MemoryService.recall() unit tests with mocked embed + fake pool rows."""
 
