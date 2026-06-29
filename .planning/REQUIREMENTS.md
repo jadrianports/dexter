@@ -34,7 +34,7 @@ the others derive from the v1.2 codebase-analysis pass.
 > `pgvector` on the existing Neon Postgres + `gemini-embedding-001` @ 768d via the existing API key.
 
 - [x] **MEM-01**: `pgvector` is enabled on Neon and a `user_memories` table (with a `vector(768)` column) exists; the vector codec is registered on pooled connections, boot-order-safe (`CREATE EXTENSION` before pool creation)
-- [ ] **MEM-02**: A `MemoryService.embed()` path uses `gemini-embedding-001` @ 768d behind a **separate** embedding rate limiter — never the shared 15 RPM chat budget — and runs off the 3s command-defer critical path
+- [x] **MEM-02**: A `MemoryService.embed()` path uses `gemini-embedding-001` @ 768d behind a **separate** embedding rate limiter — never the shared 15 RPM chat budget — and runs off the 3s command-defer critical path
 - [x] **MEM-03**: Retrieval returns the top-k semantically-relevant memories above a similarity floor, reranked (relevance + recency + salience + novelty), capped to 1–3 injected memories
 - [ ] **MEM-04**: A write path distills and stores roast-worthy facts on event/session-end triggers (NOT per-message), with near-duplicate dedup at write time
 - [ ] **MEM-05**: A sensitivity/PII gate prevents storing genuinely sensitive content, and the system never embeds facts SQL already knows (play counts, streaks) — preserving Critical Rule 5 (accuracy-first)
@@ -97,7 +97,7 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 | TEST-03 | Phase 10 | Complete |
 | TEST-04 | Phase 10 | Complete |
 | MEM-01 | Phase 11 | Complete |
-| MEM-02 | Phase 11 | Pending |
+| MEM-02 | Phase 11 | Complete |
 | MEM-03 | Phase 11 | Complete |
 | MEM-04 | Phase 11 | Pending |
 | MEM-05 | Phase 11 | Pending |
