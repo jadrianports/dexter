@@ -308,20 +308,35 @@ _SENSITIVE_KEYWORDS: frozenset[str] = frozenset({
     "give up on life",
     "no reason to live",
     # Abuse / violence
-    "rape",
+    # NOTE: "rape" is matched via _SENSITIVE_WORD_RE (word-boundary), not here —
+    # substring matching it caught "grape"/"drape"/"scrape" (WR-02).
     "sexually assault",
     "domestic abuse",
     "domestic violence",
     # Sexuality / gender identity (private categories per D-01)
+    # NOTE: "gay" is matched via _SENSITIVE_WORD_RE (word-boundary), not here —
+    # substring matching it caught "marvin gaye"/"gayle" (WR-02).
     "sexual orientation",
     "coming out",
-    "gay",
     "lesbian",
     "bisexual",
     "transgender",
     "nonbinary",
     "non-binary",
 })
+
+# Short/ambiguous identity & violence terms — matched on WORD BOUNDARIES only
+# (WR-02). Naive substring matching of these short tokens produced false positives
+# inside common, innocuous music vocabulary:
+#   "gay"  → "marvin gaye", "gayle" (the artist behind "abcdefu")
+#   "rape" → "grape", "drape", "scrape"
+# Word boundaries match the standalone term while leaving those tokens alone.
+# Longer, unambiguous stems (depress, suicid, schizophren, ...) stay as substrings
+# in _SENSITIVE_KEYWORDS above.
+_SENSITIVE_WORD_RE: re.Pattern[str] = re.compile(
+    r"\b(?:gay|rape)\b",
+    re.IGNORECASE,
+)
 
 # PII regex patterns
 _EMAIL_RE: re.Pattern[str] = re.compile(
@@ -368,6 +383,10 @@ def is_sensitive(text: str) -> bool:
     for kw in _SENSITIVE_KEYWORDS:
         if kw in text_lower:
             return True
+
+    # Short/ambiguous terms: word-boundary match to avoid music-token false positives (WR-02)
+    if _SENSITIVE_WORD_RE.search(text):
+        return True
 
     if _EMAIL_RE.search(text):
         return True
