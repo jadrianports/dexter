@@ -13,6 +13,7 @@ Phase 11 coverage locked by tests/test_memory.py (MEM-02 / MEM-03 / MEM-04 / MEM
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -259,3 +260,151 @@ def choose_eviction(facts: list[MemoryFact], cap: int) -> list[int]:
         key=lambda f: (f.salience, f.created_at, f.hit_count),
     )
     return [f.id for f in candidates[:n_evict]]
+
+
+# ---------------------------------------------------------------------------
+# is_sensitive  (MEM-05 / D-01 stop-ship gate)
+# ---------------------------------------------------------------------------
+
+# Keywords for blocked D-01 categories (mental health, self-harm, medical,
+# sexuality, grief/trauma, PII markers, apparent-distress cues).
+# These are SUBSTRING matches against the lowercased fact text.
+# Conservative: ambiguous cases → True (drop).
+_SENSITIVE_KEYWORDS: frozenset[str] = frozenset({
+    # Mental health / self-harm
+    "depress",          # depression, depressed
+    "suicide",
+    "suicidal",
+    "self-harm",
+    "self harm",
+    "selfharm",
+    "overdose",
+    "eating disorder",
+    "anorex",           # anorexia, anorexic
+    "bulimi",           # bulimia, bulimic
+    "mental illness",
+    "mental health",
+    "panic attack",
+    "psychiatr",        # psychiatrist, psychiatric
+    "bipolar",
+    "schizophren",      # schizophrenia, schizophrenic
+    "ptsd",
+    # Grief / loss / bereavement
+    "griev",            # grief, grieving
+    "bereave",          # bereaved, bereavement
+    "mourn",            # mourning
+    "passed away",
+    "death of",
+    "lost a loved",
+    # Distress phrases (D-01: "anything said in apparent distress")
+    "want to die",
+    "wanting to die",
+    "wanna die",
+    "don't want to live",
+    "don't want to be here",
+    "feel worthless",
+    "feel hopeless",
+    "can't go on",
+    "give up on life",
+    "no reason to live",
+    # Abuse / violence
+    "rape",
+    "sexually assault",
+    "domestic abuse",
+    "domestic violence",
+    # Sexuality / gender identity (private categories per D-01)
+    "sexual orientation",
+    "coming out",
+    "gay",
+    "lesbian",
+    "bisexual",
+    "transgender",
+    "nonbinary",
+    "non-binary",
+})
+
+# PII regex patterns
+_EMAIL_RE: re.Pattern[str] = re.compile(
+    r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
+)
+_PHONE_RE: re.Pattern[str] = re.compile(
+    r"\+?\d[\d\s\-\.]{7,}\d"
+)
+_ADDRESS_RE: re.Pattern[str] = re.compile(
+    r"\d{1,5}\s+[a-zA-Z\s]{3,30}\s+"
+    r"(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|blvd|boulevard|court|ct)\b",
+    re.IGNORECASE,
+)
+
+# Written count words (used by contains_number backstop)
+_NUMBER_WORDS_RE: re.Pattern[str] = re.compile(
+    r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|"
+    r"twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|"
+    r"hundred|thousand|million)\b",
+    re.IGNORECASE,
+)
+
+
+def is_sensitive(text: str) -> bool:
+    """Return True if text matches blocked identity/wellbeing/PII categories (D-01/D-02).
+
+    Conservative: when ambiguous on a blocked category, return True (drop the memory).
+    The LLM DISTILL_PROMPT is the primary gate; this is the deterministic backstop.
+
+    Blocked (D-01): mental health, self-harm, medical, sexuality, grief/relationship
+    trauma, real-world PII (email/phone/address), apparent distress.
+    Passes (D-02): music-taste cringe, hypocrisy, 3am binges, light comedic drama.
+
+    Args:
+        text: A candidate distilled fact string.
+
+    Returns:
+        True — blocked (matches a D-01 category); do NOT store this memory.
+        False — passes (D-02 territory); safe to store.
+    """
+    text_lower = text.lower()
+
+    for kw in _SENSITIVE_KEYWORDS:
+        if kw in text_lower:
+            return True
+
+    if _EMAIL_RE.search(text):
+        return True
+    if _PHONE_RE.search(text):
+        return True
+    if _ADDRESS_RE.search(text):
+        return True
+
+    return False
+
+
+# ---------------------------------------------------------------------------
+# contains_number  (MEM-05 / accuracy firewall — Critical Rule 5)
+# ---------------------------------------------------------------------------
+
+
+def contains_number(text: str) -> bool:
+    """Return True if text contains a digit or written count word (accuracy firewall).
+
+    SQL already tracks play counts, streak days, and song totals. Storing those
+    same numbers in the vector store would risk stale-count drift when the live
+    SQL changes (Pitfall 5 / Critical Rule 5).
+
+    The DISTILL_PROMPT forbids numbers; this is the deterministic backstop.
+    Any digit or written count word → drop the fact before it reaches remember().
+
+    Args:
+        text: A candidate distilled fact string.
+
+    Returns:
+        True — contains a number (digit or count word); do NOT store this memory.
+        False — number-free; safe to pass through.
+    """
+    # Any digit is an unambiguous SQL-competing figure
+    if re.search(r"\d", text):
+        return True
+    # Written count words (conservative: drop any fact containing them)
+    if _NUMBER_WORDS_RE.search(text):
+        return True
+    return False

@@ -20,7 +20,20 @@ import asyncpg
 
 import config
 import database
-from models.memory import MemoryFact, apply_floor, rerank, dedup_decision, choose_eviction
+import json
+import re as _re
+
+from models.memory import (
+    MemoryFact,
+    apply_floor,
+    rerank,
+    dedup_decision,
+    choose_eviction,
+    compute_salience,
+    is_sensitive,
+    contains_number,
+)
+from personality.prompts import DISTILL_PROMPT
 from services.gemini import GeminiService, GeminiAPIError, GeminiRateLimitError
 from utils.logger import log
 
@@ -296,5 +309,152 @@ class MemoryService:
             # A write failure must NEVER crash the ambient-roast or music event path.
             log.debug(
                 f"memory.remember: unexpected error swallowed "
+                f"({type(e).__name__}: {e}) user={user_id} kind={kind}"
+            )
+
+    # -------------------------------------------------------------------------
+    # distill — LLM-based episode extraction with stop-ship safety gates (MEM-05)
+    # -------------------------------------------------------------------------
+
+    async def distill(self, raw_text: str) -> list[str]:
+        """Distill raw_text into 0-3 atomic, third-person, number-free episode facts.
+
+        Full pipeline:
+          1. Send raw_text to Gemini using DISTILL_PROMPT as the system instruction
+             (priority=2 — background, never contends with user /ask at priority=1).
+          2. Parse the JSON array response tolerantly (strip fences, find array in prose).
+          3. Apply stop-ship backstop: drop any fact where is_sensitive() or
+             contains_number() is True — the deterministic double-check after the
+             LLM primary gate (T-11-05a / T-11-05b / D-01..D-03).
+          4. Enforce 0-3 cap and return surviving facts.
+
+        Returns [] when:
+          - GeminiRateLimitError or GeminiAPIError (priority-2 background skip),
+          - Response is not parseable JSON, or
+          - All produced facts are blocked by the safety gates.
+
+        Never raises — always degrades to [].
+
+        Args:
+            raw_text: The raw banter / notable-event context to distill. May
+                      contain counts or PII — the distiller and backstop will drop them.
+
+        Returns:
+            List of 0–3 atomic, safe, number-free fact strings.
+        """
+        try:
+            raw = await self._gemini.chat(
+                DISTILL_PROMPT,
+                [{"role": "user", "content": raw_text}],
+                priority=2,
+            )
+        except (GeminiRateLimitError, GeminiAPIError) as e:
+            log.debug(
+                f"memory.distill: Gemini error, returning [] "
+                f"({type(e).__name__}: {e})"
+            )
+            return []
+        except Exception as e:
+            log.debug(
+                f"memory.distill: unexpected Gemini error, returning [] "
+                f"({type(e).__name__}: {e})"
+            )
+            return []
+
+        if not raw or not raw.strip():
+            return []
+
+        # Tolerant JSON parse (mirrors cogs/ai.py:parse_suggestions style)
+        text = raw.strip()
+        # Strip optional leading/trailing code fences (```json ... ```)
+        text = _re.sub(r"^```(?:json)?\s*", "", text)
+        text = _re.sub(r"\s*```$", "", text).strip()
+
+        candidates: list[str] = [text]
+        # Fallback: extract arrays from surrounding prose (non-greedy)
+        candidates.extend(_re.findall(r"\[.*?\]", text, _re.DOTALL))
+
+        facts: list | None = None
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+            if isinstance(parsed, list):
+                facts = parsed
+                break
+
+        if facts is None:
+            log.debug("memory.distill: could not parse JSON array from model response")
+            return []
+
+        # Stop-ship backstop: drop sensitive or number-bearing facts (T-11-05a/b)
+        safe: list[str] = []
+        for f in facts:
+            if not isinstance(f, str):
+                continue
+            f = f.strip()
+            if not f:
+                continue
+            if is_sensitive(f):
+                log.debug(f"memory.distill: is_sensitive blocked: {f!r}")
+                continue
+            if contains_number(f):
+                log.debug(f"memory.distill: contains_number blocked: {f!r}")
+                continue
+            safe.append(f)
+            if len(safe) >= 3:   # enforce 0-3 cap before returning
+                break
+
+        log.debug(
+            f"memory.distill: produced {len(safe)} fact(s) from "
+            f"{len(facts)} model output(s)"
+        )
+        return safe
+
+    # -------------------------------------------------------------------------
+    # distill_and_remember — orchestrate distill → remember (D-09 path 1 / MEM-04)
+    # -------------------------------------------------------------------------
+
+    async def distill_and_remember(
+        self,
+        *,
+        user_id: str,
+        guild_id: str | None,
+        raw_text: str,
+        kind: str,
+        base_salience: float,
+    ) -> None:
+        """Distill raw_text into facts and store each surviving one via remember().
+
+        Orchestration:
+          1. distill(raw_text) → 0-3 safe, number-free facts (or []).
+          2. For each surviving fact: remember(user_id, guild_id, fact, kind, salience).
+             salience = compute_salience(base_salience) — the D-07 hybrid score.
+
+        Always called via asyncio.create_task from cogs (fire-and-forget). Catches
+        all errors silently so it NEVER raises into the task error handler (T-11-05e).
+
+        Args:
+            user_id:       Discord user ID — memory owner.
+            guild_id:      Guild context for the event; None for cross-guild facts.
+            raw_text:      Raw banter / event description to distill.
+            kind:          Event kind; must be a key in config.MEMORY_SALIENCE_BASE_WEIGHTS.
+            base_salience: Base salience weight from config.MEMORY_SALIENCE_BASE_WEIGHTS[kind].
+        """
+        try:
+            facts = await self.distill(raw_text)
+            salience = compute_salience(base_salience)
+            for fact in facts:
+                await self.remember(
+                    user_id=user_id,
+                    guild_id=guild_id,
+                    fact_text=fact,
+                    kind=kind,
+                    salience=salience,
+                )
+        except Exception as e:
+            log.debug(
+                f"memory.distill_and_remember: error swallowed "
                 f"({type(e).__name__}: {e}) user={user_id} kind={kind}"
             )
