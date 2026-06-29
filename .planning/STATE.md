@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
-status: executing
-stopped_at: Completed 11-06-PLAN.md
-last_updated: "2026-06-29T13:47:07.255Z"
+status: verifying
+stopped_at: Completed 11-07-PLAN.md (Phase 11 complete)
+last_updated: "2026-06-29T14:03:14.948Z"
 last_activity: 2026-06-29 -- Phase 11 execution started
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
-  completed_plans: 14
-  percent: 50
+  completed_plans: 15
+  percent: 75
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 Phase: 11 (rag-long-term-memory) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-29 -- Phase 11 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 11 P04 | 14 | 3 tasks | 6 files |
 | Phase 11-rag-long-term-memory P05 | 1680 | 3 tasks | 8 files |
 | Phase 11 P06 | 10 | 3 tasks | 5 files |
+| Phase 11 P07 | 28 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: 11-04
 - [Phase ?]: memories=None renders byte-identical prompt; {memory_context} slot with empty-string fallback, no whitespace artifact (T-11-06d)
 - [Phase ?]: Cadence gate (random.random() < MEMORY_CALLBACK_CHANCE=0.35) applied per-surface for occasional stat x episode callback (D-04); guild_id='' safe in _build_roast_line (ANN scopes to user_id only)
+- [Phase ?]: keeps pure function side-effect-free while giving DB layer a named constant
+- [Phase ?]: mirrors decay_predicate; prevents over-broad delete of high-salience expired facts
+- [Phase ?]: distinct from ytdlp_update (04:00) and memory_distill_batch (03:00) to avoid thundering-herd on Neon pool
 
 ### Pending Todos
 
@@ -135,8 +139,8 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-29T13:47:07.245Z
-Stopped at: Completed 11-06-PLAN.md
+Last session: 2026-06-29T14:03:14.940Z
+Stopped at: Completed 11-07-PLAN.md (Phase 11 complete)
 Next:
 
   Plan the first v1.2 phase: `/gsd-plan-phase 9` (Reliability & Ops Hardening). Phase 11 (RAG) is
