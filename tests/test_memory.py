@@ -370,7 +370,7 @@ class TestRecallService:
         async def run():
             return await svc.recall("user1", "guild1", "what music do i like")
 
-        result = asyncio.get_event_loop().run_until_complete(run()) if asyncio.get_event_loop().is_running() else asyncio.run(run())
+        result = asyncio.run(run())
         assert result == []
 
     def test_returns_empty_on_gemini_api_error(self) -> None:
