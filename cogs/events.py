@@ -121,9 +121,25 @@ class EventsCog(commands.Cog):
             if "{name}" in scenario:
                 scenario = scenario.format(name=member.display_name)
 
+            # Phase 11 / MEM-06: occasional recall for stat×episode callback (D-04).
+            # The substituted scenario string doubles as the recall anchor. Cadence
+            # gate keeps recalls rare; degrade to [] on any error (non-fatal).
+            amb_memories: list[str] = []
+            if random.random() < config.MEMORY_CALLBACK_CHANCE:
+                _memory_svc = getattr(self.bot, "memory_service", None)
+                if _memory_svc is not None:
+                    try:
+                        amb_memories = await _memory_svc.recall(
+                            str(member.id),
+                            str(member.guild.id),
+                            scenario,   # formatted scenario is the recall anchor
+                        )
+                    except Exception as _mem_err:
+                        log.debug("memory.recall failed (non-fatal): %s", _mem_err)
+
             # Use the locked few-shot DEXTER voice (D-06: examples >> descriptions).
             # mood="normal" is a pure MOOD_CONTEXTS lookup (no DB call); seasonal omitted.
-            system_prompt = build_chat_prompt("normal", user_context, "")
+            system_prompt = build_chat_prompt("normal", user_context, "", memories=amb_memories or None)
             conversation = [
                 {
                     "role": "user",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from typing import TYPE_CHECKING
 
@@ -1105,7 +1106,25 @@ class MusicCog(commands.Cog):
                     log.debug("Music roast: taste lookup failed for %s: %s", user_id, db_err)
 
             user_context = user_summary or "No data on this user yet."
-            system_prompt = build_chat_prompt("normal", user_context, "")
+
+            # Phase 11 / MEM-06: occasional recall for stat×episode callback (D-04).
+            # scenario_content is the recall anchor; guild_id is reserved in recall()
+            # (ANN scopes to user_id only — personal memories carry cross-server).
+            # Cadence gate keeps recalls rare; degrade to [] on any error (non-fatal).
+            music_memories: list[str] = []
+            if random.random() < config.MEMORY_CALLBACK_CHANCE:
+                _memory_svc = getattr(self.bot, "memory_service", None)
+                if _memory_svc is not None:
+                    try:
+                        music_memories = await _memory_svc.recall(
+                            user_id,
+                            "",   # guild_id reserved — ANN scopes to user_id only
+                            scenario_content,
+                        )
+                    except Exception as _mem_err:
+                        log.debug("memory.recall failed (non-fatal): %s", _mem_err)
+
+            system_prompt = build_chat_prompt("normal", user_context, "", memories=music_memories or None)
             conversation = [
                 {
                     "role": "user",
