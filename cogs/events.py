@@ -221,6 +221,23 @@ class EventsCog(commands.Cog):
                         allowed_mentions=discord.AllowedMentions.none(),
                     )
                 self._mark_ambient_roast(member.id)
+                # D-09 path 1: fire-and-forget memory write for this notable voice event.
+                # Uses create_task so the event handler is never blocked (T-11-05e / 3s rule).
+                # Guarded by getattr so the bot degrades gracefully when GEMINI_API_KEY unset.
+                memory_service = getattr(self.bot, "memory_service", None)
+                if memory_service is not None:
+                    # Format {name} placeholder before passing as raw_text so the
+                    # distiller sees the real display name, not the template literal.
+                    raw_text = scenario.format(name=member.display_name) if "{name}" in scenario else scenario
+                    asyncio.create_task(
+                        memory_service.distill_and_remember(
+                            user_id=str(member.id),
+                            guild_id=str(guild.id),
+                            raw_text=raw_text,
+                            kind="late_night",
+                            base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["late_night"],
+                        )
+                    )
             return
 
         # LEAVE: before.channel is not None, after.channel is None

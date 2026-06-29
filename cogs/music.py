@@ -1188,6 +1188,20 @@ class MusicCog(commands.Cog):
                     },
                 )
                 await self._post_music_roast(interaction.guild, line)
+                # D-09 path 1: fire-and-forget memory write. create_task keeps the
+                # handler non-blocking (T-11-05e / 3s rule). Guarded by getattr so
+                # the bot degrades when GEMINI_API_KEY is absent.
+                _memory_svc = getattr(self.bot, "memory_service", None)
+                if _memory_svc is not None:
+                    asyncio.create_task(
+                        _memory_svc.distill_and_remember(
+                            user_id=str(interaction.user.id),
+                            guild_id=str(interaction.guild.id),
+                            raw_text=scenario,
+                            kind="repeat_song",
+                            base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["repeat_song"],
+                        )
+                    )
         except Exception as exc:
             log.debug("Repeat-song roast failed (non-blocking): %s", exc)
 
@@ -1206,6 +1220,18 @@ class MusicCog(commands.Cog):
                     fallback_kwargs={"count": new_total},
                 )
                 await self._post_music_roast(interaction.guild, line)
+                # D-09 path 1: fire-and-forget memory write for song-count milestone.
+                _memory_svc = getattr(self.bot, "memory_service", None)
+                if _memory_svc is not None:
+                    asyncio.create_task(
+                        _memory_svc.distill_and_remember(
+                            user_id=str(interaction.user.id),
+                            guild_id=str(interaction.guild.id),
+                            raw_text=scenario,
+                            kind="milestone",
+                            base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["milestone"],
+                        )
+                    )
         except Exception as exc:
             log.debug("Song-count milestone roast failed (non-blocking): %s", exc)
 
@@ -1233,6 +1259,18 @@ class MusicCog(commands.Cog):
                     },
                 )
                 await self._post_music_roast(interaction.guild, line)
+                # D-09 path 1: fire-and-forget memory write for streak milestone.
+                _memory_svc = getattr(self.bot, "memory_service", None)
+                if _memory_svc is not None:
+                    asyncio.create_task(
+                        _memory_svc.distill_and_remember(
+                            user_id=str(interaction.user.id),
+                            guild_id=str(interaction.guild.id),
+                            raw_text=scenario,
+                            kind="milestone",
+                            base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["milestone"],
+                        )
+                    )
         except Exception as exc:
             log.debug("Streak/milestone roast failed (non-blocking): %s", exc)
 

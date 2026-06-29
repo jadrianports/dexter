@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 import re
@@ -326,9 +327,39 @@ class AICog(commands.Cog):
             if channel:
                 msg = pick_random(AUTO_QUEUE_ANNOUNCE)
                 prev = server_state.auto_queue_results
-                if prev["skipped"] > 0 and prev["played"] + prev["skipped"] > 0:
+                ignored_signal = prev["skipped"] > 0 and prev["played"] + prev["skipped"] > 0
+                if ignored_signal:
                     msg = pick_random(AUTO_QUEUE_IGNORED) + "\n\n" + msg
                 await channel.send(msg)
+
+                # D-09 path 1: fire-and-forget memory write for auto_queue_ignored signal.
+                # auto-queue is guild-scoped so we write the signal for every non-bot
+                # member currently in the voice channel (collective taste signal).
+                # create_task keeps the handler non-blocking (T-11-05e / 3s rule).
+                if ignored_signal:
+                    _memory_svc = getattr(self.bot, "memory_service", None)
+                    if _memory_svc is not None:
+                        vc = guild.voice_client
+                        voice_members = (
+                            [m for m in vc.channel.members if not m.bot]
+                            if vc and vc.channel else []
+                        )
+                        scenario = (
+                            "dexter auto-queued songs were all skipped — "
+                            "the recommendations were not to the server's taste"
+                        )
+                        for _member in voice_members:
+                            asyncio.create_task(
+                                _memory_svc.distill_and_remember(
+                                    user_id=str(_member.id),
+                                    guild_id=str(guild.id),
+                                    raw_text=scenario,
+                                    kind="auto_queue_ignored",
+                                    base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS[
+                                        "auto_queue_ignored"
+                                    ],
+                                )
+                            )
 
             log.info("auto-queue: queued %d track(s) for guild %d (round %d)",
                      len(tracks_added), guild.id, server_state.auto_queue_rounds + 1)
