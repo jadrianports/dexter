@@ -107,8 +107,8 @@ binding than this CONTEXT.md on anything technical.
   blowout, sensitive-content storage, unbounded growth, IVFFlat-on-empty-table).
 
 ### Roadmap / requirements
-- `.planning/ROADMAP.md` §"Phase 11: RAG Long-Term Memory" — goal, success criteria, 6-plan
-  decomposition (11-01…11-06).
+- `.planning/ROADMAP.md` §"Phase 11: RAG Long-Term Memory" — goal, success criteria, 7-plan
+  decomposition (11-01…11-07).
 - `.planning/REQUIREMENTS.md` — MEM-01 … MEM-07 (the seven requirements this phase satisfies).
 
 ### Code to correct during planning (stale references)
