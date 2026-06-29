@@ -1,5 +1,5 @@
 """Pure memory scoring functions: apply_floor, rerank, recency_score, novelty_score,
-dedup_decision, compute_salience, choose_eviction.
+dedup_decision, compute_salience, choose_eviction, decay_predicate.
 
 All functions are deterministic and side-effect-free: no asyncio, no Discord imports,
 no database calls, no random, no datetime.now().
@@ -408,3 +408,49 @@ def contains_number(text: str) -> bool:
     if _NUMBER_WORDS_RE.search(text):
         return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# decay_predicate  (MEM-07 / D-08 — time-based decay sweep)
+# ---------------------------------------------------------------------------
+
+
+def decay_predicate(
+    fact: MemoryFact,
+    now: datetime,
+    decay_days: int | float,
+    salience_floor: float = 0.5,
+) -> bool:
+    """Return True if this fact should be swept: expired + low-salience.
+
+    D-08: low-salience facts age out first. High-salience episodes survive
+    indefinitely — a fact that was personally significant is never auto-deleted
+    just because it is old.
+
+    Selection predicate (both conditions must hold):
+      1. Age > decay_days — past the decay window (equivalent to expires_at < now
+         for rows inserted with expires_at = created_at + MEMORY_DECAY_DAYS).
+      2. salience < salience_floor — low intrinsic value (daily_batch=0.2,
+         auto_queue_ignored=0.4 age out; repeat_song=0.5, late_night=0.7,
+         milestone=1.0 are retained).
+
+    Pure + clock-injectable: no datetime.now() calls, no I/O (T-11-07b).
+
+    Args:
+        fact:          MemoryFact to evaluate.
+        now:           Reference clock (UTC); injected by the caller (sweep or test).
+        decay_days:    Decay window in days; use config.MEMORY_DECAY_DAYS (90).
+        salience_floor: Salience threshold below which a fact is "low-salience".
+                        Default 0.5 retains repeat_song=0.5 and above; sweeps
+                        auto_queue_ignored=0.4 and daily_batch=0.2 when expired.
+
+    Returns:
+        True  — select for sweep (expired AND low-salience).
+        False — retain (recent OR high-salience).
+    """
+    # High-salience facts are always retained regardless of age (D-08)
+    if fact.salience >= salience_floor:
+        return False
+    # Past the decay horizon?  Strictly > so the boundary day is retained.
+    age_days = (now - fact.created_at).total_seconds() / 86400.0
+    return age_days > decay_days
