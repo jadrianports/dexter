@@ -124,17 +124,35 @@ Plans:
   4. A write path distills roast-worthy facts on event/session-end triggers (NEVER per-message) with write-time near-duplicate dedup, gated by a sensitivity/PII filter, and never embeds numbers SQL already knows (play counts, streaks) — the accuracy firewall (MEM-04, MEM-05)
   5. Callback roasts inject retrieved memories as optional, backward-compatible "candidate ammo" the model may NOOP, while any hard numbers in the output come from live SQL; memory hygiene ships in-phase — a per-user cap (~150) and a decay/expiry sweep for low-salience facts keep the store bounded (MEM-06, MEM-07)
 
-**Plans**: TBD (~6, plus an opening validation spike)
-**Approach**: This is the flagship, research-backed phase (`.planning/research/SUMMARY.md`). It opens with a short **numeric-defaults validation spike** — the priors top-k=8, 0.70 similarity floor, 0.90 dedup threshold, ~150 per-user cap, 90-day decay, and rerank weights (relevance 1.0 / recency 0.5 / salience 0.7 / novelty 0.5) are MEDIUM-confidence tuned starting points to validate empirically against this bot's real scale and budget before retrieval lands. The suggested plan decomposition follows the research's 6 sub-phase dependency chain (schema → embedding → retrieval → write/distill → integration → hygiene). It stays **one** roadmap phase.
+**Plans**: 7 plans across 6 waves (strict dependency chain; integration ∥ hygiene run parallel at the end)
+**Approach**: This is the flagship, research-backed phase (`.planning/research/SUMMARY.md`). It opens with a short **numeric-defaults validation spike** (11-02) — the priors top-k=8, 0.70 similarity floor, 0.90 dedup threshold, ~150 per-user cap, 90-day decay, and rerank weights (relevance 1.0 / recency 0.5 / salience 0.7 / novelty 0.5) are MEDIUM-confidence tuned starting points to validate empirically against this bot's real scale and budget before retrieval lands. The decomposition follows the research's 6 sub-phase dependency chain (schema → embedding/retrieval → write/dedup → distill/gate → integration → hygiene), with the spike split out as its own plan so its decision checkpoint stays isolated from the foundation's pgvector-install checkpoint. It stays **one** roadmap phase.
 
 Plans:
 
-- [ ] 11-01: Foundation — `CREATE EXTENSION` + `user_memories` in `SCHEMA_SQL`, extension-first bootstrap connection + `init=_register_vector` on `create_pool`, shared 768-dim config constant; opens with the numeric-defaults validation spike (MEM-01)
-- [ ] 11-02: Embedding primitive + retrieval read path — `GeminiService.embed()` + separate `_embed_limiter`, `search_memories` scoped ANN, pure `MemoryFact` rerank/recency/novelty (TDD), `MemoryService.recall()` with 0.70 floor → rerank → top 1–3 (MEM-02, MEM-03)
-- [ ] 11-03: Write path + dedup — insert/bump/count/evict helpers, `MemoryService.remember()` (distill → embed → >0.90 dedup → insert/bump → cap guard), pure `dedup_decision` (MEM-04 partial)
-- [ ] 11-04: Distillation triggers + sensitivity/PII gate — hook `remember()` into event/session-end paths (repeat-song, milestone, late-night, auto-queue ignored-memory, daily batch), accuracy + sensitivity firewalls, never embed SQL-known numbers (MEM-04, MEM-05)
-- [ ] 11-05: Prompt injection + callback-roast integration (capstone) — backward-compatible `build_chat_prompt(memories=...)`, wire `recall()` into `/ask`, `/roast`, ambient roasts; candidate-ammo framing, hard numbers from live SQL (MEM-06)
-- [ ] 11-06: Hygiene & ops — `delete_expired_memories` decay sweep (~90d low-salience) as a daily background task, contradiction supersede; per-user cap eviction lands in 11-03 (MEM-07)
+**Wave 1**
+
+- [ ] 11-01-PLAN.md — Foundation: `CREATE EXTENSION` + `user_memories(vector(768))` in `SCHEMA_SQL`, extension-first bootstrap + `init=_register_vector`, Phase 11 config priors, stale `text-embedding-004` → `gemini-embedding-001` correction, Wave-0 test scaffold; pgvector install legitimacy gate (MEM-01) — Wave 1
+
+**Wave 2** *(blocked on 11-01)*
+
+- [ ] 11-02-PLAN.md — Numeric-defaults validation spike: embed a seed corpus + roast queries @ 768d, review similarity distributions, lock the retrieval constants into `config.py` (MEM-03) — Wave 2
+
+**Wave 3** *(blocked on 11-02)*
+
+- [ ] 11-03-PLAN.md — Embedding primitive + retrieval read path: `GeminiService.embed()` + separate `_embed_limiter`, `search_memories` scoped ANN, pure `MemoryFact` rerank/recency/novelty/floor (TDD), `MemoryService.recall()` with floor → rerank → top 1–3 (MEM-02, MEM-03) — Wave 3
+
+**Wave 4** *(blocked on 11-03)*
+
+- [ ] 11-04-PLAN.md — Write storage + dedup + cap: insert/bump/count/evict helpers, pure `dedup_decision`/`compute_salience`/`choose_eviction`, `MemoryService.remember()` (distilled-fact in → embed → dedup → insert/bump → cap-evict) (MEM-04, MEM-07) — Wave 4
+
+**Wave 5** *(blocked on 11-04)*
+
+- [ ] 11-05-PLAN.md — Distillation triggers + sensitivity/PII stop-ship gate + accuracy firewall: `DISTILL_PROMPT`, pure `is_sensitive`/`contains_number`, notable-event + daily-batch write hooks (D-09 two paths, never per-message; no voice-session-end D-10) (MEM-04, MEM-05) — Wave 5
+
+**Wave 6** *(blocked on 11-05; parallel — disjoint files)*
+
+- [ ] 11-06-PLAN.md — Prompt injection + callback-roast integration (capstone): backward-compatible `build_chat_prompt(memories=...)`, wire `recall()` into `/ask`, `/roast`, ambient + music roasts; candidate-ammo framing, the stat × episode payoff, numbers from live SQL (MEM-06) — Wave 6
+- [ ] 11-07-PLAN.md — Hygiene & ops: `delete_expired_memories` decay sweep as a daily background task + pure `decay_predicate` + `MemoryService.sweep()` (per-user cap eviction lands in 11-04) (MEM-07) — Wave 6
 
 ### Phase 12: Richer Music/UX
 
@@ -174,5 +192,5 @@ Plans:
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete    | 2026-06-27 |
-| 11. RAG Long-Term Memory | v1.2 | 0/6 | Not started | - |
+| 11. RAG Long-Term Memory | v1.2 | 0/7 | Not started | - |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |
