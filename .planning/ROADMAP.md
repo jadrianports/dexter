@@ -135,7 +135,7 @@ Plans:
 
 **Wave 2** *(blocked on 11-01)*
 
-- [ ] 11-02-PLAN.md — Numeric-defaults validation spike: embed a seed corpus + roast queries @ 768d, review similarity distributions, lock the retrieval constants into `config.py` (MEM-03) — Wave 2
+- [x] 11-02-PLAN.md — Numeric-defaults validation spike: embed a seed corpus + roast queries @ 768d, review similarity distributions, lock the retrieval constants into `config.py` (MEM-03) — Wave 2
 
 **Wave 3** *(blocked on 11-02)*
 
@@ -192,5 +192,5 @@ Plans:
 | 8. Social & Ops | v1.1 | 3/3 | Complete — verified live (08-HUMAN-UAT) | 2026-06-19 |
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete    | 2026-06-27 |
-| 11. RAG Long-Term Memory | v1.2 | 1/7 | In Progress|  |
+| 11. RAG Long-Term Memory | v1.2 | 2/7 | In Progress|  |
 | 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |

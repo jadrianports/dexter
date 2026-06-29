@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
 status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-06-29T08:36:47.164Z"
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-06-29T09:08:36.699Z"
 last_activity: 2026-06-29 -- Phase 11 execution started
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 15
-  completed_plans: 9
+  completed_plans: 10
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 ## Current Position
 
 Phase: 11 (rag-long-term-memory) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-06-29 -- Phase 11 execution started
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 09 P04 | 546 | 1 tasks | 2 files |
 | Phase 10 P01 | 30 | 3 tasks | 6 files |
 | Phase 10 P02 | 12 | 2 tasks | 4 files |
+| Phase 11 P02 | 17 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,9 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: D-02 true extraction: live cog dispatches on TrackEndAction enum — no duplicated/mirrored logic remains in callers
 - [Phase ?]: D-02 true extraction: logic/health.py is single source of truth for /health status decision and degraded-reason assembly
 - [Phase ?]: logic/health.py keyword-only primitives (D-07): pool_present, db_ok, gateway_ready, ready_done, musiccog_loaded passed from async glue to pure function (D-06 seam)
+- [Phase ?]: MEMORY_DEDUP_THRESHOLD raised 0.90→0.92: near-dup pairs 0.937/0.955, distinct max 0.79
+- [Phase ?]: MEMORY_SIMILARITY_FLOOR kept 0.70 (high-precision): gemini-embedding-001 compresses scores, strict floor over recall
+- [Phase ?]: EMBED_DIM=768 confirmed (keep-768): scoped cosine ANN sufficient — 11-03 uses vector(768), no migration
 
 ### Pending Todos
 
@@ -121,8 +125,8 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-29T08:36:47.145Z
-Stopped at: Phase 11 context gathered
+Last session: 2026-06-29T09:08:36.683Z
+Stopped at: Completed 11-02-PLAN.md
 Next:
 
   Plan the first v1.2 phase: `/gsd-plan-phase 9` (Reliability & Ops Hardening). Phase 11 (RAG) is
