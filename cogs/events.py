@@ -354,6 +354,7 @@ class EventsCog(commands.Cog):
                 channel_id=message.channel.id,
                 role="user",
                 author=message.author.display_name,
+                author_id=str(message.author.id),  # CR-02: real snowflake for distill-batch keying
                 content=message.content,
             )
 

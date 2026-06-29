@@ -843,33 +843,38 @@ async def memory_distill_batch() -> None:
         # Group messages by user so we generate a distilled fact per user, not
         # per channel — memory is per-user scoped (T-11-03a / user_id WHERE guard).
         # Build a per-user raw_text by concatenating their messages from the buffer.
-        user_texts: dict[str, tuple[str, list[str]]] = {}  # user_id → (display_name, [msgs])
+        #
+        # CR-02: key on the real Discord snowflake (msg["author_id"]), NEVER the
+        # display name. Display names are user-controllable; keying on them both
+        # makes the memory unrecallable (recall scopes on str(user.id)) and lets a
+        # user poison another user's memory scope by setting their nickname to a
+        # victim's Discord ID. The display name is still carried into raw_text purely
+        # as distiller context — it never becomes an owner key.
+        user_texts: dict[str, tuple[str, list[str]]] = {}  # user_id (snowflake) → (display_name, [msgs])
         for msg in history:
             if msg.get("role") != "user":
                 continue
-            # Buffer stores author as display_name (no user_id available here).
-            # Use author name as the key; memory will use author for user_id lookup
-            # which is imperfect but graceful — the fact is still distilled.
-            # NOTE: message_buffer stores display_name not Discord user_id.
-            # We use the author as a best-effort user identifier for the daily batch.
-            author = msg.get("author", "unknown")
+            user_id = msg.get("author_id")
+            if not user_id or not user_id.isdigit():
+                continue  # never accept a non-snowflake (or missing id) as an owner key
+            display_name = msg.get("author", "someone")
             content = msg.get("content", "")
             if content:
-                if author not in user_texts:
-                    user_texts[author] = (author, [])
-                user_texts[author][1].append(content)
+                if user_id not in user_texts:
+                    user_texts[user_id] = (display_name, [])
+                user_texts[user_id][1].append(content)
 
-        for author, (display_name, messages) in user_texts.items():
+        for user_id, (display_name, messages) in user_texts.items():
             if not messages:
                 continue
             # Batch the user's messages into a single context string for the distiller.
             raw_text = f"{display_name} said in chat: " + " | ".join(messages[-5:])  # last 5 msgs
             try:
-                # Fire a single batched priority-2 distill call per user per channel.
-                # Use display_name as user_id for daily-batch — this is best-effort;
-                # the distilled fact is still valuable even without a perfect user_id.
+                # Fire a single batched priority-2 distill call per user per channel,
+                # keyed on the real Discord snowflake so the fact is recallable and
+                # scoped to its true owner (CR-02).
                 await memory_service.distill_and_remember(
-                    user_id=author,
+                    user_id=user_id,
                     guild_id=None,  # channel_id doesn't map to guild_id in message_buffer
                     raw_text=raw_text,
                     kind="daily_batch",
@@ -877,8 +882,8 @@ async def memory_distill_batch() -> None:
                 )
             except Exception as exc:
                 log.debug(
-                    "memory_distill_batch: error for author=%s channel=%d: %s",
-                    author, channel_id, exc,
+                    "memory_distill_batch: error for user=%s channel=%d: %s",
+                    user_id, channel_id, exc,
                 )
 
     log.info("memory_distill_batch: batch pass complete")

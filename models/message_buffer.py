@@ -25,11 +25,23 @@ class MessageBuffer:
             self._buffers.pop(ch, None)
             self._last_seen.pop(ch, None)
 
-    def add(self, channel_id: int, role: str, author: str, content: str) -> None:
+    def add(
+        self,
+        channel_id: int,
+        role: str,
+        author: str,
+        content: str,
+        author_id: str | None = None,
+    ) -> None:
         """Add a message to the channel's buffer.
 
         Evicts idle channels (not seen within MESSAGE_BUFFER_TTL_HOURS) before
         adding, bounding memory growth across many guilds (SCALE-01).
+
+        ``author_id`` carries the real Discord snowflake (str(user.id)) so the
+        daily distill-batch can key memories on a stable, non-user-controllable
+        identifier rather than the mutable display name (CR-02). Defaults to None
+        for model messages and any caller that has no user id to record.
         """
         self._evict_stale()
         self._last_seen[channel_id] = datetime.now()
@@ -39,6 +51,7 @@ class MessageBuffer:
             {
                 "role": role,
                 "author": author,
+                "author_id": author_id,
                 "content": content,
                 "timestamp": datetime.now(),
             }
