@@ -91,6 +91,67 @@ class TestDexterSystemPromptStructure:
             )
 
 
+class TestBuildChatPromptMemories:
+    """Tests for the memories= kwarg (Phase 11 / MEM-06)."""
+
+    def test_memories_none_byte_identical(self):
+        """memories=None must produce byte-identical output to omitting the arg entirely."""
+        without_arg = build_chat_prompt("normal", "top: drake", "It is December.")
+        with_none = build_chat_prompt("normal", "top: drake", "It is December.", memories=None)
+        assert without_arg == with_none, (
+            "memories=None changed the output — byte-identity broken (T-11-06d)"
+        )
+
+    def test_memories_empty_list_byte_identical(self):
+        """memories=[] (falsy) must also produce byte-identical output."""
+        without_arg = build_chat_prompt("normal", "top: drake", "It is December.")
+        with_empty = build_chat_prompt("normal", "top: drake", "It is December.", memories=[])
+        assert without_arg == with_empty, (
+            "memories=[] changed the output — byte-identity broken"
+        )
+
+    def test_memory_block_rendered_fact_present(self):
+        """memories=[...] must include the fact text in the rendered prompt."""
+        result = build_chat_prompt(
+            "normal", "top: drake", "",
+            memories=["swore he was done with the killers"],
+        )
+        assert "killers" in result, "Memory fact not rendered in prompt"
+
+    def test_memory_block_rendered_user_context_anchor(self):
+        """Numbers-from-SQL instruction must reference USER CONTEXT (T-11-06b)."""
+        result = build_chat_prompt(
+            "normal", "top: drake", "",
+            memories=["swore he was done with the killers"],
+        )
+        assert "USER CONTEXT" in result, (
+            "USER CONTEXT accuracy anchor missing from memory block"
+        )
+
+    def test_memory_block_rendered_never_instruction(self):
+        """The 'never from memories' accuracy firewall must be present (D-06)."""
+        result = build_chat_prompt(
+            "normal", "top: drake", "",
+            memories=["swore he was done with the killers"],
+        )
+        assert "never" in result.lower(), (
+            "'never from memories' accuracy instruction missing"
+        )
+
+    def test_memories_none_no_triple_newline(self):
+        """memories=None with non-empty seasonal must not produce triple-newlines."""
+        result = build_chat_prompt("normal", None, "It is December.", memories=None)
+        assert "\n\n\n" not in result, "Triple-newline artifact with memories=None"
+
+    def test_memories_block_no_triple_newline(self):
+        """memories=[...] with non-empty seasonal must not produce triple-newlines."""
+        result = build_chat_prompt(
+            "normal", None, "It is December.",
+            memories=["swore he was done with the killers"],
+        )
+        assert "\n\n\n" not in result, "Triple-newline artifact with memories block"
+
+
 class TestBuildRecommendationPrompt:
     def test_includes_song_list(self):
         songs = [
