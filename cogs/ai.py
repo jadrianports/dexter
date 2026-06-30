@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import random
 import re
@@ -38,6 +37,7 @@ from personality.seasonal import get_seasonal_context
 from services.gemini import GeminiRateLimitError, GeminiAPIError
 from services.lyrics import build_genius_search_query
 from utils.logger import log
+from utils.tasks import make_task
 
 
 def parse_suggestions(response: str) -> list[dict] | None:
@@ -416,7 +416,11 @@ class AICog(commands.Cog):
                             "the recommendations were not to the server's taste"
                         )
                         for _member in voice_members:
-                            asyncio.create_task(
+                            # Route through make_task so the event loop retains a
+                            # strong reference (bare create_task can be GC'd mid-flight,
+                            # silently dropping the memory write) and any exception is
+                            # surfaced rather than swallowed (WR-04).
+                            make_task(
                                 _memory_svc.distill_and_remember(
                                     user_id=str(_member.id),
                                     guild_id=str(guild.id),
@@ -425,7 +429,9 @@ class AICog(commands.Cog):
                                     base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS[
                                         "auto_queue_ignored"
                                     ],
-                                )
+                                ),
+                                name="auto-queue-memory",
+                                bot=self.bot,
                             )
 
             log.info("auto-queue: queued %d track(s) for guild %d (round %d)",
