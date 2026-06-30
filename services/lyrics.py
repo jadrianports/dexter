@@ -383,6 +383,12 @@ class LyricsService:
                         log.warning("LRCLIB response too large (%d bytes)", len(raw))
                         return None
                     results = json.loads(raw)
+                    # LRCLIB's success shape is an array; a bare object/string/number
+                    # (e.g. an error body) would otherwise iterate dict keys / chars and
+                    # AttributeError on item.get(...), masked as a silent miss (WR-05).
+                    if not isinstance(results, list):
+                        log.warning("LRCLIB returned non-list payload for %s / %s", title, artist)
+                        return None
                     for item in results:
                         # Skip instrumental tracks (no vocals; plainLyrics is typically null)
                         if item.get("instrumental"):
