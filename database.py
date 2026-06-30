@@ -179,6 +179,17 @@ CREATE TABLE IF NOT EXISTS resolution_cache (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rescache_expires ON resolution_cache(expires_at);
+
+CREATE TABLE IF NOT EXISTS guild_jams (
+    guild_id   TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    snapshot   JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (guild_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_jams_guild ON guild_jams(guild_id, updated_at DESC);
 """
 
 
@@ -762,6 +773,120 @@ async def count_playlists(pool: asyncpg.Pool, *, user_id: str) -> int:
         row = await conn.fetchrow(
             "SELECT COUNT(*) AS cnt FROM user_playlists WHERE user_id = $1",
             user_id,
+        )
+    return int(row["cnt"]) if row else 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 12: Guild jams helpers (UX-01, D-01..D-05, T-12-01-01/02)
+# ---------------------------------------------------------------------------
+
+
+async def save_jam(
+    pool: asyncpg.Pool,
+    *,
+    guild_id: str,
+    name: str,
+    snapshot: list[dict],
+) -> None:
+    """Upsert a named jam snapshot for (guild_id, name).
+
+    First save inserts; re-saving the same name overwrites the snapshot and
+    bumps updated_at (D-05). The snapshot list is serialised via json.dumps
+    and stored as JSONB — all values flow through $N params (T-12-01-01).
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO guild_jams (guild_id, name, snapshot, created_at, updated_at)"
+            " VALUES ($1, $2, $3::jsonb, now(), now())"
+            " ON CONFLICT (guild_id, name)"
+            " DO UPDATE SET snapshot = EXCLUDED.snapshot, updated_at = now()",
+            guild_id, name, json.dumps(snapshot),
+        )
+
+
+async def get_jam(
+    pool: asyncpg.Pool,
+    *,
+    guild_id: str,
+    name: str,
+) -> list[dict] | None:
+    """Return the snapshot list for (guild_id, name), or None if not found.
+
+    asyncpg may return JSONB columns as a dict/list directly or as a JSON
+    string depending on the driver version and server type-OID registration.
+    We normalise via json.loads when the value is a str (T-12-01-01 / D-01).
+
+    Cross-guild isolation (T-12-01-02): keyed on guild_id so guild-A jams
+    are never visible to guild-B queries.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT snapshot FROM guild_jams WHERE guild_id = $1 AND name = $2",
+            guild_id, name,
+        )
+    if row is None:
+        return None
+    payload = row["snapshot"]
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    return list(payload)
+
+
+async def list_jams(
+    pool: asyncpg.Pool,
+    *,
+    guild_id: str,
+) -> list[dict]:
+    """Return the guild's jams as metadata rows, newest-updated-first (D-02).
+
+    Each dict has: name (str), track_count (int), updated_at (datetime).
+    Cross-guild isolation (T-12-01-02): WHERE guild_id = $1.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT name,"
+            "       jsonb_array_length(snapshot) AS track_count,"
+            "       updated_at"
+            " FROM guild_jams"
+            " WHERE guild_id = $1"
+            " ORDER BY updated_at DESC",
+            guild_id,
+        )
+    return [dict(row) for row in rows]
+
+
+async def delete_jam(
+    pool: asyncpg.Pool,
+    *,
+    guild_id: str,
+    name: str,
+) -> bool:
+    """Delete (guild_id, name) from guild_jams.
+
+    Returns True if a row was deleted, False if no matching row existed (D-05).
+    Cross-guild isolation (T-12-01-02): guild_id in WHERE prevents cross-guild
+    deletion. Anyone in the guild may delete (D-03 — no ownership gate).
+    """
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM guild_jams WHERE guild_id = $1 AND name = $2",
+            guild_id, name,
+        )
+    # asyncpg execute() returns a status string like "DELETE 1" or "DELETE 0";
+    # parse the trailing affected-row count rather than a fragile suffix match.
+    return result.rsplit(" ", 1)[-1] != "0"
+
+
+async def count_jams(pool: asyncpg.Pool, *, guild_id: str) -> int:
+    """Return the number of named jams saved for guild_id (for cap checks, D-05).
+
+    Cross-guild isolation (T-12-01-02): WHERE guild_id = $1.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS cnt FROM guild_jams WHERE guild_id = $1",
+            guild_id,
         )
     return int(row["cnt"]) if row else 0
 

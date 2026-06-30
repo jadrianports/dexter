@@ -139,6 +139,13 @@ PERF_ROLLING_WINDOW = 50            # rolling aggregate sample count (D-18)
 LEADERBOARD_TOP_N = 5               # top-N per leaderboard section (D-13)
 
 
+# --- Phase 12: Richer Music/UX ---
+JAMS_PER_GUILD_MAX = 25             # per-guild jam cap (mirrors PLAYLISTS_MAX_PER_USER, D-05)
+SKIP_STATS_MIN_PLAYS = 5            # min data points before showing skip rate (D-08)
+AUTO_QUEUE_SEARCH_CANDIDATES = 3    # YouTube candidates per auto-queue suggestion (D-13)
+# Note: reuse PLAYLIST_NAME_MAX_LENGTH (60) for jam names — no new knob needed (D-05)
+
+
 # --- Phase 9: Reliability & Ops Hardening ---
 HEALTH_STRICT_STATUS: bool = os.getenv("HEALTH_STRICT_STATUS", "true").lower() != "false"  # D-01: 503 when degraded (strict) vs legacy 200
 DB_COMMAND_TIMEOUT_SECONDS: int = 30        # D-07: replaces hardcoded 30 in bot.py create_pool
