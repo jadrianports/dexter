@@ -305,7 +305,17 @@ class LibraryCog(commands.Cog):
         user_channel = interaction.user.voice.channel  # type: ignore[union-attr]
         voice_client = guild.voice_client
         if voice_client is None:
-            voice_client = await user_channel.connect()
+            try:
+                voice_client = await user_channel.connect()
+            except Exception as exc:
+                # Guard the connect (permissions / already-connecting race / region
+                # failure) so the deferred-ephemeral interaction gets a real error
+                # rather than a permanent "thinking…" (WR-03).
+                log.warning("favorites: connect failed: %s", exc)
+                await interaction.followup.send(
+                    "couldn't join your voice channel. try again.", ephemeral=True
+                )
+                return
 
         # Add to queue (cap enforced in MusicQueue.add)
         try:
@@ -592,7 +602,13 @@ class LibraryCog(commands.Cog):
                 try:
                     voice_client = await user_channel.connect()
                 except Exception as exc:
+                    # Stop here on connect failure instead of falling through to
+                    # _play_track with no voice client connected (WR-03).
                     log.warning("playlist load: connect failed: %s", exc)
+                    await interaction.followup.send(
+                        "couldn't join your voice channel. try again.", ephemeral=True
+                    )
+                    return
 
             queue.current_index = len(queue.tracks) - added  # first newly added track
             queue._text_channel_id = interaction.channel.id
@@ -920,7 +936,13 @@ class LibraryCog(commands.Cog):
                 try:
                     voice_client = await user_channel.connect()
                 except Exception as exc:
+                    # Stop here on connect failure instead of falling through to
+                    # _play_track with no voice client connected (WR-03).
                     log.warning("jam load: connect failed: %s", exc)
+                    await interaction.followup.send(
+                        "couldn't join your voice channel. try again.", ephemeral=True
+                    )
+                    return
 
             queue.current_index = len(queue.tracks) - added  # first newly added track
             queue._text_channel_id = interaction.channel.id
