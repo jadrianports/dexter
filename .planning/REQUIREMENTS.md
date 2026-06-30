@@ -44,7 +44,7 @@ the others derive from the v1.2 codebase-analysis pass.
 ### Richer Music / UX (Phase 12)
 
 - [x] **UX-01**: Favorites/playlists can be scoped per-server (a guild's "jams" are distinct from a user's global favorites)
-- [ ] **UX-02**: Skip-rate analytics are surfaced to users (the tracked skip data becomes visible, e.g. via `/stats` or a dedicated view)
+- [x] **UX-02**: Skip-rate analytics are surfaced to users (the tracked skip data becomes visible, e.g. via `/stats` or a dedicated view)
 - [ ] **UX-03**: A third lyrics fallback exists for when both Genius and AZLyrics fail, so `/lyrics` degrades gracefully
 - [ ] **UX-04**: AI auto-queue validates Gemini's suggestions against actual YouTube results before queueing, rejecting hallucinated tracks
 
@@ -104,7 +104,7 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 | MEM-06 | Phase 11 | Complete |
 | MEM-07 | Phase 11 | Complete |
 | UX-01 | Phase 12 | Complete |
-| UX-02 | Phase 12 | Pending |
+| UX-02 | Phase 12 | Complete |
 | UX-03 | Phase 12 | Pending |
 | UX-04 | Phase 12 | Pending |
 
