@@ -174,7 +174,7 @@ Plans:
 
 - [x] 12-01-PLAN.md — Per-server shared playlists (`/jam` group + `guild_jams` table), distinct from global favorites (UX-01) — Wave 1
 - [x] 12-02-PLAN.md — Surface skip-rate analytics via a dedicated `/skips` command (UX-02) — Wave 1
-- [ ] 12-03-PLAN.md — Third lyrics fallback (LRCLIB) for graceful `/lyrics` degradation (UX-03) — Wave 1
+- [x] 12-03-PLAN.md — Third lyrics fallback (LRCLIB) for graceful `/lyrics` degradation (UX-03) — Wave 1
 - [ ] 12-04-PLAN.md — Auto-queue hallucination validation against real YouTube results (UX-04) — Wave 1
 
 ## Progress
