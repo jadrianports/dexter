@@ -613,22 +613,22 @@ def compute_skip_rate(
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`/jam` group location: extend `LibraryCog` vs new `JamCog`?**
    - What we know: `/playlist` and `/favorite` live in `cogs/library.py`; adding `/jam` there keeps "library" commands together but makes `library.py` longer
    - What's unclear: Whether the planner prefers thin cog files or command-grouping by concept
-   - Recommendation: Add to `LibraryCog` (same file) — mirrors how `/playlist` and `/favorite` coexist; avoids a new `bot.add_cog()` registration
+   - **RESOLVED:** Add to `LibraryCog` (same file) — mirrors how `/playlist` and `/favorite` coexist; avoids a new `bot.add_cog()` registration. Adopted in 12-01.
 
 2. **`/jam add` — append single track vs snapshot entire queue?**
    - What we know: D-04 says `/jam add` appends the now-playing song (singular) vs `/jam save` which appears to snapshot the queue (like `/playlist save`)
    - What's unclear: Whether `/jam save` = snapshot current queue (like `/playlist save`) or something else
-   - Recommendation: Implement both: `/jam save <name>` snapshots the queue (like `/playlist save`), `/jam add <name>` appends the now-playing track only. This matches the "server mixtape that grows over time" framing from CONTEXT.md Specific Ideas.
+   - **RESOLVED:** Implement both: `/jam save <name>` snapshots the queue (like `/playlist save`), `/jam add <name>` appends the now-playing track only. This matches the "server mixtape that grows over time" framing from CONTEXT.md Specific Ideas. Adopted in 12-01.
 
 3. **Does `get_leaderboard_skips` in `cogs/ops.py` already pass `config.LEADERBOARD_TOP_N` or should `/skips` use a different limit?**
    - What we know: `get_leaderboard_skips(pool, guild_id)` uses `LIMIT $2` with `config.LEADERBOARD_TOP_N = 5`
    - What's unclear: Whether the `/skips` embed should show top-5 or a different number
-   - Recommendation: Reuse `LEADERBOARD_TOP_N = 5` for consistency — same embed style as `/leaderboard`
+   - **RESOLVED:** Reuse `LEADERBOARD_TOP_N = 5` for consistency — same embed style as `/leaderboard`. Adopted in 12-02.
 
 ---
 
