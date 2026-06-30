@@ -377,13 +377,17 @@ class AICog(commands.Cog):
             # silent. The voice client is the only ground truth for "audio is flowing"
             # (scar #2 / CLAUDE.md Phase 6-8 gotcha; now locked by should_start_playback).
             voice_client = guild.voice_client
-            queue.current_index = len(queue.tracks) - len(tracks_added)
             if should_start_playback(
                 connected=voice_client is not None,
                 voice_is_playing=voice_client.is_playing() if voice_client else False,
                 voice_is_paused=voice_client.is_paused() if voice_client else False,
-                has_track=queue.get_current() is not None,
+                has_track=len(queue.tracks) > 0,
             ):
+                # Only move the queue pointer onto the first newly-appended track on
+                # the branch that actually starts playback. Mutating it unconditionally
+                # (when audio is already flowing) desyncs the pointer from the live
+                # player and makes _on_track_end skip tracks (WR-01).
+                queue.current_index = len(queue.tracks) - len(tracks_added)
                 await music_cog._play_track(guild, queue.get_current())
 
             channel = self._get_text_channel(guild)
