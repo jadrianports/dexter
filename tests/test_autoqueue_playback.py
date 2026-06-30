@@ -142,3 +142,45 @@ async def test_autoqueue_does_not_double_play_when_audio_already_flowing():
     # Tracks still queued, but no playback start (something is already playing).
     assert len(queue.tracks) == 3
     music_cog._play_track.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_autoqueue_falls_through_when_first_suggestion_candidates_all_rejected():
+    """D-14 fall-through, driven through the REAL try_auto_queue (WR-06).
+
+    The first suggestion's YouTube candidates all fail validate_youtube_match, so
+    the loop must `continue` to the second suggestion and fill the slot from it —
+    not bail after the first. This drives the shipped loop in cogs/ai.py end to
+    end (validate_youtube_match runs for real), unlike the hand-copied loop body
+    in test_autoqueue_validate.py which would stay green if the real `continue`
+    on `validated is None` ever regressed.
+    """
+    cog, guild, queue, music_cog = _make_env(queue_is_playing=True, vc_is_playing=False)
+
+    # First suggestion ("Rec new1"): every candidate title is unrelated, so all
+    # fail token-containment validation. Second suggestion ("Rec new2"): one
+    # matching candidate that passes.
+    cog.bot.youtube_service.async_search = AsyncMock(side_effect=[
+        [
+            {"url": "https://youtu.be/bad1", "title": "Completely Different Track"},
+            {"url": "https://youtu.be/bad2", "title": "Another Unrelated Thing"},
+        ],
+        [{"url": "https://youtu.be/new2", "title": "Rec Artist - Rec new2"}],
+    ])
+    # async_extract is reached ONLY for the validated second suggestion.
+    cog.bot.youtube_service.async_extract = AsyncMock(side_effect=[_extract_data("new2")])
+
+    with _patches()[0], _patches()[1], _patches()[2], _patches()[3], _patches()[4]:
+        await cog.try_auto_queue(guild)
+
+    # Both suggestions were searched — the first fell through rather than aborting.
+    assert cog.bot.youtube_service.async_search.await_count == 2
+    # Extract ran exactly once: only the suggestion that passed validation.
+    cog.bot.youtube_service.async_extract.assert_awaited_once()
+    # Exactly one new track was appended (after the pre-existing one), and it came
+    # from the SECOND suggestion — the first contributed nothing.
+    assert len(queue.tracks) == 2
+    assert queue.tracks[1].video_id == "new2"
+    # Playback started on the fall-through track.
+    music_cog._play_track.assert_awaited_once()
+    assert queue.current_index == 1
