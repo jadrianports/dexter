@@ -166,14 +166,16 @@ Plans:
   3. `/lyrics` degrades gracefully through a third fallback source when both Genius and AZLyrics fail (UX-03)
   4. AI auto-queue validates Gemini's suggestions against actual YouTube results and rejects hallucinated tracks before queueing (UX-04)
 
-**Plans**: TBD (~4)
+**Plans**: 4 plans (all Wave 1 — independent features; shared edits to database.py + config.py are append-only)
 
 Plans:
 
-- [ ] 12-01: Per-server scoped playlists, distinct from global favorites (UX-01)
-- [ ] 12-02: Surface skip-rate analytics to users (UX-02)
-- [ ] 12-03: Third lyrics fallback source for graceful `/lyrics` degradation (UX-03)
-- [ ] 12-04: Auto-queue hallucination validation against real YouTube results (UX-04)
+**Wave 1** *(parallel — each plan owns its feature; database.py + config.py touches are additive, non-conflicting)*
+
+- [ ] 12-01-PLAN.md — Per-server shared playlists (`/jam` group + `guild_jams` table), distinct from global favorites (UX-01) — Wave 1
+- [ ] 12-02-PLAN.md — Surface skip-rate analytics via a dedicated `/skips` command (UX-02) — Wave 1
+- [ ] 12-03-PLAN.md — Third lyrics fallback (LRCLIB) for graceful `/lyrics` degradation (UX-03) — Wave 1
+- [ ] 12-04-PLAN.md — Auto-queue hallucination validation against real YouTube results (UX-04) — Wave 1
 
 ## Progress
 
