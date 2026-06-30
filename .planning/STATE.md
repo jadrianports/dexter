@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
-status: executing
-stopped_at: Phase 12 Plan 03 complete
-last_updated: "2026-06-30T10:48:51.000Z"
+status: verifying
+stopped_at: Phase 12 Plan 04 complete (auto-queue hallucination validation)
+last_updated: "2026-06-30T11:01:59.365Z"
 last_activity: 2026-06-30 -- Phase 12 Plan 03 (LRCLIB fallback) complete
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 19
-  completed_plans: 18
-  percent: 79
+  completed_plans: 19
+  percent: 100
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 Phase: 12 (richer-music-ux) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-30 -- Phase 12 Plan 03 (LRCLIB fallback) complete
 
 Progress: [███████░░░] 79%
@@ -66,6 +66,7 @@ Progress: [███████░░░] 79%
 | Phase 11 P07 | 28 | 3 tasks | 7 files |
 | Phase 12 P02 | 80 | 2 tasks | 6 files |
 | Phase 12 P03 | 300 | 2 tasks | 2 files |
+| Phase 12-richer-music-ux P04 | 408 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,7 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: distinct from ytdlp_update (04:00) and memory_distill_batch (03:00) to avoid thundering-herd on Neon pool
 - [Phase 12 P03]: Use /api/search (not /api/get) for LRCLIB — robust to missing duration; returns relevance-sorted array (Pitfall 2)
 - [Phase 12 P03]: strip_lrc_headers runs BEFORE sanitize_lyrics — sanitize only handles HTML/@mentions, not LRC metadata lines (Pitfall 1 / T-12-03-04)
+- [Phase ?]: Token-set containment over difflib for auto-queue validation (UX-04): YouTube titles are longer than clean names; subset check is semantically correct (D-12)
 
 ### Pending Todos
 
@@ -144,6 +146,6 @@ Carried-forward engineering items (fixed in code; live gate only):
 
 ## Session Continuity
 
-Last session: 2026-06-30T10:48:51.000Z
-Stopped at: Phase 12 Plan 03 complete (LRCLIB third lyrics fallback)
+Last session: 2026-06-30T11:01:59.358Z
+Stopped at: Phase 12 Plan 04 complete (auto-queue hallucination validation)
 Next: Execute Phase 12 Plan 04 (auto-queue hallucination validation)

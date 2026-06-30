@@ -46,7 +46,7 @@ the others derive from the v1.2 codebase-analysis pass.
 - [x] **UX-01**: Favorites/playlists can be scoped per-server (a guild's "jams" are distinct from a user's global favorites)
 - [x] **UX-02**: Skip-rate analytics are surfaced to users (the tracked skip data becomes visible, e.g. via `/stats` or a dedicated view)
 - [ ] **UX-03**: A third lyrics fallback exists for when both Genius and AZLyrics fail, so `/lyrics` degrades gracefully
-- [ ] **UX-04**: AI auto-queue validates Gemini's suggestions against actual YouTube results before queueing, rejecting hallucinated tracks
+- [x] **UX-04**: AI auto-queue validates Gemini's suggestions against actual YouTube results before queueing, rejecting hallucinated tracks
 
 ## Future Requirements (v1.3+)
 
@@ -106,7 +106,7 @@ Confirmed by the v1.2 roadmap (`.planning/ROADMAP.md`, Phases 9–12).
 | UX-01 | Phase 12 | Complete |
 | UX-02 | Phase 12 | Complete |
 | UX-03 | Phase 12 | Pending |
-| UX-04 | Phase 12 | Pending |
+| UX-04 | Phase 12 | Complete |
 
 **Coverage:**
 

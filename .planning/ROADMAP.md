@@ -50,7 +50,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 9: Reliability & Ops Hardening** — truthful `/health`, fire-and-forget failure logging, sync-hang guards, DB query timeouts, search/extract self-heal (completed 2026-06-26)
 - [x] **Phase 10: Critical-Path Test Coverage** — extract + unit-test MusicCog playback, OpsCog/health metrics, EventsCog ambient-roast logic (completed 2026-06-26)
 - [x] **Phase 11: RAG Long-Term Memory** — `pgvector` on Neon + Gemini embeddings → durable distilled memory and callback roasts; zero new infra (completed 2026-06-29)
-- [ ] **Phase 12: Richer Music/UX** — per-server playlists, skip-rate analytics, third lyrics fallback, auto-queue hallucination validation
+- [x] **Phase 12: Richer Music/UX** — per-server playlists, skip-rate analytics, third lyrics fallback, auto-queue hallucination validation (completed 2026-06-30)
 
 ## Phase Details
 
@@ -175,7 +175,7 @@ Plans:
 - [x] 12-01-PLAN.md — Per-server shared playlists (`/jam` group + `guild_jams` table), distinct from global favorites (UX-01) — Wave 1
 - [x] 12-02-PLAN.md — Surface skip-rate analytics via a dedicated `/skips` command (UX-02) — Wave 1
 - [x] 12-03-PLAN.md — Third lyrics fallback (LRCLIB) for graceful `/lyrics` degradation (UX-03) — Wave 1
-- [ ] 12-04-PLAN.md — Auto-queue hallucination validation against real YouTube results (UX-04) — Wave 1
+- [x] 12-04-PLAN.md — Auto-queue hallucination validation against real YouTube results (UX-04) — Wave 1
 
 ## Progress
 
@@ -195,4 +195,4 @@ Plans:
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete    | 2026-06-27 |
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete    | 2026-06-29 |
-| 12. Richer Music/UX | v1.2 | 2/4 | In Progress|  |
+| 12. Richer Music/UX | v1.2 | 4/4 | Complete   | 2026-06-30 |
