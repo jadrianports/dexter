@@ -1219,3 +1219,27 @@ async def set_resolution_cache(
             "  expires_at = EXCLUDED.expires_at",
             query_key, video_id, title, expires,
         )
+
+
+async def get_user_skip_rate(
+    pool: asyncpg.Pool, *, guild_id: str, user_id: str
+) -> asyncpg.Record | None:
+    """Return an asyncpg Record with total_plays and total_skips for a user in a guild.
+
+    Aggregate is all-time (no date filter, D-09) and scoped to BOTH guild_id ($1)
+    and user_id ($2) — preventing cross-guild and cross-user data leakage (Pitfall 6
+    / T-12-02-01). fetchrow always returns a row for COUNT(*) even when no matching
+    rows exist (both counters = 0), so callers can safely treat None as 0 plays.
+
+    The min-plays floor (D-08) is applied by logic.skip_stats.compute_skip_rate in
+    the caller — never here in SQL.
+    All values bound as $1/$2 positional params — no string interpolation (T-12-02-03).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT COUNT(*) AS total_plays,"
+            " COUNT(*) FILTER (WHERE was_skipped = true) AS total_skips"
+            " FROM song_history"
+            " WHERE guild_id = $1 AND user_id = $2",
+            guild_id, user_id,
+        )

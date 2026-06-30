@@ -39,7 +39,9 @@ from database import (
     get_leaderboard_streaks,
     get_daily_stats_row,
     get_images_today_global,
+    get_user_skip_rate,
 )
+from logic.skip_stats import compute_skip_rate
 from utils import embeds
 from utils.logger import log
 
@@ -187,6 +189,61 @@ class OpsCog(commands.Cog):
             return
 
         embed = embeds.leaderboard_embed(songs_rows, skips_rows, streaks_rows)
+        await interaction.followup.send(embed=embed)
+
+    # ---- /skips -------------------------------------------------------------
+
+    @app_commands.command(
+        name="skips",
+        description="Show this server's most-skipped songs and your personal skip rate",
+    )
+    async def skips(self, interaction: discord.Interaction) -> None:
+        """/skips — public embed: server most-skipped songs + personal skip-rate footer (UX-02).
+
+        Surfaces the skip data Dexter already tracks (D-06: own embed, NOT folded into
+        /stats). Personal rate is all-time, guild-scoped, and floor-gated so a 1/1
+        never shows as 100% (D-07/D-08/D-09). Defers publicly — embed is not private.
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        # Defer publicly — skips embed is public like /leaderboard (D-07)
+        await interaction.response.defer()
+
+        guild_id = str(guild.id)  # T-12-02-02: str cast, passed as $N param
+        user_id = str(interaction.user.id)
+
+        try:
+            skips_rows = await get_leaderboard_skips(self.pool, guild_id=guild_id)
+            rate_row = await get_user_skip_rate(
+                self.pool, guild_id=guild_id, user_id=user_id
+            )
+        except asyncio.TimeoutError:
+            # REL-05 / T-09-02: static message — never interpolate exc, SQL, or DSN
+            log.warning("/skips DB timeout")
+            await interaction.followup.send(
+                "database is being slow. try again in a bit.", ephemeral=True
+            )
+            return
+        except Exception as exc:
+            log.error("/skips DB error: %s", exc)
+            await interaction.followup.send(
+                "couldn't load skip stats right now. try again in a bit.",
+                ephemeral=True,
+            )
+            return
+
+        # Apply min-plays floor via pure logic (D-08 / T-12-02-04).
+        # Treat a missing row (None) the same as 0 plays — no data means below floor.
+        total_plays = int(rate_row["total_plays"]) if rate_row else 0
+        total_skips = int(rate_row["total_skips"]) if rate_row else 0
+        rate = compute_skip_rate(total_plays, total_skips, config.SKIP_STATS_MIN_PLAYS)
+
+        embed = embeds.skips_embed(skips_rows, rate)
         await interaction.followup.send(embed=embed)
 
     # ---- /stats -------------------------------------------------------------

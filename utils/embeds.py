@@ -11,6 +11,8 @@ from personality.responses import (
     LEADERBOARD_STREAK_COMMENTARY,
     LEADERBOARD_SKIPS_COMMENTARY,
     LEADERBOARD_EMPTY,
+    SKIPS_RATE_ROASTS,
+    SKIPS_NOT_ENOUGH_DATA,
 )
 from utils.formatters import format_duration, progress_bar
 
@@ -200,6 +202,54 @@ def leaderboard_embed(
             value="nobody's skipped enough to make the board. yet.",
             inline=False,
         )
+
+    return embed
+
+
+def skips_embed(
+    skips_rows: list,
+    skip_rate: float | None,
+) -> discord.Embed:
+    """Build the /skips embed: server most-skipped songs + personal roast footer (UX-02).
+
+    Lead section: per-guild most-skipped song titles from get_leaderboard_skips
+    (song — N skips). If no rows, a personality empty-state line.
+    Footer: personal skip rate roast when skip_rate is not None (floor-gated, D-08);
+    a 'not enough data' line otherwise.
+
+    skip_rate is a float in [0.0, 1.0] or None. Values are rendered as a rounded
+    integer percentage (e.g. 0.3 → "30%"). One emoji max, Dexter's voice.
+    """
+    embed = discord.Embed(title="skips", color=COLOR_LEADERBOARD)
+
+    # Server most-skipped songs
+    if skips_rows:
+        lines = [
+            f"{i + 1}. {r['title']} — {r['skip_count']} skips"
+            for i, r in enumerate(skips_rows)
+        ]
+        commentary = pick_random(LEADERBOARD_SKIPS_COMMENTARY)
+        embed.add_field(
+            name="most-skipped songs",
+            value="\n".join(lines) + f"\n\n{commentary}",
+            inline=False,
+        )
+    else:
+        embed.add_field(
+            name="most-skipped songs",
+            value="nobody's skipped anything yet. suspicious.",
+            inline=False,
+        )
+
+    # Personal skip rate footer (D-08: gated by min-plays floor in the caller)
+    if skip_rate is None:
+        footer_text = pick_random(SKIPS_NOT_ENOUGH_DATA)
+    else:
+        pct = round(skip_rate * 100)
+        template = pick_random(SKIPS_RATE_ROASTS)
+        footer_text = template.format(pct=pct)
+
+    embed.set_footer(text=footer_text)
 
     return embed
 

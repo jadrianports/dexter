@@ -171,3 +171,19 @@ LEADERBOARD_EMPTY: list[str] = [
     "nobody's done anything worth ranking yet.",
     "new server energy. nobody's committed to anything yet.",
 ]
+
+# --- Phase 12: /skips personal footer roasts (UX-02) ---
+# Templates expect one positional arg: the integer skip percentage (0-100).
+
+SKIPS_RATE_ROASTS: list[str] = [
+    "you skip {pct}% of what you queue. bold of you to keep going.",
+    "you've skipped {pct}% of your own songs. commitment issues noted.",
+    "{pct}% skip rate. you and the queue clearly don't agree on anything.",
+    "you queue songs and then skip {pct}% of them. make it make sense.",
+]
+
+SKIPS_NOT_ENOUGH_DATA: list[str] = [
+    "not enough data yet. queue more songs and i'll judge you properly.",
+    "you haven't played enough for me to roast you. queue more.",
+    "come back when you've actually played something.",
+]
