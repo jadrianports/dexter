@@ -172,7 +172,7 @@ Plans:
 
 **Wave 1** *(parallel — each plan owns its feature; database.py + config.py touches are additive, non-conflicting)*
 
-- [ ] 12-01-PLAN.md — Per-server shared playlists (`/jam` group + `guild_jams` table), distinct from global favorites (UX-01) — Wave 1
+- [x] 12-01-PLAN.md — Per-server shared playlists (`/jam` group + `guild_jams` table), distinct from global favorites (UX-01) — Wave 1
 - [ ] 12-02-PLAN.md — Surface skip-rate analytics via a dedicated `/skips` command (UX-02) — Wave 1
 - [ ] 12-03-PLAN.md — Third lyrics fallback (LRCLIB) for graceful `/lyrics` degradation (UX-03) — Wave 1
 - [ ] 12-04-PLAN.md — Auto-queue hallucination validation against real YouTube results (UX-04) — Wave 1
@@ -195,4 +195,4 @@ Plans:
 | 9. Reliability & Ops Hardening | v1.2 | 4/4 | Complete    | 2026-06-26 |
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete    | 2026-06-27 |
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete    | 2026-06-29 |
-| 12. Richer Music/UX | v1.2 | 0/4 | Not started | - |
+| 12. Richer Music/UX | v1.2 | 1/4 | In Progress|  |
