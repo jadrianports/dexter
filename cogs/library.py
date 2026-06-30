@@ -328,12 +328,17 @@ class LibraryCog(commands.Cog):
 
         if not queue.is_playing:
             queue.current_index = len(queue.tracks) - 1
+            queue._text_channel_id = interaction.channel.id
             await music_cog._play_track(guild, track)  # type: ignore[attr-defined]
-            from cogs.music import NowPlayingView
-            embed = embeds.now_playing(track, queue)
-            view = NowPlayingView(self.bot)
-            msg = await interaction.followup.send(embed=embed, view=view, wait=True)
-            queue._now_playing_message_id = msg.id
+            # Post the public now-playing player via the music cog's shared helper so
+            # every entry point uses one player-management path — an ephemeral followup
+            # would only be visible to the loader and could not be re-bound after a
+            # restart, and the music cog's player manager cannot fetch/delete an
+            # ephemeral message id on the next song change (WR-02).
+            await music_cog._refresh_now_playing(guild, queue)  # type: ignore[attr-defined]
+            await interaction.followup.send(
+                f"playing **{track.title}** now.", ephemeral=True
+            )
         else:
             embed = embeds.song_queued(track, position)
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -590,15 +595,18 @@ class LibraryCog(commands.Cog):
                     log.warning("playlist load: connect failed: %s", exc)
 
             queue.current_index = len(queue.tracks) - added  # first newly added track
+            queue._text_channel_id = interaction.channel.id
             first_track = queue.get_current()
             if first_track is not None:
                 await music_cog._play_track(guild, first_track)  # type: ignore[attr-defined]
-                from cogs.music import NowPlayingView
-                embed = embeds.now_playing(first_track, queue)
-                view = NowPlayingView(self.bot)
-                msg = await interaction.followup.send(embed=embed, view=view, wait=True)
-                queue._now_playing_message_id = msg.id
-                return  # followup with now-playing embed serves as confirmation
+                # Shared now-playing helper posts the public player (WR-02); the
+                # ephemeral text below is the loader's private confirmation.
+                await music_cog._refresh_now_playing(guild, queue)  # type: ignore[attr-defined]
+                await interaction.followup.send(
+                    f"{pick_random(PLAYLIST_LOADED)} now playing \"{name}\" — {added} track(s).",
+                    ephemeral=True,
+                )
+                return
 
         summary = f"{pick_random(PLAYLIST_LOADED)} added {added} track(s) from \"{name}\"."
         if truncated:
@@ -915,15 +923,18 @@ class LibraryCog(commands.Cog):
                     log.warning("jam load: connect failed: %s", exc)
 
             queue.current_index = len(queue.tracks) - added  # first newly added track
+            queue._text_channel_id = interaction.channel.id
             first_track = queue.get_current()
             if first_track is not None:
                 await music_cog._play_track(guild, first_track)  # type: ignore[attr-defined]
-                from cogs.music import NowPlayingView
-                embed = embeds.now_playing(first_track, queue)
-                view = NowPlayingView(self.bot)
-                msg = await interaction.followup.send(embed=embed, view=view, wait=True)
-                queue._now_playing_message_id = msg.id
-                return  # followup with now-playing embed serves as confirmation
+                # Shared now-playing helper posts the public player (WR-02); the
+                # ephemeral text below is the loader's private confirmation.
+                await music_cog._refresh_now_playing(guild, queue)  # type: ignore[attr-defined]
+                await interaction.followup.send(
+                    f"loaded jam \"{name}\": now playing — {added} track(s).",
+                    ephemeral=True,
+                )
+                return
 
         summary = f"loaded jam \"{name}\": added {added} track(s)."
         if truncated:
