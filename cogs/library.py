@@ -1,4 +1,4 @@
-"""LibraryCog — personal favorites + named playlists (Phase 7, PLAYER-05, PLAYER-06).
+"""LibraryCog — personal favorites + named playlists + guild jams (Phase 7/12).
 
 Commands:
     /favorite  — save the currently-playing song to the invoking user's favorites
@@ -7,12 +7,20 @@ Commands:
     /playlist load <name>   — append a saved snapshot to the current queue
     /playlist list          — show the user's saved playlists
     /playlist delete <name> — delete a saved playlist
+    /jam save <name>        — freeze the current queue as a server-shared jam
+    /jam add <name>         — append the now-playing track to a named jam
+    /jam load <name>        — append a saved jam to the current queue
+    /jam list               — show this server's saved jams
+    /jam delete <name>      — delete a saved jam
 
 Favorites are per-user and global (cross-server, D-18), capped at FAVORITES_MAX_PER_USER
 (25, D-21), current-song-only (D-19). All responses are ephemeral (D-29, D-30).
 
 Playlists are per-user frozen JSONB snapshots (D-23), capped at PLAYLISTS_MAX_PER_USER
 (25, D-28), append-on-load (D-26), upsert-on-name-clash (D-27).
+
+Jams are per-guild shared frozen JSONB snapshots (UX-01, D-01..D-05), capped at
+JAMS_PER_GUILD_MAX (25), keyed on guild_id (no ownership gate, D-03).
 
 Security:
     T-07-03-01 — all DB calls use $N-parameterised asyncpg helpers; no string interpolation.
@@ -23,6 +31,9 @@ Security:
     T-07-04-01 — playlist snapshot serialised via json.dumps; name stored as bound param.
     T-07-04-02 — every playlist op keyed on str(interaction.user.id); no cross-user reads.
     T-07-04-03 — PLAYLISTS_MAX_PER_USER + PLAYLIST_NAME_MAX_LENGTH enforced on save.
+    T-12-01-01 — all guild_jams helpers bind values as $N positional params; no f-string SQL.
+    T-12-01-02 — every jam read/write keyed on guild_id; cross-guild isolation enforced in DB.
+    T-12-01-03 — jam name empty/length enforced before any write (reuse playlist guard, D-05).
 """
 
 from __future__ import annotations
@@ -42,6 +53,11 @@ from database import (
     list_playlists,
     delete_playlist,
     count_playlists,
+    save_jam,
+    get_jam,
+    list_jams,
+    delete_jam,
+    count_jams,
 )
 from models.queue import Track, QueueFullError
 from personality.responses import (
@@ -647,6 +663,241 @@ class LibraryCog(commands.Cog):
         log.info("User %s deleted playlist '%s'", user_id, name)
         await interaction.response.send_message(
             f"deleted playlist \"{name}\".", ephemeral=True
+        )
+
+    # ---- /jam group (Phase 12, UX-01) ------------------------------------
+    # Guild-scoped shared mixtapes — anyone in the server can save/add/load/list/delete.
+    # Mental model: /playlist = yours (user-global), /jam = the server's (guild-scoped, D-01).
+    # All subcommands respond ephemeral=True (T-12-01-03).
+
+    jam = app_commands.Group(
+        name="jam",
+        description="Manage this server's shared mixtapes",
+    )
+
+    @jam.command(name="save", description="Save the current queue as a server jam")
+    @app_commands.describe(name="Name for the jam (max 60 chars)")
+    async def jam_save(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/jam save <name> — snapshot the current queue to a guild-shared jam.
+
+        Guards: guild-only, empty queue, over-long name, jam cap (unless overwriting).
+        Upserts on name clash. Ephemeral response (T-12-01-03, D-03, D-05).
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        name = name.strip()
+        if not name:
+            await interaction.response.send_message(
+                "jam name can't be empty.", ephemeral=True
+            )
+            return
+
+        if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
+            await interaction.response.send_message(
+                f"that name is too long. keep it under {config.PLAYLIST_NAME_MAX_LENGTH} chars.",
+                ephemeral=True,
+            )
+            return
+
+        music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
+        if music_cog is None:
+            await interaction.response.send_message(
+                "music isn't loaded right now.", ephemeral=True
+            )
+            return
+
+        queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
+        if not queue.tracks:
+            await interaction.response.send_message(
+                "the queue is empty. add some songs first.", ephemeral=True
+            )
+            return
+
+        guild_id = str(guild.id)
+
+        # Cap check — allow overwriting an existing jam without counting it twice (D-05).
+        # Only block when creating a genuinely new name.
+        existing = await get_jam(self.bot.pool, guild_id=guild_id, name=name)
+        if existing is None:
+            current_count = await count_jams(self.bot.pool, guild_id=guild_id)
+            if current_count >= config.JAMS_PER_GUILD_MAX:
+                await interaction.response.send_message(
+                    f"this server has hit the {config.JAMS_PER_GUILD_MAX}-jam cap."
+                    " delete one before saving a new jam.",
+                    ephemeral=True,
+                )
+                return
+
+        snapshot = [t.to_dict() for t in queue.tracks]
+        await save_jam(self.bot.pool, guild_id=guild_id, name=name, snapshot=snapshot)
+
+        log.info(
+            "Guild %s: jam '%s' saved with %d tracks by user %s",
+            guild_id, name, len(snapshot), interaction.user.id,
+        )
+        await interaction.response.send_message(
+            f"saved jam \"{name}\" ({len(snapshot)} tracks).",
+            ephemeral=True,
+        )
+
+    @jam.command(name="add", description="Add the now-playing track to a jam")
+    @app_commands.describe(name="Name of the jam to append to")
+    async def jam_add(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/jam add <name> — append the now-playing track to a named jam (D-04).
+
+        If no track is currently playing, responds with a nothing-playing message.
+        If the named jam doesn't exist yet, creates it with just the one track.
+        Applies the jam cap check only when creating a new jam name.
+        Ephemeral response (T-12-01-03, D-03).
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        name = name.strip()
+        if not name:
+            await interaction.response.send_message(
+                "jam name can't be empty.", ephemeral=True
+            )
+            return
+
+        if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
+            await interaction.response.send_message(
+                f"that name is too long. keep it under {config.PLAYLIST_NAME_MAX_LENGTH} chars.",
+                ephemeral=True,
+            )
+            return
+
+        music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
+        if music_cog is None:
+            await interaction.response.send_message(
+                "music isn't loaded right now.", ephemeral=True
+            )
+            return
+
+        queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
+
+        # Nothing-playing guard — do NOT crash on None track (T-12-01-03, Pitfall 5)
+        track = queue.get_current()
+        if track is None:
+            await interaction.response.send_message(
+                pick_random(NOTHING_PLAYING), ephemeral=True
+            )
+            return
+
+        guild_id = str(guild.id)
+
+        # Load existing snapshot (None = new jam)
+        existing = await get_jam(self.bot.pool, guild_id=guild_id, name=name)
+
+        # Cap check — only applies when creating a new jam name
+        if existing is None:
+            current_count = await count_jams(self.bot.pool, guild_id=guild_id)
+            if current_count >= config.JAMS_PER_GUILD_MAX:
+                await interaction.response.send_message(
+                    f"this server has hit the {config.JAMS_PER_GUILD_MAX}-jam cap."
+                    " delete one before creating a new jam.",
+                    ephemeral=True,
+                )
+                return
+
+        snapshot = existing if existing is not None else []
+        snapshot = list(snapshot)  # defensive copy
+        snapshot.append(track.to_dict())
+
+        await save_jam(self.bot.pool, guild_id=guild_id, name=name, snapshot=snapshot)
+
+        log.info(
+            "Guild %s: track '%s' added to jam '%s' by user %s (now %d tracks)",
+            guild_id, track.title, name, interaction.user.id, len(snapshot),
+        )
+        await interaction.response.send_message(
+            f"added \"{track.title}\" to jam \"{name}\" ({len(snapshot)} track(s) total).",
+            ephemeral=True,
+        )
+
+    @jam.command(name="list", description="Show this server's saved jams")
+    async def jam_list(self, interaction: discord.Interaction) -> None:
+        """/jam list — ephemeral embed of the guild's saved jams (UX-01, D-02)."""
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        guild_id = str(guild.id)
+        rows = await list_jams(self.bot.pool, guild_id=guild_id)
+
+        if not rows:
+            await interaction.response.send_message(
+                "this server has no jams yet. use /jam save while something's queued.",
+                ephemeral=True,
+            )
+            return
+
+        embed = discord.Embed(
+            title="server jams",
+            color=discord.Color.blurple(),
+        )
+        for row in rows:
+            updated = row["updated_at"]
+            ts = (
+                discord.utils.format_dt(updated, style="R")
+                if hasattr(updated, "tzinfo")
+                else str(updated)
+            )
+            embed.add_field(
+                name=row["name"],
+                value=f"{row['track_count']} track(s) — updated {ts}",
+                inline=False,
+            )
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @jam.command(name="delete", description="Delete a server jam")
+    @app_commands.describe(name="Name of the jam to delete")
+    async def jam_delete(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/jam delete <name> — remove a named guild jam (D-03, D-05).
+
+        Any guild member can delete (no ownership gate — collaborative model).
+        Ephemeral confirmation or not-found message (T-12-01-03).
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        guild_id = str(guild.id)
+        name = name.strip()
+
+        deleted = await delete_jam(self.bot.pool, guild_id=guild_id, name=name)
+        if not deleted:
+            await interaction.response.send_message(
+                f"i can't find a jam called \"{name}\". check /jam list.",
+                ephemeral=True,
+            )
+            return
+
+        log.info("Guild %s: jam '%s' deleted by user %s", guild_id, name, interaction.user.id)
+        await interaction.response.send_message(
+            f"deleted jam \"{name}\".", ephemeral=True
         )
 
 
