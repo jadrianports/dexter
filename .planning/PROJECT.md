@@ -20,9 +20,22 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 
 **The 24/7 live deploy is PARKED.** YouTube blocks datacenter IPs → free cloud hosting is non-viable, and there is no always-on residential host yet. The bot runs on the **user's PC (residential IP) on demand against Neon Singapore**; Phases 6/7/8 were live-verified that way. The 4 open DEPLOY requirements + remaining live-UAT/verification items (9 total) are deferred until a Pi / always-on residential host is acquired — see STATE.md Deferred Items.
 
-## Current Milestone: v1.2 Sharper & Smarter
+**Shipped (code): v1.2 "Sharper & Smarter" (2026-06-30)** — Phases 9–12, 19 plans, 43 tasks. All 21 v1.2 requirements met at the code level. Delivered:
+- **Phase 9 (Reliability & Ops Hardening):** truthful `/health` (degraded-503 on MusicCog load failure, `_ready_done`-guarded), fire-and-forget failure surfacing via `utils/tasks.py` `make_task`, un-wedgeable `on_ready` watchdog + `_sync_retry_active`-guarded startup-sync recovery, config-driven DB query timeouts, bounded YouTube search/extract self-heal.
+- **Phase 10 (Critical-Path Test Coverage):** extracted the untested decision logic into pure `logic/` modules (`playback.py` TrackEndAction + five fns, `health.py`, `roasts.py`, later `autoqueue.py`) locked by ~83 mock-free unit tests with three named scar regressions; full-suite-green + clean-boot regression gate.
+- **Phase 11 (RAG Long-Term Memory):** `pgvector` on Neon + `gemini-embedding-001` @ 768d behind a separate 60 RPM limiter; full read (recall/rerank/floor) + write (remember/dedup/cap-evict) halves, sensitivity/PII + numbers-from-SQL accuracy firewall, callback roasts at four surfaces, daily decay sweep — **zero new infrastructure**.
+- **Phase 12 (Richer Music/UX):** per-server `/jam` shared playlists, `/skips` analytics, LRCLIB third lyrics fallback, token-set auto-queue hallucination validation.
 
-**Goal:** Harden Dexter into a trustworthy 24/7-ready bot and give it a real memory — fix the reliability gaps, cover the untested critical paths, then make it smarter (long-term RAG memory) and richer (music/UX polish). Continues phase numbering at Phase 9.
+The Phase 09/11 live-runtime UAT/verification tail (4 items) is deferred behind the same parked host — see STATE.md Deferred Items.
+
+## Next Milestone: v1.3 (planning)
+
+Not yet scoped. Run `/gsd-new-milestone` to define it. The standing v1.3 candidate is **Vision / multimodal roasting** (VIS-01/02 — Dex reacts to images posted in chat via Gemini vision, with content-safety guardrails), deferred from v1.2 because it leans hardest on the 15 RPM budget and pays off most with the parked 24/7 host. The parked 24/7 live deploy (DEPLOY-02/03/05/08 + the live-UAT tail) also resumes whenever an always-on residential host (Pi) is acquired.
+
+<details>
+<summary>Previous: v1.2 "Sharper & Smarter" milestone framing (archived — shipped 2026-06-30)</summary>
+
+**Goal:** Harden Dexter into a trustworthy 24/7-ready bot and give it a real memory — fix the reliability gaps, cover the untested critical paths, then make it smarter (long-term RAG memory) and richer (music/UX polish). Continued phase numbering at Phase 9.
 
 **Target features:**
 - **Reliability & ops hardening** — health endpoint can no longer report "ok" while degraded, fire-and-forget tasks log failures, `first_run`/`on_ready` sync no longer hangs silently, DB query timeouts, search/extract retry/self-heal.
@@ -30,10 +43,7 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 - **RAG long-term memory** — `pgvector` on the existing Neon Postgres + Gemini `gemini-embedding-001` @ 768d, so Dex remembers across restarts and lands callback roasts referencing real history. **Zero new infrastructure or monthly cost.** Includes a research spike.
 - **Richer music/UX** — per-server playlists, skip-rate analytics command, third lyrics fallback, auto-queue hallucination validation.
 
-**Key context:**
-- **No Railway / no cloud.** Datacenter-IP block (YouTube) + $1/mo ≠ 24/7 keeps free cloud non-viable. Run env stays PC (residential IP) → Neon Singapore on demand. Parked DEPLOY-02/03/05/08 + live-UAT tail resume only on a Pi/residential host.
-- **RAG uses Postgres (`pgvector`), not Redis** — a new table on the Neon DB already in use, embeddings via the free Gemini API.
-- **Vision / multimodal roasting deferred to v1.3** — capability + cost confirmed viable on the free tier; deferred because it leans hardest on the 15 RPM budget, needs content-safety guardrails, and pays off most with the parked 24/7 host.
+</details>
 
 <details>
 <summary>Previous: v1.1 "Live & Lethal" milestone framing (archived)</summary>
@@ -62,22 +72,21 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 - ✓ Speed & caching: next-track prefetch (zero gap), opus-copy codec path + SponsorBlock, Postgres resolution cache, download-timeout→stream fallback, LFU eviction, `PerfMetrics` in `/stats` — v1.1 (Phase 6)
 - ✓ Player UX & filters: persistent control-button view, `/seek` `/previous` `/jump`, four `/filter` presets (opus-passthrough preserved), favorites + named playlists — v1.1 (Phase 7)
 - ✓ Social & ops: `/roast @user`, per-guild `/leaderboard`, owner-only `/stats`, `/health` endpoint, Gemini RPM headroom + `total_errors` visibility — v1.1 (Phase 8)
+- ✓ Reliability & ops hardening: truthful `/health` (degraded-503, `_ready_done`-guarded), fire-and-forget failure surfacing via `make_task`, un-wedgeable `on_ready` watchdog + startup-sync recovery, config-driven DB query timeouts, bounded YouTube search/extract self-heal — v1.2 (Phase 9; live-runtime UAT in 09-HUMAN-UAT.md)
+- ✓ Critical-path test coverage: playback/health/roast/auto-queue decision logic extracted to pure `logic/` modules with ~83 mock-free unit tests + three named scar regressions; full-suite-green + clean-boot regression gate — v1.2 (Phase 10)
 - ✓ RAG long-term memory: `pgvector` on Neon + `gemini-embedding-001` @ 768d, scoped cosine recall with rerank/dedup, constrained distillation with sensitivity/number safety gates, prompt injection at four roast surfaces, per-user cap + daily decay sweep — v1.2 (Phase 11; 3 live-runtime UAT items tracked in 11-HUMAN-UAT.md)
+- ✓ Richer music/UX: per-server `/jam` shared playlists (distinct from global favorites), `/skips` analytics, LRCLIB third lyrics fallback, token-set auto-queue hallucination validation — v1.2 (Phase 12)
 
-> Phase 3 & 4 items (v1.0) and Phase 5–6 live checks (v1.1) are code-complete and statically/locally verified; their live-deploy UAT is carried forward as the deployment checklist (STATE.md Deferred Items), not as open scope. Phases 6/7/8 were live-verified on the user's PC + Neon.
+> Phase 3 & 4 items (v1.0) and Phase 5–6 live checks (v1.1), plus the Phase 09/11 live-runtime checks (v1.2), are code-complete and statically/locally verified; their live-deploy/live-Discord UAT is carried forward as the deployment checklist (STATE.md Deferred Items), not as open scope. Phases 6/7/8 were live-verified on the user's PC + Neon.
 
 ### Active
 
-<!-- Current scope: v1.2 "Sharper & Smarter" (Phases 9–12). See REQUIREMENTS.md for REQ-IDs. -->
+<!-- No active milestone scope. v1.2 shipped 2026-06-30; next scope is defined by /gsd-new-milestone. -->
 
-- [ ] **Reliability & ops hardening** (Phase 9) — truthful `/health`, fire-and-forget failure logging, sync-hang guards, DB query timeouts, search/extract self-heal
-- [ ] **Critical-path test coverage** (Phase 10) — MusicCog playback flow, OpsCog/health, EventsCog ambient roasts
-- [x] **RAG long-term memory** (Phase 11) — ✓ complete 2026-06-29; `pgvector` on Neon + Gemini embeddings → callback roasts; zero new infra (3 live-runtime UAT items pending)
-- [ ] **Richer music/UX** (Phase 12) — per-server playlists, skip-rate analytics, third lyrics fallback, auto-queue validation
+- [ ] (v1.3 candidate) Vision / multimodal roasting — Dexter reacts to/roasts images posted in chat via Gemini vision, with content-safety guardrails (VIS-01/02)
 
-Carried forward (not in v1.2 scope, host-gated / deferred):
-- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the live-UAT tail
-- [ ] (v1.3 candidate) Vision / multimodal roasting — Dexter reacts to images posted in chat
+Carried forward (host-gated / deferred, not yet scoped to a milestone):
+- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the live-UAT tail (incl. the Phase 09/11 v1.2 live-runtime checks)
 
 ### Out of Scope
 
@@ -130,6 +139,14 @@ Carried forward (not in v1.2 scope, host-gated / deferred):
 | LFU cache eviction keyed on `song_history` play counts, with `protected_video_ids` (Phase 6) | `atime` is unreliable on `noatime` mounts; never evict an in-use track | ✓ Good |
 | Persistent views via `timeout=None` + stable `custom_id`s registered in `setup_hook` (Phase 7) | Correct discord.py pattern so buttons survive restarts | ✓ Good |
 | Shared `_do_*` helpers route slash command + button through one path (Phase 7) | Eliminate divergence between the two invocation surfaces | ✓ Good |
+| Truthful `/health` returns degraded-503, guarded by `_ready_done` (Phase 9) | A health endpoint that reports "ok" while broken is worse than none; the guard prevents false-degraded during legitimate startup (Pitfall 3) | ✓ Good |
+| Fire-and-forget tasks attach a `make_task` done-callback (Phase 9) | Background-task exceptions must surface to logs/error channel instead of vanishing silently (REL-02) | ✓ Good |
+| Extract decision logic into pure `logic/` modules; Discord/process glue stays untested-by-design (Phase 10) | Test the branches that matter without mocking Discord; ~83 mock-free tests + named scar regressions lock the critical paths | ✓ Good |
+| RAG memory = `pgvector` on the existing Neon DB, not Redis/knowledge-graph (Phase 11) | A new table on infra already in use → zero new cost/infra; top-k + heuristic rerank suffices for a single-community bot | ✓ Good |
+| Embeddings on a **separate** 60 RPM limiter, never the shared 15 RPM chat budget (Phase 11) | Memory writes are background work that must not starve user-facing `/ask`/`/imagine` | ✓ Good |
+| Accuracy firewall: never embed SQL-known numbers; hard numbers in output come from live SQL (Phase 11) | Stale embedded counts/streaks would violate Critical Rule 5 (accuracy-first); memory is roast *ammo*, not a number source | ✓ Good |
+| Numeric retrieval defaults validated by a live-Neon spike before retrieval landed (Phase 11) | MEDIUM-confidence priors (floor/dedup/dims) tuned empirically (dedup 0.90→0.92, floor 0.70, keep-768) rather than shipped on assumption | ✓ Good |
+| Token-set-containment over difflib for auto-queue validation (Phase 12) | YouTube titles are longer than clean names; subset check is the semantically correct rejection test for hallucinated tracks | ✓ Good |
 
 ## Evolution
 
@@ -149,4 +166,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-29 after completing Phase 11 (RAG Long-Term Memory)*
+*Last updated: 2026-07-01 after v1.2 "Sharper & Smarter" milestone*

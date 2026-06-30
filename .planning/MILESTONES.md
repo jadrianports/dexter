@@ -4,6 +4,46 @@ A historical record of shipped versions. Newest first.
 
 ---
 
+## v1.2 — Sharper & Smarter
+
+**Shipped (code):** 2026-06-30
+**Phases:** 4 (9, 10, 11, 12) · **Plans:** 19 · **Tasks:** 43
+
+**Delivered:** The "Sharper & Smarter" pass — hardened the reliability gaps (truthful `/health`, fire-and-forget failure surfacing, sync-hang guards, DB query timeouts, YouTube self-heal), covered the untested critical-path decision logic with real pure-unit tests, gave Dex a durable **RAG long-term memory** (`pgvector` on the existing Neon Postgres + `gemini-embedding-001` @ 768d → callback roasts that pair a live SQL stat with a recalled episode, at zero new infrastructure), and rounded out the music/UX (per-server `/jam` playlists, `/skips` analytics, a third lyrics fallback, hallucination-validated auto-queue). All code-complete and locally/statically verified; the live-runtime UAT tail (Phase 09/11) is deferred behind the parked 24/7 host.
+
+### Stats
+
+- **Timeline:** 2026-06-26 → 2026-06-30 (~5 days)
+- **Commits:** 136 since `v1.1`
+- **Diff:** 121 files changed, +24,390 / −302 (includes `.planning/` docs)
+- **Git range:** `18806e7` (Phase 9 reliability config) → `2580bf1` (Phase 12 code-review fix report)
+
+### Key Accomplishments
+
+1. **Reliability & Ops Hardening (Phase 9)** — `/health` now returns degraded-503 when MusicCog fails to load (guarded by `_ready_done` to avoid false-degraded during startup); fire-and-forget tasks surface exceptions via a `utils/tasks.py` `make_task` done-callback; an un-wedgeable `on_ready` watchdog + `_sync_retry_active`-guarded startup-sync recovery (`asyncio.TimeoutError` caught before `Exception` per Python 3.11+); config-driven DB query timeouts; and bounded YouTube search/extract self-heal reusing the existing `update_ytdlp` + throttle path.
+2. **Critical-Path Test Coverage (Phase 10)** — Extracted the untested decision logic into pure `logic/` modules — `playback.py` (TrackEndAction enum + five keyword-only functions), `health.py` (`determine_health_status` + `assemble_degraded_reasons`), `roasts.py` (`decide_ambient_roast` + `cooldown_elapsed`) — locked by ~83 mock-free unit tests including three named scar regressions (finished-song replay, silent auto-queue, restore index clamp). Regression gate green: full suite + clean boot, no new silent failures.
+3. **RAG Long-Term Memory (Phase 11)** — `pgvector` extension-first boot + `user_memories(vector(768))` with per-connection codec registration via `create_pool(init=...)`; `GeminiService.embed()` on a **separate** 60 RPM limiter; the complete read half (pure `MemoryFact` rerank/recency/novelty/floor → `recall()` top 1–3) and write half (`remember()` with near-dup dedup → salience-ranked cap-evict); a sensitivity/PII + numbers-from-SQL accuracy firewall; callback roasts wired at all four surfaces behind a cadence gate; and a daily decay sweep keeping the store bounded. **Zero new infrastructure, zero new monthly cost.** A numeric-defaults spike against live Neon tuned the constants (dedup 0.90→0.92, floor 0.70, keep-768).
+4. **Richer Music/UX (Phase 12)** — `guild_jams` table + `/jam` group (save/add/load/list/delete) giving each server a shared mixtape distinct from global favorites; a dedicated `/skips` command surfacing tracked skip data; an LRCLIB third lyrics fallback with `strip_lrc_headers`; and a pure token-set-containment validator (`logic/autoqueue.py`) that rejects hallucinated auto-queue tracks before queueing.
+
+### Quality
+
+- All 21 v1.2 requirements satisfied at the code level (21/21 traceability coverage).
+- Phase 10 added ~83 mock-free pure-unit tests with named scar regressions; the full suite stays green and the bot boots clean (TEST-04 regression gate).
+- Phase 11 RAG decisions empirically validated by a live-Neon spike before retrieval landed.
+- TDD on all pure logic (`logic/playback|health|roasts|autoqueue`, memory rerank/dedup/decay); Discord/process code verified structurally + by clean boot per convention.
+
+### Known Gaps (deferred at close: 13 surfaced by audit — see STATE.md Deferred Items)
+
+The pre-close audit surfaced 13 open items — **all UAT / verification, all `human_needed` live-Discord checks, zero code gaps.** Phases 03–06 are the same parked v1.1 deploy checks carried forward; the two genuinely new v1.2 items are the Phase 09 and Phase 11 live-runtime checks. All resume when a Pi / always-on residential host exists:
+
+- **Phase 09** `09-HUMAN-UAT.md` (6 pending) + `09-VERIFICATION.md` (`human_needed`) — live truthful-`/health` degraded + task-failure surfacing
+- **Phase 11** `11-HUMAN-UAT.md` (3 pending) + `11-VERIFICATION.md` (`human_needed`) — live RAG recall + callback-roast behavior
+- **Carried from v1.1:** Phases 03/04/05/06 HUMAN-UAT + VERIFICATION + `05-UAT-RUNBOOK.md` — all live-Discord/live-deploy checks superseded by the Koyeb+Neon runbook, pending the parked deploy.
+
+**Archived:** `milestones/v1.2-ROADMAP.md`, `milestones/v1.2-REQUIREMENTS.md`
+
+---
+
 ## v1.1 — Live & Lethal
 
 **Shipped (code):** 2026-06-26

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Sharper & Smarter
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 12 Plan 04 complete (auto-queue hallucination validation)
-last_updated: "2026-06-30T13:40:42.758Z"
-last_activity: 2026-06-30 -- Phase 12 marked complete
+last_updated: "2026-06-30T16:21:02.297Z"
+last_activity: 2026-06-30 — Milestone v1.2 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 ## Current Position
 
-Phase: 12 — COMPLETE
-Plan: 4 of 4
-Status: Phase 12 complete
-Last activity: 2026-06-30 -- Phase 12 marked complete
-
-Progress: [███████░░░] 79%
+Phase: Milestone v1.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-30 — Milestone v1.2 completed and archived
 
 ## Performance Metrics
 
@@ -122,7 +120,20 @@ None.
 
 ## Deferred Items
 
-**Acknowledged and deferred at v1.1 milestone close on 2026-06-26.** All 9 are live-Discord /
+**Re-acknowledged and deferred at v1.2 milestone close on 2026-07-01.** The pre-close audit surfaced
+13 open items — all UAT / verification, all `human_needed` live-Discord checks. The Phase 03–06 items
+are the same parked v1.1 deploy checks (carried below); the two genuinely new v1.2 items are the
+Phase 09 and Phase 11 live-runtime checks. None are code gaps — Phases 9–12 are code-complete and
+locally/statically verified. All resume when a Pi / always-on residential host exists.
+
+| Category | Item | Status |
+|----------|------|--------|
+| uat | Phase 09 — `09-HUMAN-UAT.md` (6 pending: truthful `/health` degraded, task-failure surfacing live) | Blocked on live Discord/host |
+| uat | Phase 11 — `11-HUMAN-UAT.md` (3 pending: live RAG recall + callback-roast behavior) | Blocked on live Discord/host |
+| verification | Phase 09 — `09-VERIFICATION.md` (`human_needed`) | Blocked on live Discord/host |
+| verification | Phase 11 — `11-VERIFICATION.md` (`human_needed`) | Blocked on live Discord/host |
+
+**Carried from v1.1 (acknowledged + deferred at v1.1 milestone close on 2026-06-26).** All are live-Discord /
 live-deploy validation that cannot run without an always-on residential host — the 24/7 deploy is
 **parked** behind the YouTube datacenter-IP block (free cloud non-viable; bot runs on the user's PC
 on demand → Neon Singapore). They resume when a Pi / always-on residential host is acquired.
@@ -149,3 +160,7 @@ Carried-forward engineering items (fixed in code; live gate only):
 Last session: 2026-06-30T11:01:59.358Z
 Stopped at: Phase 12 Plan 04 complete (auto-queue hallucination validation)
 Next: Execute Phase 12 Plan 04 (auto-queue hallucination validation)
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
