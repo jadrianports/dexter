@@ -828,6 +828,111 @@ class LibraryCog(commands.Cog):
             ephemeral=True,
         )
 
+    @jam.command(name="load", description="Append a server jam to the current queue")
+    @app_commands.describe(name="Name of the jam to load")
+    async def jam_load(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/jam load <name> — rebuild tracks from a guild jam and APPEND to queue (D-04).
+
+        Mirrors playlist_load exactly but reads from get_jam(guild_id=...) instead of
+        get_playlist(user_id=...). Truncates at MAX_QUEUE_SIZE_PER_GUILD with a report
+        (T-12-01-05 / Pitfall 7). Handles empty-jam snapshot as a distinct error case.
+        Starts playback if the queue was idle. Ephemeral summary (T-12-01-03).
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        guild_id = str(guild.id)
+        name = name.strip()
+
+        rows = await get_jam(self.bot.pool, guild_id=guild_id, name=name)
+        if rows is None:
+            await interaction.response.send_message(
+                f"i can't find a jam called \"{name}\". check /jam list.",
+                ephemeral=True,
+            )
+            return
+
+        # Empty-jam snapshot — distinct error rather than silent no-op (Pitfall 7)
+        if len(rows) == 0:
+            await interaction.response.send_message(
+                f"that jam is empty.", ephemeral=True
+            )
+            return
+
+        music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
+        if music_cog is None:
+            await interaction.response.send_message(
+                "music isn't loaded right now.", ephemeral=True
+            )
+            return
+
+        if not interaction.user.voice or not interaction.user.voice.channel:  # type: ignore[union-attr]
+            await interaction.response.send_message(
+                "you're not in a voice channel.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
+        was_idle = not queue.is_playing
+
+        added = 0
+        truncated = 0
+        for track_dict in rows:
+            track = Track.from_dict({**track_dict, "requested_by": interaction.user.id})
+            try:
+                queue.add(track)
+                added += 1
+            except QueueFullError:
+                truncated += 1
+
+        # Persist queue state
+        if hasattr(self.bot, "queue_persistence"):
+            try:
+                await self.bot.queue_persistence.persist(
+                    guild,
+                    queue,
+                    interaction.user.voice.channel.id,  # type: ignore[union-attr]
+                )
+            except Exception as exc:
+                log.debug("jam load: queue persist failed: %s", exc)
+
+        # Kick off playback if we were idle
+        if was_idle and queue.tracks:
+            user_channel = interaction.user.voice.channel  # type: ignore[union-attr]
+            voice_client = guild.voice_client
+            if voice_client is None:
+                try:
+                    voice_client = await user_channel.connect()
+                except Exception as exc:
+                    log.warning("jam load: connect failed: %s", exc)
+
+            queue.current_index = len(queue.tracks) - added  # first newly added track
+            first_track = queue.get_current()
+            if first_track is not None:
+                await music_cog._play_track(guild, first_track)  # type: ignore[attr-defined]
+                from cogs.music import NowPlayingView
+                embed = embeds.now_playing(first_track, queue)
+                view = NowPlayingView(self.bot)
+                msg = await interaction.followup.send(embed=embed, view=view, wait=True)
+                queue._now_playing_message_id = msg.id
+                return  # followup with now-playing embed serves as confirmation
+
+        summary = f"loaded jam \"{name}\": added {added} track(s)."
+        if truncated:
+            summary += (
+                f" {truncated} track(s) were skipped — queue is at the"
+                f" {config.MAX_QUEUE_SIZE_PER_GUILD}-song cap."
+            )
+        await interaction.followup.send(summary, ephemeral=True)
+
     @jam.command(name="list", description="Show this server's saved jams")
     async def jam_list(self, interaction: discord.Interaction) -> None:
         """/jam list — ephemeral embed of the guild's saved jams (UX-01, D-02)."""
