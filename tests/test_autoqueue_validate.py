@@ -123,3 +123,26 @@ class TestValidateYoutubeMatch:
     def test_both_empty_inputs_return_true(self):
         """Empty title and artist — both checks pass vacuously."""
         assert validate_youtube_match("Some YouTube Title", "", "") is True
+
+
+# ---------------------------------------------------------------------------
+# Function-level aliases — make `-k validate_youtube_match` discoverable
+# ---------------------------------------------------------------------------
+
+
+def test_validate_youtube_match_accepts_valid():
+    """Sanity: accept a well-formed title+artist match."""
+    assert validate_youtube_match(
+        "Taylor Swift - Shake It Off (Official Music Video)",
+        "Shake It Off",
+        "Taylor Swift",
+    ) is True
+
+
+def test_validate_youtube_match_rejects_mismatch():
+    """Sanity: reject a clear title+artist mismatch."""
+    assert validate_youtube_match(
+        "Rick Astley - Never Gonna Give You Up",
+        "Bohemian Rhapsody",
+        "Queen",
+    ) is False
