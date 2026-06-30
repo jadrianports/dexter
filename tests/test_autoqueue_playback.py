@@ -76,7 +76,12 @@ def _make_env(*, queue_is_playing: bool, vc_is_playing: bool):
     bot.gemini_service = MagicMock()
     bot.gemini_service.chat = AsyncMock(return_value="[ignored — parse is patched]")
     bot.youtube_service = MagicMock()
-    bot.youtube_service.async_search = AsyncMock(return_value=[{"url": "https://youtu.be/x"}])
+    # UX-04: async_search now returns multiple candidates; include a "title" key so
+    # validate_youtube_match can approve the result before async_extract is called.
+    bot.youtube_service.async_search = AsyncMock(side_effect=[
+        [{"url": "https://youtu.be/new1", "title": "Rec Artist - Rec new1"}],
+        [{"url": "https://youtu.be/new2", "title": "Rec Artist - Rec new2"}],
+    ])
     bot.youtube_service.async_extract = AsyncMock(
         side_effect=[_extract_data("new1"), _extract_data("new2")]
     )

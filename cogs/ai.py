@@ -13,6 +13,7 @@ from discord.ext import commands
 
 import config
 from database import get_recent_songs, increment_daily_stat
+from logic.autoqueue import validate_youtube_match
 from logic.playback import should_start_playback
 from models.queue import Track
 from models.server_state import get_server_state, get_mood
@@ -304,13 +305,42 @@ class AICog(commands.Cog):
             queue = music_cog.get_queue(guild.id)
             tracks_added = []
 
-            for suggestion in suggestions[: config.AUTO_QUEUE_SONGS_PER_ROUND]:
+            # D-14: iterate ALL suggestions, break when round is full.
+            # Do NOT slice suggestions — slicing prevented fall-through when an
+            # early suggestion had no passing candidate (Pitfall 3 / 12-RESEARCH.md).
+            for suggestion in suggestions:
+                if len(tracks_added) >= config.AUTO_QUEUE_SONGS_PER_ROUND:
+                    break
+
                 search_query = f"{suggestion['title']} {suggestion['artist']}"
-                results = await self.bot.youtube_service.async_search(search_query, count=1)
+                # D-13: widen search to AUTO_QUEUE_SEARCH_CANDIDATES (was count=1)
+                # so we have multiple YouTube results to validate against.
+                results = await self.bot.youtube_service.async_search(
+                    search_query, count=config.AUTO_QUEUE_SEARCH_CANDIDATES
+                )
                 if not results:
                     continue
 
-                result = results[0]
+                # D-12: validate each candidate; take the first that passes.
+                validated = None
+                for result in results:
+                    if validate_youtube_match(
+                        result.get("title", ""),
+                        suggestion["title"],
+                        suggestion["artist"],
+                    ):
+                        validated = result
+                        break
+
+                if validated is None:
+                    # D-14: no candidate matched — fall through to next suggestion.
+                    log.info(
+                        "auto-queue: all %d candidate(s) rejected for '%s' — trying next suggestion",
+                        len(results), suggestion["title"],
+                    )
+                    continue
+
+                result = validated
                 try:
                     data = await self.bot.youtube_service.async_extract(result["url"])
                 except Exception as extract_error:

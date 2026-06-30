@@ -146,3 +146,133 @@ def test_validate_youtube_match_rejects_mismatch():
         "Bohemian Rhapsody",
         "Queen",
     ) is False
+
+
+# ---------------------------------------------------------------------------
+# TestAutoQueueFallThroughLoop — mocked fall-through coverage (Task 2 / D-14)
+# ---------------------------------------------------------------------------
+
+
+class TestAutoQueueFallThroughLoop:
+    """Exercise the widened-search + validate + fall-through loop logic using
+    stubs — no live Gemini, YouTube, or Discord.  All inputs are deterministic.
+
+    The loop under test (simplified extract of the cogs/ai.py logic):
+
+        tracks_added = []
+        for suggestion in suggestions:
+            if len(tracks_added) >= SONGS_PER_ROUND:
+                break
+            results = stub_search(suggestion)
+            validated = None
+            for result in results:
+                if validate_youtube_match(result["title"], suggestion["title"], suggestion["artist"]):
+                    validated = result
+                    break
+            if validated is None:
+                continue   # fall-through — D-14
+            tracks_added.append(validated)
+    """
+
+    # Inline the loop logic so the test is a pure unit with no cog imports.
+    @staticmethod
+    def _run_loop(suggestions: list[dict], search_map: dict[str, list[dict]], songs_per_round: int) -> list[dict]:
+        """Pure re-implementation of the loop body from cogs/ai.py try_auto_queue."""
+        tracks_added: list[dict] = []
+        for suggestion in suggestions:
+            if len(tracks_added) >= songs_per_round:
+                break
+            results = search_map.get(suggestion["title"], [])
+            if not results:
+                continue
+            validated = None
+            for result in results:
+                if validate_youtube_match(
+                    result.get("title", ""),
+                    suggestion["title"],
+                    suggestion["artist"],
+                ):
+                    validated = result
+                    break
+            if validated is None:
+                continue  # D-14: fall through to next suggestion
+            tracks_added.append(validated)
+        return tracks_added
+
+    def test_valid_suggestion_is_added(self):
+        """A suggestion whose candidate passes validation is added to tracks_added."""
+        suggestions = [{"title": "Shake It Off", "artist": "Taylor Swift"}]
+        search_map = {
+            "Shake It Off": [{"title": "Taylor Swift - Shake It Off (Official Music Video)", "url": "u1"}],
+        }
+        result = self._run_loop(suggestions, search_map, songs_per_round=3)
+        assert len(result) == 1
+        assert result[0]["url"] == "u1"
+
+    def test_fall_through_when_first_suggestion_all_candidates_fail(self):
+        """When all candidates for suggestion #1 fail, loop falls to suggestion #2."""
+        suggestions = [
+            {"title": "Bohemian Rhapsody", "artist": "Queen"},   # will be rejected
+            {"title": "Kill Bill", "artist": "SZA"},              # will be accepted
+        ]
+        search_map = {
+            # Candidates for suggestion #1 are Rick Astley — all will fail validate
+            "Bohemian Rhapsody": [
+                {"title": "Rick Astley - Never Gonna Give You Up", "url": "u_wrong"},
+            ],
+            # Candidate for suggestion #2 matches
+            "Kill Bill": [
+                {"title": "SZA - Kill Bill (Official Music Video)", "url": "u2"},
+            ],
+        }
+        result = self._run_loop(suggestions, search_map, songs_per_round=3)
+        assert len(result) == 1
+        assert result[0]["url"] == "u2"  # filled from suggestion #2, not suggestion #1
+
+    def test_count_never_exceeds_songs_per_round(self):
+        """Loop breaks when len(tracks_added) >= songs_per_round (D-14 cap)."""
+        suggestions = [
+            {"title": "Song A", "artist": "Artist A"},
+            {"title": "Song B", "artist": "Artist B"},
+            {"title": "Song C", "artist": "Artist C"},
+            {"title": "Song D", "artist": "Artist D"},  # 4th should never be added if cap=3
+        ]
+        search_map = {
+            "Song A": [{"title": "Artist A - Song A", "url": "ua"}],
+            "Song B": [{"title": "Artist B - Song B", "url": "ub"}],
+            "Song C": [{"title": "Artist C - Song C", "url": "uc"}],
+            "Song D": [{"title": "Artist D - Song D", "url": "ud"}],
+        }
+        result = self._run_loop(suggestions, search_map, songs_per_round=3)
+        assert len(result) == 3
+        # Songs A, B, C were queued; D was never reached
+        urls = {r["url"] for r in result}
+        assert "ud" not in urls
+
+    def test_no_results_continues_to_next_suggestion(self):
+        """Empty search results for a suggestion are skipped; later suggestion fills the round."""
+        suggestions = [
+            {"title": "Ghost Song", "artist": "Nobody"},   # no results
+            {"title": "Kill Bill", "artist": "SZA"},        # has results
+        ]
+        search_map = {
+            "Ghost Song": [],
+            "Kill Bill": [{"title": "SZA - Kill Bill (Official Music Video)", "url": "u2"}],
+        }
+        result = self._run_loop(suggestions, search_map, songs_per_round=1)
+        assert len(result) == 1
+        assert result[0]["url"] == "u2"
+
+    def test_first_passing_candidate_chosen_from_multiple(self):
+        """Among multiple candidates, the first passing one is selected."""
+        suggestions = [{"title": "Never Gonna Give You Up", "artist": "Rick Astley"}]
+        search_map = {
+            "Never Gonna Give You Up": [
+                {"title": "Someone Else - Wrong Song", "url": "u_wrong"},  # fails
+                {"title": "Rick Astley - Never Gonna Give You Up", "url": "u_right"},  # passes
+                {"title": "Rick Astley - Never Gonna Give You Up (Live)", "url": "u_third"},  # also passes but not first
+            ],
+        }
+        result = self._run_loop(suggestions, search_map, songs_per_round=1)
+        assert len(result) == 1
+        assert result[0]["url"] == "u_right"  # second candidate (first passing)
