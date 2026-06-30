@@ -18,10 +18,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-26)
+See: .planning/PROJECT.md (updated 2026-07-01)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 12 — richer-music-ux
+**Current focus:** Awaiting next milestone (v1.3 — run `/gsd-new-milestone`; standing candidate: Vision / multimodal roasting)
 
 ## Current Position
 
@@ -114,9 +114,9 @@ None.
 
 ### Blockers/Concerns
 
-- [Phase 11 / research flag] Numeric retrieval defaults (top-k=8, 0.70 similarity floor, 0.90 dedup, ~150 per-user cap, 90-day decay, rerank weights) are MEDIUM-confidence tuned priors — validate via a short spike at the START of Phase 11 before retrieval lands.
-- [Phase 11 / correction] PROJECT.md + CLAUDE.md still name the deprecated `text-embedding-004` (sunset 2026-01-14) — Phase 11 uses `gemini-embedding-001` @ 768d; correct the stale references during planning.
-- [Parked] All v1.1 deploy/UAT blockers (Koyeb sleep + UptimeRobot, reconnect race, live Neon/Koyeb human-check) remain parked behind the YouTube datacenter-IP block — out of v1.2 scope, resume on a residential host. See Deferred Items.
+- [Parked] All v1.1 deploy/UAT blockers (Koyeb sleep + UptimeRobot, reconnect race, live Neon/Koyeb human-check) plus the new v1.2 Phase 09/11 live-runtime UAT/verification checks remain parked behind the YouTube datacenter-IP block — resume on an always-on residential host. See Deferred Items.
+
+> Resolved at v1.2 close: the Phase 11 numeric-defaults research flag (validated by the 11-02 spike against live Neon) and the `text-embedding-004` → `gemini-embedding-001` correction (applied in Phase 11).
 
 ## Deferred Items
 

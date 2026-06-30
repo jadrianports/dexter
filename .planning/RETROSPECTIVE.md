@@ -84,6 +84,47 @@
 
 ---
 
+## Milestone: v1.2 — Sharper & Smarter
+
+**Shipped (code):** 2026-06-30
+**Phases:** 4 (9, 10, 11, 12) | **Plans:** 19 | **Tasks:** 43 | **Commits:** 136 since v1.1
+
+### What Was Built
+- Reliability & ops hardening: truthful degraded-503 `/health`, fire-and-forget failure surfacing via `make_task`, un-wedgeable `on_ready` watchdog + startup-sync recovery, DB query timeouts, YouTube search/extract self-heal (Phase 9).
+- Critical-path test coverage: playback/health/roast decision logic extracted to pure `logic/` modules with ~83 mock-free unit tests + three named scar regressions; full-suite-green + clean-boot regression gate (Phase 10).
+- A durable RAG long-term memory: `pgvector` on the existing Neon Postgres + `gemini-embedding-001` @ 768d behind a separate 60 RPM limiter — recall/rerank read + remember/dedup/cap-evict write halves, a sensitivity/PII + numbers-from-SQL accuracy firewall, callback roasts at four surfaces, daily decay sweep — at zero new infra (Phase 11).
+- Richer music/UX: per-server `/jam` playlists, `/skips` analytics, an LRCLIB third lyrics fallback, token-set auto-queue hallucination validation (Phase 12).
+
+### What Worked
+- **Pure-seam-first graduated into a `logic/` package.** Phase 10 formalized the long-standing convention into a top-level `logic/` package (`playback`/`health`/`roasts`), which Phases 11–12 then imported from for rerank/dedup/decay and auto-queue validation — the seam became shared infrastructure, not a per-phase habit.
+- **Spike-before-commit on ML priors.** Phase 11 ran a numeric-defaults validation spike against live Neon *before* retrieval landed, tuning MEDIUM-confidence priors empirically (dedup 0.90→0.92, floor 0.70 kept, keep-768) instead of shipping assumptions — the flagship phase's riskiest guesses were de-risked cheaply up front.
+- **Disjoint-file wave parallelization held.** Phase 9 Wave 2 (utils+music vs bot.py vs youtube), Phase 10 Wave 1 (three disjoint `logic/` modules), and Phase 12 (all Wave 1, append-only `database.py`/`config.py`) ran with zero file-overlap rework.
+- **Accuracy firewall designed in, not bolted on.** Memory never embeds SQL-known numbers; hard numbers in output come from live SQL — Critical Rule 5 survived the RAG addition intact.
+
+### What Was Inefficient
+- **The "human_needed" tail grew again.** Four new v1.2 live-runtime items (Phase 09 truthful-health + task-surfacing, Phase 11 RAG recall + callback-roast behavior) join the parked v1.1 deploy checks. RAG's real payoff — recall quality and whether callback roasts actually land — genuinely needs a live community the parked host still blocks.
+- **Decision-log provenance drifted.** Many STATE.md decisions were logged as `[Phase ?]` or bare `11-04` placeholders, and several Phase-09 SUMMARYs produced empty one-liners — the per-decision phase attribution decayed over a long, fast milestone.
+- **A requirement checkbox went stale.** UX-03 (LRCLIB fallback) stayed unchecked in REQUIREMENTS.md despite 12-03 shipping it — caught and corrected at milestone close rather than at the Phase 12 transition.
+
+### Patterns Established
+- **A top-level `logic/` package** is the canonical home for extracted pure decision logic (`playback`, `health`, `roasts`, `autoqueue`) — keyword-only primitives, mock-free tests, Discord/process glue stays out.
+- **One rate budget per workload class** — 60 RPM embeddings vs the shared 15 RPM chat budget, so background memory writes can never starve user-facing `/ask`/`/imagine`.
+- **Spike-to-lock-constants** — validate MEDIUM-confidence numeric/ML priors against real data before building retrieval on them.
+- **RAG accuracy firewall** — memory is optional roast *ammo* the model may NOOP; any hard number in the output comes from live SQL, never from an embedded fact.
+
+### Key Lessons
+1. Extract critical-path decision logic into a pure `logic/` package early — it makes the branches testable without mocking Discord, and later phases import from it instead of re-deriving.
+2. Spike numeric/ML priors against real data before building on them — a half-day validation beats shipping tuned-by-assumption constants into a flagship feature.
+3. Give each workload class its own rate budget so background work can't starve user commands.
+4. Reconcile requirement checkboxes at each phase transition, not at milestone close — stale traceability state accumulates silently across a fast milestone.
+
+### Cost Observations
+- Model mix: not instrumented this milestone.
+- Sessions: not tracked.
+- Notable: Phase 11 P05 (distillation prompt + sensitivity/number gates + write-hooks + daily batch) was the heavyweight — the largest single plan by the STATE.md per-plan metrics (~8 files). The RAG write-producer half carried the milestone's most concentrated complexity.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -92,6 +133,7 @@
 |-----------|----------|--------|------------|
 | v1.0 | n/a | 5 | Adopted GSD wave-based planning mid-project (Phases 3–4); earlier phases ingested retroactively |
 | v1.1 | n/a | 4 | Full GSD per-phase chain throughout; executor=sonnet; deploy substrate re-targeted twice (Oracle → Koyeb → on-demand PC) |
+| v1.2 | n/a | 4 | First milestone with a dedicated test-coverage phase (10) and a research-backed flagship phase (11) gated by a validation spike; pure-logic seam graduated to a `logic/` package |
 
 ### Cumulative Quality
 
@@ -99,10 +141,13 @@
 |-----------|-------|----------|--------------------|
 | v1.0 | 20 files (251+ passing at Phase 3 close) | Not measured (pure-logic TDD + structural review convention) | lyricsgenius, beautifulsoup4, aiohttp, tzdata, asyncpg |
 | v1.1 | + Phase 6/7/8 suites (resolution-cache, audio, filters, favorites/playlists, leaderboard — incl. live-DB integration) | Not measured (same convention) | SponsorBlock via yt-dlp postprocessors; aiohttp `/health` server |
+| v1.2 | + ~83 mock-free `logic/` unit tests (playback/health/roasts) with named scar regressions + Phase 11 memory rerank/dedup/decay suites | Not measured (same convention; first explicit regression-gate phase) | `pgvector` (Neon extension) + `pgvector` Python codec; `gemini-embedding-001` embeddings |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. **(Confirmed at v1.1)** Bot/process code is verified structurally + by live UAT, never by unit tests alone — v1.1's PC-env UAT caught a blocker static review missed.
-2. **(Confirmed at v1.1)** Pure seams first, integration wiring second — held across all four v1.1 phases.
+2. **(Confirmed across v1.0→v1.2)** Pure seams first, integration wiring second — held every milestone, and at v1.2 graduated into a dedicated `logic/` package downstream phases import from.
 3. *(New at v1.1)* Keep hosting behind a Dockerfile + `DATABASE_URL` seam — it absorbed two deploy pivots as config-only changes.
 4. *(New at v1.1)* Validate that the target host can reach the core external dependency before sequencing a milestone around it — the YouTube datacenter-IP block parked the entire deploy premise.
+5. *(New at v1.2)* Spike MEDIUM-confidence numeric/ML priors against real data before building on them — cheap validation beats shipped assumptions in a flagship feature.
+6. *(New at v1.2)* Give each workload class its own rate budget — separate 60 RPM embeddings from the 15 RPM chat budget so background work never starves user commands.
