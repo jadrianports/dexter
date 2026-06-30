@@ -256,12 +256,14 @@ class LyricsService:
             log.warning("GENIUS_TOKEN not set — Genius lyrics disabled")
 
     async def get_lyrics(self, title: str, artist: str | None) -> str | None:
-        """Fetch lyrics: Genius first, AZLyrics fallback. Returns None if both fail.
+        """Fetch lyrics: Genius → AZLyrics → LRCLIB. Returns None if all three fail.
 
         Cleans the (often messy YouTube) title/artist ONCE here via
-        build_genius_search_query, so BOTH the Genius search and the AZLyrics
-        URL use the same normalized query (previously AZLyrics used the raw
-        title, which produced wrong matches).
+        build_genius_search_query, so ALL three sources use the same normalized
+        query (previously AZLyrics used the raw title, which produced wrong matches).
+
+        Chain: Genius (search_song via asyncio.to_thread) → AZLyrics (aiohttp scrape)
+               → LRCLIB (aiohttp JSON /api/search — third fallback, D-10).
         """
         q_title, q_artist = build_genius_search_query(title, artist)
         if not q_title:
@@ -269,7 +271,10 @@ class LyricsService:
         lyrics = await self._get_genius(q_title, q_artist)
         if lyrics:
             return lyrics
-        return await self._get_azlyrics(q_title, q_artist)
+        lyrics = await self._get_azlyrics(q_title, q_artist)
+        if lyrics:
+            return lyrics
+        return await self._get_lrclib(q_title, q_artist)
 
     async def _get_genius(self, title: str, artist: str | None) -> str | None:
         """Search Genius for lyrics using asyncio.to_thread (non-blocking).
@@ -340,4 +345,58 @@ class LyricsService:
                     return sanitize_lyrics(text)
         except Exception as exc:
             log.warning("AZLyrics fetch failed: %s", exc)
+            return None
+
+    async def _get_lrclib(self, title: str, artist: str | None) -> str | None:
+        """Fetch plainLyrics from LRCLIB as third lyrics fallback (D-10, UX-03).
+
+        Uses /api/search (NOT /api/get) — more robust because /api/get requires
+        a matching duration (±2s) which Dexter may not have; /api/search returns
+        an array sorted by relevance, and we pick the first non-instrumental,
+        non-null plainLyrics result.
+
+        Security (T-12-03-01 through T-12-03-05):
+        - Host hard-coded as _LRCLIB_BASE — no SSRF.
+        - title/artist passed via aiohttp params= dict (URL-encoded — no injection).
+        - aiohttp.ClientTimeout(total=10) + 500_000-byte cap (DoS guards).
+        - strip_lrc_headers() removes LRC metadata lines BEFORE sanitize_lyrics().
+        - Non-200 responses (incl. 429) treated as None — no retry storm.
+        """
+        params: dict[str, str] = {"track_name": title}
+        if artist:
+            params["artist_name"] = artist
+        headers = {"User-Agent": "Dexter/1.2 (Discord music bot)"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{_LRCLIB_BASE}/api/search",
+                    params=params,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    if resp.status != 200:
+                        log.warning("LRCLIB returned HTTP %s for %s / %s", resp.status, title, artist)
+                        return None
+                    raw = await resp.text()
+                    # DoS guard: cap response size (T-12-03-02)
+                    if len(raw) > 500_000:
+                        log.warning("LRCLIB response too large (%d bytes)", len(raw))
+                        return None
+                    results = json.loads(raw)
+                    for item in results:
+                        # Skip instrumental tracks (no vocals; plainLyrics is typically null)
+                        if item.get("instrumental"):
+                            continue
+                        plain = item.get("plainLyrics")
+                        if not plain:
+                            continue
+                        # Strip LRC metadata headers before sanitizing (Pitfall 1 / T-12-03-04)
+                        cleaned = strip_lrc_headers(plain)
+                        if len(cleaned) < 50:
+                            continue  # too short to be real lyrics
+                        return sanitize_lyrics(cleaned)
+                    # All results were instrumental or had no plainLyrics
+                    return None
+        except Exception as exc:
+            log.warning("LRCLIB fetch failed: %s", exc)
             return None
