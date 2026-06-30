@@ -1,21 +1,25 @@
-"""Lyrics fetching service: Genius primary, AZLyrics fallback.
+"""Lyrics fetching service: Genius primary, AZLyrics fallback, LRCLIB third fallback.
 
 Exposes LyricsService(genius_token) with async get_lyrics(title, artist).
 Pure helpers (build_genius_search_query, build_azlyrics_url, chunk_lyrics,
-sanitize_lyrics, extract_azlyrics) are importable standalone for unit tests.
+sanitize_lyrics, extract_azlyrics, strip_lrc_headers) are importable standalone
+for unit tests.
 
-Security notes (STRIDE T-03-06 through T-03-09):
+Security notes (STRIDE T-03-06 through T-03-09, T-12-03-01 through T-12-03-05):
 - build_azlyrics_url strips ALL non-alphanum from artist/song (kills path traversal, @).
 - URL host is hard-coded azlyrics.com — no SSRF.
 - sanitize_lyrics strips HTML tags and neutralizes @everyone / @here.
 - GENIUS_TOKEN is passed only to the Genius() constructor; never logged or echoed.
 - _get_azlyrics uses aiohttp.ClientTimeout(total=10) + 500_000-byte cap (DoS guards).
 - Genius is wrapped in asyncio.to_thread — never blocks the event loop.
+- _LRCLIB_BASE is hard-coded — no user-supplied host reaches the HTTP client (T-12-03-01).
+- strip_lrc_headers removes LRC metadata lines before sanitize_lyrics (T-12-03-04).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 
 import aiohttp
@@ -62,10 +66,36 @@ _JUNK_ARTIST_RE = re.compile(
 _DASH_SPLIT_RE = re.compile(r"\s[-–—]\s")
 _DASH_TRIM = " -–—\t"
 
+# LRCLIB API base URL — hard-coded, no user-supplied host reaches the HTTP client (T-12-03-01).
+_LRCLIB_BASE = "https://lrclib.net"
+
+# LRC metadata header lines embedded in some LRCLIB plainLyrics records (Pitfall 1 / T-12-03-04).
+# Matches a FULL line like "[ti:Title]", "[ar:Artist]", "[offset:0]" etc.
+# re.MULTILINE so ^ matches each line start; [^\]]* consumes the tag value safely.
+_LRC_HEADER_RE = re.compile(
+    r"^\[(ti|ar|al|by|offset|length|re|ve):[^\]]*\]\s*$",
+    re.MULTILINE,
+)
+
 
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
+
+
+def strip_lrc_headers(text: str) -> str:
+    """Strip LRC metadata header lines from LRCLIB plainLyrics text (T-12-03-04).
+
+    Some LRCLIB records embed [ti:...], [ar:...], [al:...], [by:...],
+    [offset:0], [length:...], [re:...], [ve:...] lines at the start of
+    plainLyrics (verified via live API probe 2026-06-30).
+
+    This helper MUST run BEFORE sanitize_lyrics() — sanitize_lyrics only strips
+    HTML and @mentions; it will not remove LRC header lines (Pitfall 1).
+
+    Pure function — no I/O, no async — suitable for unit testing without mocks.
+    """
+    return _LRC_HEADER_RE.sub("", text).strip()
 
 
 def build_genius_search_query(title: str, artist: str | None) -> tuple[str, str]:
