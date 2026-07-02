@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from logic.playback import TrackEndAction, decide_on_track_end
+from logic.playback import TrackEndAction, decide_on_track_end, should_start_playback
 
 import discord
 from discord import app_commands
@@ -24,10 +25,12 @@ from database import (
     normalize_search_query,
     get_resolution_cache,
     set_resolution_cache,
+    get_user_top_artist,
+    get_artist_cooccurrence,
 )
 from models.queue import Track, LoopMode, MusicQueue, QueueFullError
 from models.user_profile import get_user_summary
-from personality.prompts import build_chat_prompt
+from personality.prompts import build_chat_prompt, build_discover_commentary_prompt
 from personality.roasts import (
     pick_random,
     NO_LYRICS_FOUND,
@@ -41,6 +44,7 @@ from personality.responses import (
     FILTER_CLEARED,
     NOT_IN_VOICE,
     NOTHING_PLAYING,
+    DISCOVER_NO_HISTORY,
 )
 from services.gemini import GeminiRateLimitError
 from services.lyrics import chunk_lyrics
@@ -1973,6 +1977,97 @@ class MusicCog(commands.Cog):
             await interaction.followup.send(msg, embed=embed, view=view)
         else:
             await interaction.followup.send(msg)
+
+    # ──────────────────────────── PHASE 14: /discover (BRAIN-02) ────────────────────────────
+
+    @app_commands.command(
+        name="discover",
+        description="Discover an artist this server tends to play alongside your favorites",
+    )
+    async def discover(self, interaction: discord.Interaction) -> None:
+        """/discover — SQL-derived artist adjacency, Gemini voice-only commentary (D-04/D-05).
+
+        Anchor = invoker's guild-scoped top artist (get_user_top_artist, Option B
+        per 14-01). Adjacent artists = same-guild-day co-occurrence
+        (get_artist_cooccurrence) — a guild-WIDE aggregate exposing only artist
+        names, never a user_id (Criterion 4). These SQL rows ARE the
+        recommendation; Gemini (build_discover_commentary_prompt) only wraps
+        them in voice — its reply is used as plain text, with no JSON-suggestion
+        parsing step at all (D-04 firewall). Cold-start (no anchor / no
+        adjacency) degrades to an in-character message, never an error (D-05).
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer()
+
+        try:
+            anchor_rows = await get_user_top_artist(
+                self.bot.pool,
+                guild_id=str(guild.id),
+                user_id=str(interaction.user.id),
+                limit=1,
+            )
+            if not anchor_rows:
+                await interaction.followup.send(pick_random(DISCOVER_NO_HISTORY))
+                return
+
+            anchor_artist = anchor_rows[0]["artist"]
+
+            since = datetime.now(timezone.utc) - timedelta(
+                days=config.DISCOVER_COOCCURRENCE_WINDOW_DAYS
+            )
+            adjacent_rows = await get_artist_cooccurrence(
+                self.bot.pool,
+                guild_id=str(guild.id),
+                anchor_artist=anchor_artist,
+                since=since,
+                limit=config.DISCOVER_ADJACENT_COUNT,
+            )
+            if not adjacent_rows:
+                await interaction.followup.send(pick_random(DISCOVER_NO_HISTORY))
+                return
+
+            # SQL-derived picks — these ARE the recommendation (D-04 firewall).
+            # Gemini below supplies commentary/voice only, never the picks themselves.
+            adjacent_artists = [r["artist"] for r in adjacent_rows]
+
+            gemini_service = getattr(self.bot, "gemini_service", None)
+            commentary: str | None = None
+            if gemini_service is not None:
+                try:
+                    commentary = await gemini_service.chat(
+                        build_discover_commentary_prompt(anchor_artist, adjacent_artists),
+                        [],
+                        priority=2,
+                    )
+                except Exception as gemini_err:
+                    log.debug(
+                        "discover: gemini commentary failed, using fallback (%s)", gemini_err
+                    )
+
+            if not commentary:
+                # Firewall-safe fallback: names the SQL picks directly, no Gemini needed.
+                commentary = (
+                    f"since you're into {anchor_artist}, this server also plays "
+                    f"{', '.join(adjacent_artists)}."
+                )
+
+            await interaction.followup.send(commentary)
+        except Exception as e:
+            log.error(
+                "discover: unexpected error for guild %s user %s: %s",
+                guild.id, interaction.user.id, e, exc_info=True,
+            )
+            await interaction.followup.send(
+                embed=embeds.error(
+                    "something broke while digging through the server's taste. try again later."
+                )
+            )
 
     # ──────────────────────────── VOICE EVENTS ────────────────────────────
 

@@ -187,3 +187,14 @@ SKIPS_NOT_ENOUGH_DATA: list[str] = [
     "you haven't played enough for me to roast you. queue more.",
     "come back when you've actually played something.",
 ]
+
+# --- Phase 14: /discover cold-start (D-05) ---
+# Never an error — surfaced when the invoker has no anchor artist yet, or the
+# server has no co-occurrence adjacency to surface for their anchor.
+
+DISCOVER_NO_HISTORY: list[str] = [
+    "i don't have enough listening history on you yet. queue some songs first.",
+    "not enough data to work with. play something and come back.",
+    "this server hasn't given me enough to go on. queue more, then ask again.",
+    "i can't find a pattern yet. give me more songs to judge you by.",
+]
