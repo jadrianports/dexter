@@ -417,7 +417,19 @@ class EventsCog(commands.Cog):
              suppressed. The daily counter increments ONLY on an actual fire.
         """
         user_id = str(message.author.id)
-        opted_out = await database.get_proactive_opt_out(self.bot.pool, user_id)
+        # WR-02: fail closed on a DB hiccup, matching the recall path's
+        # degrade-to-default discipline two steps below. Unlike recall(),
+        # there's no meaningful "default" opt-out value to substitute here, so
+        # an error just skips this message's callback silently rather than
+        # raising an unhandled listener exception into on_message.
+        try:
+            opted_out = await database.get_proactive_opt_out(self.bot.pool, user_id)
+        except Exception as _opt_out_err:
+            log.debug(
+                "proactive callback: opt-out lookup failed (non-fatal): %s",
+                _opt_out_err,
+            )
+            return
 
         # Community-time day key (STREAK_TIMEZONE convention — never naive
         # datetime.now(), see on_voice_state_update above).
