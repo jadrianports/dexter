@@ -209,6 +209,17 @@ MEMORY_DECAY_DAYS_BY_KIND: dict[str, int] = {
 }
 
 
+# --- Phase 14: Smarter Music Brain (BRAIN-01/02/03) ---
+# All six knobs below are directional / Claude's-discretion priors per CONTEXT.md —
+# not derived from any measured constraint, safe to retune later without a design change.
+AUTO_QUEUE_SKIP_LOOKBACK_DAYS = 7        # D-01: recently-skipped window, days
+AUTO_QUEUE_SKIP_HINT_CAP = 15            # D-01: max rows in the negative-hint block
+AUTO_QUEUE_POSITIVE_TASTE_CAP = 4        # D-03: max injected taste_episode facts
+DISCOVER_ADJACENT_COUNT = 3              # D-04: max /discover adjacent artists surfaced
+DISCOVER_COOCCURRENCE_WINDOW_DAYS = 90   # D-04: get_artist_cooccurrence recency bound, days
+JAM_SUGGEST_CANDIDATE_COUNT = 3          # D-06: /jam suggest candidate additions requested
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 

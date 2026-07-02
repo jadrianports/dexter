@@ -131,3 +131,52 @@ def test_phase9_all_constants_exist():
     assert config.TASK_ERROR_CHANNEL_COOLDOWN_SECONDS == 300
     assert config.YTDLP_RETRY_BACKOFF_SECONDS == 1.0
     assert config.YTDLP_MAX_QUICK_RETRIES == 2
+
+
+# ---------------------------------------------------------------------------
+# Phase 14: Smarter Music Brain constants
+# ---------------------------------------------------------------------------
+
+
+class TestPhase14Constants:
+    """Assert Phase 14 config constants exist as positive ints with correct defaults."""
+
+    def test_auto_queue_skip_lookback_days(self):
+        assert isinstance(config.AUTO_QUEUE_SKIP_LOOKBACK_DAYS, int)
+        assert config.AUTO_QUEUE_SKIP_LOOKBACK_DAYS > 0
+        assert config.AUTO_QUEUE_SKIP_LOOKBACK_DAYS == 7
+
+    def test_auto_queue_skip_hint_cap(self):
+        assert isinstance(config.AUTO_QUEUE_SKIP_HINT_CAP, int)
+        assert config.AUTO_QUEUE_SKIP_HINT_CAP > 0
+        assert config.AUTO_QUEUE_SKIP_HINT_CAP == 15
+
+    def test_auto_queue_positive_taste_cap(self):
+        assert isinstance(config.AUTO_QUEUE_POSITIVE_TASTE_CAP, int)
+        assert config.AUTO_QUEUE_POSITIVE_TASTE_CAP > 0
+        assert config.AUTO_QUEUE_POSITIVE_TASTE_CAP == 4
+
+    def test_discover_adjacent_count(self):
+        assert isinstance(config.DISCOVER_ADJACENT_COUNT, int)
+        assert config.DISCOVER_ADJACENT_COUNT > 0
+        assert config.DISCOVER_ADJACENT_COUNT == 3
+
+    def test_discover_cooccurrence_window_days(self):
+        assert isinstance(config.DISCOVER_COOCCURRENCE_WINDOW_DAYS, int)
+        assert config.DISCOVER_COOCCURRENCE_WINDOW_DAYS > 0
+        assert config.DISCOVER_COOCCURRENCE_WINDOW_DAYS == 90
+
+    def test_jam_suggest_candidate_count(self):
+        assert isinstance(config.JAM_SUGGEST_CANDIDATE_COUNT, int)
+        assert config.JAM_SUGGEST_CANDIDATE_COUNT > 0
+        assert config.JAM_SUGGEST_CANDIDATE_COUNT == 3
+
+
+def test_phase14_all_constants_exist():
+    """Phase 14: All six Phase 14 constants exist with correct default values."""
+    assert config.AUTO_QUEUE_SKIP_LOOKBACK_DAYS == 7
+    assert config.AUTO_QUEUE_SKIP_HINT_CAP == 15
+    assert config.AUTO_QUEUE_POSITIVE_TASTE_CAP == 4
+    assert config.DISCOVER_ADJACENT_COUNT == 3
+    assert config.DISCOVER_COOCCURRENCE_WINDOW_DAYS == 90
+    assert config.JAM_SUGGEST_CANDIDATE_COUNT == 3
