@@ -88,7 +88,7 @@ Plans:
 **Wave 1**
 
 - [x] 13-01-PLAN.md — Taste config knobs + salience/decay tier + pure logic/taste.py banding & gate
-- [ ] 13-02-PLAN.md — song_history aggregate helpers + expires_at refresh helper
+- [x] 13-02-PLAN.md — song_history aggregate helpers + expires_at refresh helper
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -172,7 +172,7 @@ Plans:
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete | 2026-06-27 |
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete (live-runtime UAT deferred) | 2026-06-29 |
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
-| 13. Semantic Music Memory | v1.3 | 1/4 | In Progress|  |
+| 13. Semantic Music Memory | v1.3 | 2/4 | In Progress|  |
 | 14. Smarter Music Brain | v1.3 | 0/TBD | Not started | - |
 | 15. RAG Reach | v1.3 | 0/TBD | Not started | - |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |

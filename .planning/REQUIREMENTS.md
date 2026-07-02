@@ -15,7 +15,7 @@ Requirements for the v1.3 milestone. Each maps to a roadmap phase (13–17).
 
 - [x] **TASTE-01**: Dexter distills a user's listening activity into number-free "taste episode" facts and stores them as a new `kind` in the existing `user_memories` vector store (no schema fork; accuracy firewall preserved — no counts embedded).
 - [x] **TASTE-02**: Taste-episode memories use their own salience base weight and decay tier (deliberately set for taste, not inherited from the Phase 11 general-fact defaults).
-- [ ] **TASTE-03**: A background task writes taste episodes on a schedule distinct from the existing distill-batch/sweep loops (no thundering-herd on the Neon pool), following the module-scope `@tasks.loop` + `make_task` failure-surfacing convention.
+- [x] **TASTE-03**: A background task writes taste episodes on a schedule distinct from the existing distill-batch/sweep loops (no thundering-herd on the Neon pool), following the module-scope `@tasks.loop` + `make_task` failure-surfacing convention.
 
 ### Smarter Music Brain *(Phase 14)*
 
@@ -75,7 +75,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | TASTE-01 | Phase 13 | Complete |
 | TASTE-02 | Phase 13 | Complete |
-| TASTE-03 | Phase 13 | Pending |
+| TASTE-03 | Phase 13 | Complete |
 | BRAIN-01 | Phase 14 | Pending |
 | BRAIN-02 | Phase 14 | Pending |
 | BRAIN-03 | Phase 14 | Pending |
