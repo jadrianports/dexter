@@ -102,3 +102,13 @@ None - no external service configuration required.
 ---
 *Phase: 15-rag-reach*
 *Completed: 2026-07-03*
+
+## Self-Check: PASSED
+
+- FOUND: cogs/memory.py
+- FOUND: tests/test_memory_command.py
+- FOUND: .planning/phases/15-rag-reach/15-03-SUMMARY.md
+- FOUND commit: fc69f81
+- FOUND commit: 175b3e5
+- FOUND commit: 76040e8
+- FOUND commit: b20356c
