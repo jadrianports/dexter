@@ -148,6 +148,43 @@ def summarize_taste(
     return phrases
 
 
+def select_positive_taste_context(
+    member_facts: list[list[str]], *, cap: int
+) -> list[str]:
+    """Flatten per-member recalled taste_episode facts into one capped, deduped list (D-03).
+
+    Args:
+        member_facts: one list[str] per in-voice member (already recall()-filtered to
+                      kind="taste_episode" upstream). Interleaves round-robin across
+                      members by index position (not member-by-member concatenation)
+                      so no single member's facts dominate the cap purely by list
+                      position — mirrors D-03's "collective, not per-listener" framing.
+        cap: config.AUTO_QUEUE_POSITIVE_TASTE_CAP — max facts to return.
+
+    Returns:
+        A flat list[str], length <= cap. Never raises for any list-of-list-of-str
+        input; cap=0 or empty member_facts -> []; members with empty lists are
+        skipped without error.
+
+    Deliberately UNATTRIBUTED: the return type carries no member identity — the
+    caller MUST NOT re-associate a returned fact with which member produced it
+    (Pitfall 4). The facts themselves are already number-free by construction of
+    taste_episode distillation (summarize_taste's firewall) — no numeric
+    interpolation is added here (accuracy firewall, Critical Rule 12).
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    max_len = max((len(f) for f in member_facts), default=0)
+    for i in range(max_len):
+        for facts in member_facts:
+            if len(result) >= cap:
+                return result
+            if i < len(facts) and facts[i] not in seen:
+                seen.add(facts[i])
+                result.append(facts[i])
+    return result
+
+
 def resolve_decay_days(
     kind: str,
     *,

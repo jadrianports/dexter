@@ -22,6 +22,7 @@ from logic.taste import (
     classify_artist,
     has_min_activity,
     resolve_decay_days,
+    select_positive_taste_context,
     summarize_taste,
 )
 
@@ -157,6 +158,36 @@ class TestDigitFreeFirewall:
         assert phrases  # sanity: fixture actually produced output
         for phrase in phrases:
             assert re.search(r"\d", phrase) is None, f"digit leaked into phrase: {phrase!r}"
+
+
+class TestSelectPositiveTasteContext:
+    """D-03 blend/cap: round-robin interleave, dedup, cap, unattributed collective output."""
+
+    def test_positive_taste_round_robin_interleave_order(self):
+        result = select_positive_taste_context([["a", "b"], ["c", "d"]], cap=3)
+        assert result == ["a", "c", "b"]
+
+    def test_positive_taste_dedup_across_members(self):
+        # "shared" appears in both members' lists — emitted once.
+        result = select_positive_taste_context(
+            [["shared", "a"], ["shared", "b"]], cap=10
+        )
+        assert result.count("shared") == 1
+
+    def test_positive_taste_cap_zero_returns_empty_list(self):
+        assert select_positive_taste_context([["a", "b"], ["c"]], cap=0) == []
+
+    def test_positive_taste_empty_input_returns_empty_list(self):
+        assert select_positive_taste_context([], cap=5) == []
+
+    def test_positive_taste_members_with_empty_lists_skipped_without_error(self):
+        result = select_positive_taste_context([[], ["x", "y"]], cap=5)
+        assert result == ["x", "y"]
+
+    def test_positive_taste_never_raises_and_respects_cap_length(self):
+        member_facts = [["a", "b", "c"], ["d", "e"], []]
+        result = select_positive_taste_context(member_facts, cap=2)
+        assert len(result) <= 2
 
 
 class TestResolveDecayDays:
