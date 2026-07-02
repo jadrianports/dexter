@@ -3,6 +3,9 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from google.genai import errors
+
+import config
 from services.gemini import GeminiService, GeminiAPIError, GeminiRateLimitError
 
 
@@ -55,3 +58,130 @@ class TestGeminiChat:
                     system_prompt="test",
                     conversation=[],
                 )
+
+
+# ──────────────────────── Phase 17: safety_settings retrofit ────────────────────────
+
+
+def _mock_service_and_generate(text="roast line"):
+    """Return (service, mock_generate) with genai patched and a captured
+    generate_content AsyncMock. `text` is the mocked response.text."""
+    mock_response = MagicMock()
+    mock_response.text = text
+    mock_client = MagicMock()
+    mock_generate = AsyncMock(return_value=mock_response)
+    mock_client.aio.models.generate_content = mock_generate
+    return mock_client, mock_generate
+
+
+class TestGeminiSafetySettings:
+    """VIS-03: every user-influenced generate_content config carries explicit safety_settings."""
+
+    @pytest.mark.asyncio
+    async def test_plain_chat_threads_text_threshold(self):
+        mock_client, mock_generate = _mock_service_and_generate()
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+            await service.chat(system_prompt="test", conversation=[])
+
+            _, kwargs = mock_generate.call_args
+            settings = kwargs["config"].safety_settings
+            assert settings is not None
+            assert len(settings) >= 4
+            assert all(s.threshold == config.TEXT_SAFETY_THRESHOLD for s in settings)
+
+    @pytest.mark.asyncio
+    async def test_vision_chat_uses_real_block_threshold(self):
+        mock_client, mock_generate = _mock_service_and_generate()
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+            await service.chat(
+                system_prompt="test",
+                conversation=[{"role": "user", "content": "react"}],
+                image_bytes=b"\x89PNG\r\n",
+                image_mime_type="image/png",
+            )
+
+            _, kwargs = mock_generate.call_args
+            settings = kwargs["config"].safety_settings
+            assert settings is not None
+            assert all(s.threshold == config.VISION_SAFETY_THRESHOLD for s in settings)
+
+    @pytest.mark.asyncio
+    async def test_vision_and_text_thresholds_are_distinct(self):
+        # The two call shapes must select two DIFFERENT threshold values.
+        assert config.VISION_SAFETY_THRESHOLD != config.TEXT_SAFETY_THRESHOLD
+
+    @pytest.mark.asyncio
+    async def test_vision_chat_appends_image_part(self):
+        mock_client, mock_generate = _mock_service_and_generate()
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+            await service.chat(
+                system_prompt="test",
+                conversation=[{"role": "user", "content": "react"}],
+                image_bytes=b"\x89PNG\r\n",
+                image_mime_type="image/png",
+            )
+
+            _, kwargs = mock_generate.call_args
+            contents = kwargs["contents"]
+            # image part appended onto the final user turn (>=2 parts on last Content)
+            assert len(contents[-1].parts) >= 2
+
+    @pytest.mark.asyncio
+    async def test_generate_image_threads_text_threshold(self):
+        mock_response = MagicMock()
+        mock_response.candidates = None  # short-circuits extraction -> returns None
+        mock_client = MagicMock()
+        mock_generate = AsyncMock(return_value=mock_response)
+        mock_client.aio.models.generate_content = mock_generate
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+            await service.generate_image(prompt="a cat")
+
+            _, kwargs = mock_generate.call_args
+            settings = kwargs["config"].safety_settings
+            assert settings is not None
+            assert all(s.threshold == config.TEXT_SAFETY_THRESHOLD for s in settings)
+
+    @pytest.mark.asyncio
+    async def test_vision_chat_blocked_response_returns_none(self):
+        # VIS-02 hinge: a safety-blocked/empty response returns None, never raises.
+        mock_client, mock_generate = _mock_service_and_generate(text=None)
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+            result = await service.chat(
+                system_prompt="test",
+                conversation=[{"role": "user", "content": "react"}],
+                image_bytes=b"\x89PNG\r\n",
+                image_mime_type="image/png",
+            )
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_chat_429_raises_rate_limit_error(self):
+        api_err = errors.APIError(429, {"error": {"message": "rate limited"}}, None)
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=api_err)
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+            with pytest.raises(GeminiRateLimitError):
+                await service.chat(system_prompt="test", conversation=[])
+
+    @pytest.mark.asyncio
+    async def test_chat_non_429_api_error_raises_api_error(self):
+        api_err = errors.APIError(500, {"error": {"message": "boom"}}, None)
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=api_err)
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+            with pytest.raises(GeminiAPIError):
+                await service.chat(system_prompt="test", conversation=[])
