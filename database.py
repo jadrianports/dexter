@@ -1010,6 +1010,35 @@ async def bump_memory_hit(pool: asyncpg.Pool, memory_id: int) -> None:
         )
 
 
+async def refresh_memory_expiry(
+    pool: asyncpg.Pool, memory_id: int, expires_at: datetime
+) -> None:
+    """Reset the decay horizon on an existing memory row — expires_at ONLY.
+
+    The D-05 self-refresh primitive: MemoryService.remember()'s dedup branch
+    (plan 13-03) calls this for short-decay kinds (e.g. taste_episode) so a
+    still-true steady favorite's expiry horizon resets on every re-distillation
+    instead of aging out under TASTE_DECAY_DAYS while remaining true. This is
+    the expires_at-only sibling of bump_memory_hit — it does NOT touch
+    hit_count, salience, or last_seen_at (that is bump_memory_hit's job), so
+    Phase 11 decay semantics for every other kind stay fully untouched.
+
+    Args:
+        pool:       asyncpg connection pool.
+        memory_id:  The id of the existing user_memories row to refresh ($1).
+        expires_at: New UTC decay horizon, computed by the caller ($2) — never
+                    computed in SQL (e.g. now() + interval), so callers control
+                    the exact decay-days constant used (e.g. TASTE_DECAY_DAYS).
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE user_memories"
+            " SET expires_at = $2"
+            " WHERE id = $1",
+            memory_id, expires_at,
+        )
+
+
 async def count_user_memories(pool: asyncpg.Pool, user_id: str) -> int:
     """Return the current count of active memory rows for a user.
 
