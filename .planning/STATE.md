@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
 status: executing
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-07-02T10:12:53.167Z"
+stopped_at: Completed 13-03-PLAN.md
+last_updated: "2026-07-02T10:21:30.621Z"
 last_activity: 2026-07-02 -- Phase 13 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 ## Current Position
 
 Phase: 13 (semantic-music-memory) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-07-02 -- Phase 13 execution started
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion. Plan counts refined during /gsd-plan-phase.*
 | Phase 13 P01 | 12min | 2 tasks | 3 files |
 | Phase 13 P02 | 10min | 2 tasks | 2 files |
+| Phase 13 P03 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,7 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase 13]: classify_artist precedence is OBSESSION greater than NEW_ARRIVAL greater than STEADY greater than DROPPED_OFF greater than NONE; skips_in_window accepted for future-proofing but not consulted yet
 - [Phase 13]: get_active_taste_users is a deliberately global aggregate (not guild-scoped) — each row carries its own guild_id/user_id so no cross-user merge occurs
 - [Phase 13]: refresh_memory_expiry is the D-05 self-refresh primitive: an expires_at-only UPDATE sibling to bump_memory_hit, verified via test to leave hit_count/salience/last_seen_at untouched
+- [Phase 13]: remember() dedup/insert branches gate strictly on kind in MEMORY_DECAY_DAYS_BY_KIND (D-05 fix) so taste_episode self-refreshes expires_at on dedup while all Phase 11 kinds stay byte-identical
 
 ### Pending Todos
 
@@ -97,7 +99,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T10:12:53.150Z
-Stopped at: Completed 13-02-PLAN.md
+Last session: 2026-07-02T10:20:15.066Z
+Stopped at: Completed 13-03-PLAN.md
 Next: `/gsd-plan-phase 13`
 </content>

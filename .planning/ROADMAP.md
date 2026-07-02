@@ -92,7 +92,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 13-03-PLAN.md — kind-aware decay horizon + self-refresh-on-dedup fix (D-05)
+- [x] 13-03-PLAN.md — kind-aware decay horizon + self-refresh-on-dedup fix (D-05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -172,7 +172,7 @@ Plans:
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete | 2026-06-27 |
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete (live-runtime UAT deferred) | 2026-06-29 |
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
-| 13. Semantic Music Memory | v1.3 | 2/4 | In Progress|  |
+| 13. Semantic Music Memory | v1.3 | 3/4 | In Progress|  |
 | 14. Smarter Music Brain | v1.3 | 0/TBD | Not started | - |
 | 15. RAG Reach | v1.3 | 0/TBD | Not started | - |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
