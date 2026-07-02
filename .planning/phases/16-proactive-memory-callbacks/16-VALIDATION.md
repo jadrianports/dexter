@@ -1,8 +1,8 @@
 ---
 phase: 16
 slug: proactive-memory-callbacks
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-03
 ---
@@ -87,4 +87,4 @@ created: 2026-07-03
 - [ ] Feedback latency < 30s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-03 (plans satisfy every row of the Per-Task Verification Map; `wave_0_complete` flips true after execution writes the Wave 0 test files)
