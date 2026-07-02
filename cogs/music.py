@@ -588,6 +588,17 @@ class DiscoverQueueView(discord.ui.View):
             queue.add(track)
             queue._text_channel_id = interaction.channel_id
 
+            # Persist the queue with the connected voice channel id so a
+            # /discover-queued track survives restart/smart-rejoin, matching
+            # every other queue-add entry point (favorites/playlist/jam) (WR-02).
+            if hasattr(self.bot, "queue_persistence"):
+                try:
+                    await self.bot.queue_persistence.persist(
+                        guild, queue, voice_client.channel.id
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.debug("discover: queue persist failed: %s", exc)
+
             # Start playback only if audio isn't already flowing — gate on the
             # live voice-client state, never `queue.is_playing` (scar #2).
             if should_start_playback(
