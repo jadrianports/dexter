@@ -1,167 +1,157 @@
 # Project Research Summary
 
-**Project:** Dexter Discord Bot — v1.2 / Phase 11 (RAG long-term memory)
-**Domain:** Durable semantic long-term memory (pgvector-on-Neon + Gemini embeddings) bolted onto a shipped, layered discord.py + asyncpg + google-genai bot
-**Researched:** 2026-06-26
-**Confidence:** HIGH (integration mechanics + stack); MEDIUM (retrieval-quality numeric defaults — flagged for a validation spike)
-
-> **Scope note:** This research covers ONLY the RAG/pgvector feature (Phase 11). The rest of v1.2 — reliability hardening, test coverage, music/UX polish — is work on known code and was deliberately NOT researched. The roadmapper should treat Phase 11 as the researched slice and structure the other v1.2 work from existing knowledge.
+**Project:** Dexter ("Dex") — v1.3 "Taste Brain"
+**Domain:** Additions to an existing, shipped, personality-driven Discord music+AI bot (semantic music memory, taste-aware recommendation, RAG-into-command-surfaces, proactive callbacks, vision/multimodal roasting)
+**Researched:** 2026-07-02
+**Confidence:** HIGH
 
 ## Executive Summary
 
-Phase 11 adds a **third memory layer** to Dexter. The bot already has short-term memory (MessageBuffer, 10 msgs/channel, in-RAM) and structured/deterministic memory (Postgres: song_history, user_artist_counts, streaks). The new layer is **semantic/episodic** — pgvector + Gemini embeddings storing distilled, declarative facts (opinions, reactions, notable events, banter) that SQL cannot express, retrieved at roast time to power callback roasts. The payoff pattern is **stat x episode**: a hard number from SQL (mr brightside, 14 plays since april) paired with a recalled moment from pgvector (right after you swore you were done with the killers). The design reuses the existing Neon Postgres and the existing Gemini API key: **zero new infrastructure, zero new monthly cost, one new pip dependency.**
+v1.3 "Taste Brain" is not a new-systems milestone — it's a "wire it up in more places" milestone. All four research tracks (stack, features, architecture, pitfalls) independently converged on the same conclusion: everything the milestone needs already exists in the shipped v1.2 stack (`pgvector` on Neon, `MemoryService`, the dual Gemini rate limiters, `google-genai` 2.8.0, `discord.py` attachment handling). No new dependency, table, Postgres extension, rate limiter, or scheduling library is required. The five target features decompose cleanly onto existing seams: taste/listening facts become a new `kind` in the existing `user_memories` table (reusing `MemoryService.recall/remember/distill` completely unchanged); RAG-into-`/roast`/`/ask` is largely "already wired, just needs facts to flow through it"; proactive callbacks are a new `@tasks.loop` sibling of existing background loops gated by a new pure decision function; vision is a new, architecturally isolated cog reusing the shared 15 RPM chat limiter at priority 2.
 
-The recommended approach is opinionated and well-converged across the four research files. Embed with **gemini-embedding-001 at 768 dimensions** (NOT the deprecated text-embedding-004, sunset 2026-01-14 — the brief/PROJECT.md still name it and it must be corrected). Add **pgvector (>=0.3.6,<0.5)** as the only new dependency, enable the extension on Neon, and register the asyncpg vector codec in the pool init= callback. Embeddings get their **own rate limiter** (~60 RPM under the ~100 RPM endpoint quota), kept entirely off the shared 15 RPM chat budget, and run off the 3s interaction critical path. The feature integrates as **one new service (services/memory.py), one new model module (models/memory.py), one new table (user_memories), one new Gemini primitive (embed()), and a backward-compatible optional memories= kwarg** into the prompt builder — the layered architecture is not restructured.
+The one genuinely new architectural discipline the milestone introduces is the **flavor-vs-numbers split** first established in Phase 11's "accuracy firewall": qualitative taste narrative (roast ammo, jam flavor, discovery blurbs) flows through the vector-memory pipe, while anything that *drives a decision* — auto-queue ranking, skip-weighted scoring, taste-graph adjacency — must come from live structured SQL over `song_history`/`user_artist_counts`, never from embedded text. This split recurs in every research file and should be treated as a hard constraint, not a style preference.
 
-The dominant risks are an **accuracy firewall** (Critical Rule 5: never embed numbers SQL already answers — the embedded count freezes while live SQL keeps counting; numbers always come from a live SELECT, memories are only candidate ammo the model may NOOP), a **boot-ordering trap** (register_vector raises ValueError if the vector type does not exist yet — run CREATE EXTENSION on a throwaway connection BEFORE create_pool(init=...)), **budget/latency discipline** (separate embedding limiter, defer-first, no per-message writes), and **context rot + sensitivity** (per-user cap + decay sweep + a PII/sensitivity gate all ship in v1, not deferred). statement_cache_size=0 (the Neon/PgBouncer requirement) is a verified NON-issue — the codec is a per-connection set_type_codec, not a prepared statement.
+The dominant risk is not technical feasibility but **behavioral tuning and blast radius**, concentrated in two features: vision roasting (a genuinely new trust boundary — Gemini 2.5 defaults `safety_settings` to OFF, so an unprompted feature reacting to arbitrary user-uploaded images needs explicit, carefully-gated safety configuration, silent-not-fallback refusal handling, and conservative cadence to avoid quota starvation of `/ask`) and proactive callbacks (a genuinely new "the bot reaches into the past unprompted" surface that must anchor to active moments, fire rarer than existing ambient roasts, and ship alongside `/memory forget` as an escape hatch before it lands). Both risks are well-understood and mitigated by patterns this codebase already has proven — cadence-gating, priority-tiered rate limiting, silent degradation — the work is applying them correctly to two new, higher-stakes surfaces.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The only new dependency is the pgvector Python package; everything else (asyncpg 0.31.0, google-genai, the Neon pool) is already wired. The extension lives on the existing Neon Postgres. At the expected corpus size (hundreds to low-thousands of rows) a **sequential scan is sub-millisecond — no ANN index is needed on day one**; if/when it grows past ~10k rows, add **HNSW** (vector_cosine_ops), never IVFFlat (centroid training is garbage on a tiny/empty table). Index only at <=2000 dims, which 768 satisfies.
+**No new dependencies.** `requirements.txt` already covers every v1.3 capability: `google-genai` 2.8.0 supports multimodal image input (`types.Part.from_bytes`) and safety configuration (`types.SafetySetting`/`HarmCategory`/`HarmBlockThreshold`) natively; `discord.py` `Attachment.read()`/`.content_type`/`.size` covers image ingestion with no Pillow/opencv needed; `pgvector` + `gemini-embedding-001` (already wired for v1.2 RAG) covers taste embeddings as just another memory `kind`; `asyncpg` SQL aggregation over existing tables covers taste-graph discovery (no `networkx`, no graph DB, no vector DB alternative — pgvector already won that argument in Phase 11); `asyncio` background-task patterns already used 4x in `bot.py` cover proactive callbacks (no APScheduler/celery).
 
-**Core technologies:**
-- **gemini-embedding-001 @ 768 dims** (output_dimensionality=768): embedding model — current GA model; text-embedding-004 is DEPRECATED (2026-01-14). 768 is the indexable MRL sweet spot (ANN cap is 2000 dims; default 3072 would be unindexable). Use RETRIEVAL_DOCUMENT task_type on write, RETRIEVAL_QUERY on read.
-- **pgvector extension on Neon Postgres** + **pgvector>=0.3.6,<0.5 pip package**: register_vector in the pool init= callback registers the codec so you pass/receive plain list[float]. Cosine (<=>, vector_cosine_ops) — scale-invariant, so no numpy normalization needed.
-- **Separate embedding _RateLimiter** (~60 RPM): embeddings hit a different ~100 RPM Google quota; never route through the shared 15 RPM chat limiter (would starve /ask). Batch writes (embed_content(contents=[...]) produces N facts in 1 call).
-
-See `.planning/research/STACK.md` for the full asyncpg+pgvector+Neon integration pattern.
+**The one required change is a config/call-shape decision, not a library:** Gemini 2.5-series models default `safety_settings` to **OFF** when unspecified. Today's `chat()`/`generate_image()` never pass `safety_settings` (low-risk for trusted text input); the moment vision processes arbitrary user-uploaded images, this becomes a real gap that must be closed with explicit `HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE`-style settings on all four adjustable categories. Vision shares the existing 15 RPM chat limiter (a multimodal request counts as one request against RPM/RPD) — no second limiter needed.
 
 ### Expected Features
 
-Memory exists to power callback roasts, not to be a generic knowledge store. The load-bearing principle: **structured SQL owns numbers; the semantic layer owns episodes/opinions.** See `.planning/research/FEATURES.md`.
+**Must have (table stakes):**
+- New `taste_episode`-style memory kind, distilled + number-free like existing kinds — reuses `distill_and_remember()` end to end
+- Auto-queue respects recent skips as a negative-signal prompt hint (SQL aggregation → text injected into existing Gemini auto-queue prompt, not a new subsystem)
+- `recall()` wired into `/roast` and `/ask` (plumbing already kwarg-compatible since Phase 11)
+- `/memory view` (ephemeral, paginated) + `/memory forget <id>`/`forget all` — required before shipping more memory-surfacing features, for trust
+- Vision: explicit `safety_settings`, cadence-gated + designated-channel-only, silent decline on safety-block (no visible error, unlike `/imagine`'s direct-request refusal template), priority-2 on the shared limiter
 
-**Must have (table stakes / Phase 11 v1):**
-- Durable cross-restart store (user_memories on Neon + pgvector)
-- Distilled declarative facts (0-3 atomic third-person sentences per event/session), NOT raw logs
-- Per-user (+per-guild) scoped semantic retrieval (top-k=8 -> 0.70 similarity floor -> top 1-3)
-- Write-time dedup (cosine sim >0.90 -> NOOP/bump, else insert)
-- Callback roast: SQL stat + recalled episode handed to Gemini as candidate ammo, accuracy guaranteed
-- Memory hygiene baseline: per-user cap (~150) + decay sweep (~90d on low salience) — **ships in v1, NOT deferred**
-- Sensitivity/PII gate in the distill prompt — **ships in v1 (stop-ship), NOT deferred**
+**Should have (differentiators):**
+- Skip-aware, session-scoped artist deprioritization in auto-queue (not permanent — tastes shift)
+- `/taste`-style artist-adjacency discovery command (SQL co-occurrence + one-line Gemini narration)
+- "Continue this jam" generative suggestion for `/jam` playlists (reuses existing auto-queue pipeline, capped rounds)
+- `/roast @user` referencing one real remembered episode — the single highest "wow it remembers" moment in this milestone
+- Proactive callbacks delivered in-personality as a dry aside, rarer than ambient-roast cadence, anchored to an active moment
 
-**Should have (add after validation, v1.x):**
-- Salience/novelty re-rank tuning (trigger: callbacks feel obvious/repetitive)
-- Surface-cooldown / anti-repeat (last_surfaced_at + novelty penalty)
-- /forget owner control to prune a misfired memory
-
-**Defer / out of scope (anti-features):**
-- Embedding every message; embedding play counts/numbers
-- Knowledge-graph / multi-hop memory; a reranker model in the loop
-- Cross-user "server lore" memory (scoping/privacy unresolved)
-- Historical backfill — **start empty, accumulate forward**
+**Defer / anti-features (explicitly avoid):**
+- Real collaborative filtering / audio-feature embeddings / genre taxonomy — no data or user-base scale to justify it; Gemini-in-the-loop + SQL co-occurrence is already right-sized
+- Continuous "radio mode" auto-queue with no stop condition — violates existing `AUTO_QUEUE_MAX_ROUNDS` discipline
+- `/memory edit`, exposing raw similarity scores, cross-user recall scoping for `/roast`
+- Proactive DMs, standing background "watch for the perfect moment" pollers, per-user opt-out preference systems in v1 (self-limiting cadence is the actual mitigation), cross-referencing multiple memories into one "recap"
+- Persisting image-derived content into RAG memory in v1.3; long-term image storage
+- Salience reinforcement, `/setavatar`, resuming the parked 24/7 deploy (explicitly out of scope per PROJECT.md)
 
 ### Architecture Approach
 
-Integrate, do NOT redesign. The new service sits exactly where every other service sits (wired in bot.py:_initialize_once, attached as bot.memory_service, accessed via self.bot.memory_service). The read path adds **zero generation calls** to the user critical path — the roast generation is the existing gemini.chat() call; memory only enriches the system prompt, plus one cheap embedding (separate quota, behind defer()). See `.planning/research/ARCHITECTURE.md`.
+Five additions layer onto exactly the seams v1.2 already built, with zero new tables/extensions/limiters/schedulers. Taste memory extends `user_memories`/`MEMORY_SALIENCE_BASE_WEIGHTS` with new kinds, written by a new distillation pass over `song_history` (not the message buffer) — consumed two ways: qualitative flavor via the *unchanged* `MemoryService.recall()` (kind-agnostic already), and quantitative signal via *new* structured SQL aggregates (never embedded — the accuracy firewall). Taste-graph/recommendation logic gets its own pure `logic/taste.py` module (mirroring `logic/autoqueue.py`/`logic/roasts.py` conventions) plus a new `services/taste.py` orchestrator, because three consumers (auto-queue, discovery command, generative jams) would otherwise duplicate SQL+Gemini glue across cogs. RAG-into-`/roast`+`/ask` costs zero new plumbing — facts flow through the existing pipe once written. Proactive callbacks are a new `@tasks.loop` at module scope in `bot.py` (never cog-owned, matching every existing background loop), gated by a new pure `decide_proactive_callback()` sibling of `decide_ambient_roast`, piggybacking on the existing `idle_check` loneliness-detection state rather than building a second quiet-detector. Vision is a new, standalone `cogs/vision.py` (mirrors the precedent of `imagine.py` vs `ai.py` — image *understanding* is its own feature domain, not bolted onto `events.py::on_message`), with a new `GeminiService.describe_image()` sharing the existing rate limiter.
 
 **Major components:**
-1. **services/memory.py (MemoryService)** — NEW: owns the RAG lifecycle (recall(), remember(), sweep()) and the embedding limiter; constructed with (pool, gemini_service).
-2. **models/memory.py** — NEW: MemoryFact dataclass + PURE rerank/recency/novelty/dedup functions (the TDD seam, mirrors compute_streak).
-3. **user_memories table in SCHEMA_SQL** + 6 query helpers in database.py (insert/search/bump/delete_expired/count/evict); CREATE EXTENSION IF NOT EXISTS vector at the top (idempotent, plain DDL).
-4. **services/gemini.py** — MOD: generic embed(texts, task_type, priority) + a second _embed_limiter.
-5. **personality/prompts.py:build_chat_prompt** — MOD: optional backward-compatible memories= kwarg rendering a labelled sub-block in the existing USER CONTEXT region (empty-string fallback = byte-identical to today prompt).
+1. `logic/taste.py` (pure, TDD) — artist affinity scoring, novelty filtering, discovery ranking
+2. `services/taste.py` (`TasteService`) — orchestrates SQL + Gemini + optional `MemoryService.recall()` for auto-queue, discovery, and jams
+3. `bot.py` new `@tasks.loop`s — `taste_distill_batch` (daily) and `proactive_callback` (10-15 min, gated on existing idle-loneliness state)
+4. `cogs/vision.py` + `GeminiService.describe_image()` + `logic/vision.py` — isolated, safety-gated image-understanding surface
+5. `cogs/memory.py` (or extension) — `/memory view`/`forget`, scoped hard to `interaction.user.id`
 
 ### Critical Pitfalls
 
-Top items from `.planning/research/PITFALLS.md` (18 total, mapped to sub-phases):
-
-1. **Extension-vs-pool ordering** — register_vector raises ValueError: unknown type: public.vector if the type is not there when the pool warms connections. Run CREATE EXTENSION on a throwaway asyncpg.connect() BEFORE create_pool(init=...). (11.1)
-2. **Embedding SQL-known numbers** — freezes a count that live SQL keeps changing, a Critical Rule 5 violation. Never embed counts/dates/rankings; numbers always from a live SELECT, memories supply only the episode. (11.4/11.5)
-3. **Dimension mismatch** — default 3072 vs vector(768) column throws on insert; a vector(3072) fix is unindexable (2000-dim cap). Set output_dimensionality=768 on BOTH doc and query embeds via one shared config constant. (11.1/11.2)
-4. **Sharing the 15 RPM chat limiter** — starves /ask for no reason (embeddings are a separate quota). Separate ~60 RPM limiter, priority-2 background writes. (11.2)
-5. **No similarity floor** — ANN always returns something; without a ~0.70 floor a roast cites an irrelevant memory. No memory beats a wrong memory — inject nothing if nothing clears the floor. (11.3)
-6. **Sync embed blows the 3s window** — defer() first, then embed/search/roast via create_task(). (11.3/11.5)
-7. **Sensitive content / PII stored as durable roast ammo** — sensitivity + PII gate in the distill prompt, stop-ship, ships in v1. (11.4)
-8. **Unbounded growth / context rot** — the #1 documented companion-bot failure. Per-user cap + decay sweep in v1. (11.6)
-
-Note: statement_cache_size=0 breaking the codec is a **verified MISBELIEF** — do not hand-serialize vectors to strings.
+1. **Vision safety refusal must be silent-skip, never a fallback template** — treating any Gemini refusal as "retry or fall back to a generic joke" defeats the safety gate entirely; this must be a distinct code branch from rate-limit/API-down handling, which correctly uses the guaranteed-fallback pattern.
+2. **Vision is the only feature adding genuinely new load to the shared 15 RPM chat budget** — unthrottled reaction to every posted image will starve `/ask`. Mitigate with cadence-gate (probability + cooldown) + priority-2 routing + designated-channel-only + hard per-day vision-call cap, mirroring `MAX_IMAGES_PER_USER_PER_DAY`.
+3. **Proactive callbacks are the first unprompted surface with no natural in-the-moment anchor** — reusing the ambient-roast cooldown dict as-is under-guards the one new dimension: "is right now a good moment." Anchor to active moments, cap per-user-per-day in addition to the probability roll, and ship `/memory forget` first as the escape hatch.
+4. **Cross-user memory leakage risk grows with call-site count, not because the existing guard is weak** — `search_memories`'s `WHERE user_id` guard (T-11-03a) is sound today, but taste-graph/generative-jam features are explicitly multi-user/guild-scoped in a way `/ask`/ambient roasts aren't. Any accidental per-user `recall()` loop or omitted scope filter reintroduces the leak. Require an explicit multi-user-safe aggregate pattern (not a per-user loop) plus a regression test asserting scoped queries never cross `user_id`.
+5. **Stale taste memories surfaced as current** — a "likes artist X" fact has a much shorter half-life than a milestone/personality fact; memory must inform but never decide (auto-queue ranking stays SQL-driven), and taste-kind decay/rerank parameters should be set deliberately rather than inherited unmodified from Phase 11's general-fact defaults.
 
 ## Implications for Roadmap
 
-Phase 11 decomposes into **6 sub-phases** following the dependency chain (schema -> embedding -> retrieval -> write/distill -> integration -> hygiene). Each is independently verifiable (pure-logic TDD + clean boot). This ordering is consistent across STACK, FEATURES, ARCHITECTURE, and PITFALLS.
+Based on research, suggested phase structure (continuing numbering at Phase 13):
 
-### Phase 11.1: Foundation — schema + extension + codec + config
-**Rationale:** Everything depends on the store existing and the codec registering cleanly on boot; the extension-vs-pool ordering trap must be solved first.
-**Delivers:** CREATE EXTENSION + user_memories in SCHEMA_SQL; extension-first bootstrap connection + init=_register_vector on create_pool; new config constants. No retrieval/write behavior yet.
-**Avoids:** Pitfalls 1 (ordering), 2 (statement_cache_size misbelief), 3 (dims constant), 16 (idempotent DDL, no backfill), 18 (pool inherits K-04 tuning).
+### Phase 13: Semantic Music Memory (foundation)
+**Rationale:** Every other feature reads from this; must ship first and run at least a day against real usage before consumers are built (mirrors the Phase 11 live-Neon-spike-before-retrieval precedent).
+**Delivers:** New `taste_episode` (and optionally `taste_shift`) memory kind in `MEMORY_SALIENCE_BASE_WEIGHTS`; new structured `database.py` aggregate helper(s) for artist play/skip counts; new `taste_distill_batch` `@tasks.loop` reading `song_history`/`user_artist_counts` (never message buffer) into `distill_and_remember()`.
+**Addresses:** Semantic music memory (target feature 1).
+**Avoids:** Pitfall 5 (stale/contradicted memory) by deliberately setting taste-kind decay params up front rather than inheriting general-fact defaults.
 
-### Phase 11.2: Embedding primitive + retrieval read path
-**Rationale:** Retrieval must exist before write, because dedup IS a retrieval call.
-**Delivers:** GeminiService.embed() + separate _embed_limiter; database.search_memories (scoped ANN); MemoryFact + pure rerank/recency/novelty (TDD); MemoryService.recall() (embed query -> search -> 0.70 floor -> rerank -> top 1-3, returns empty cleanly when nothing clears).
-**Uses:** gemini-embedding-001 @ 768, RETRIEVAL_QUERY, cosine <=>.
-**Avoids:** Pitfalls 4 (separate limiter), 6 (defer-aware), 8 (floor), 11 (<=3 facts).
+### Phase 14: Smarter Music Brain
+**Rationale:** First and second-through-third real consumers of the foundation; validates the whole taste pipeline end-to-end against well-understood existing code (`try_auto_queue`) before building new UI surfaces.
+**Delivers:** `logic/taste.py` (pure, TDD: `compute_artist_affinity`, novelty filtering, ranking) → `services/taste.py` (`TasteService`, wired in `bot.py:_initialize_once`) → skip-aware auto-queue deprioritization inserted before `validate_youtube_match` → `/taste`-style discovery command → "continue this jam" generative suggestion for `/jam` playlists.
+**Uses:** `song_history.was_skipped`, `user_artist_counts`, existing Gemini auto-queue prompt pipeline, `logic/autoqueue.py` validator (reused, not replaced).
+**Avoids:** Pitfall 7 (filter-bubble convergence — reserve an exploration budget, don't purely exploit skip-avoidance; branch cold-start explicitly rather than falling through to bland server-average picks); Pitfall 10 (event-loop blocking — prefer SQL aggregation over in-Python clustering).
 
-### Phase 11.3: Write path + dedup
-**Rationale:** Depends on 11.2 — must be able to search before inserting.
-**Delivers:** insert/bump/count/evict_memories helpers; MemoryService.remember() (distill -> embed -> dedup >0.90 -> insert/bump -> cap guard); pure dedup_decision.
-**Avoids:** Pitfall 12 (dedup), and the cap half of 14.
+### Phase 15: RAG Reach (`/roast`, `/ask`, `/memory`)
+**Rationale:** Mostly "verify it's landing well and tune weights," since `recall()` is already wired kwarg-compatible into both commands — cheapest phase in the milestone, and establishes the multi-user-safe scoping discipline that Phase 14's discovery/jam work and Phase 16 both need to inherit.
+**Delivers:** `/roast @user` and `/ask` memory injection verified/tuned for the new taste kind (cap at one memory reference); `/memory view` (ephemeral, paginated) + `/memory forget <id>`/`forget all` with accurate scope-of-erasure messaging (does not cascade to derivative memories) and hard-delete confirmed.
+**Addresses:** RAG reach (target feature 3) — the trust/escape-hatch prerequisite for Phase 16.
+**Avoids:** Pitfall 4 (cross-user leak — establish the explicit multi-user-safe aggregate pattern + regression test here, reused by Phase 14); Pitfall 6 (`/memory forget` incomplete erasure — document scope accurately).
 
-### Phase 11.4: Distillation triggers + sensitivity gate
-**Rationale:** Needs the write path; this is where the accuracy + sensitivity firewalls land.
-**Delivers:** Hook remember() into already-firing notable-event paths (repeat-song, milestone, late-night, auto-queue ignored-memory) + a session-end/daily batch distill (one priority-2 call). Sensitivity + PII exclusion in the distill prompt. NEVER per-message.
-**Avoids:** Pitfalls 4 (every message), 5 (embedding numbers), 9 (faithful distillation), 10 (sensitivity/PII — stop-ship).
+### Phase 16: Proactive Memory Callbacks
+**Rationale:** Depends on Phase 13+15 having something worth surfacing and a working `/memory forget` escape hatch landed first — shipping a new "the bot brings up your past unprompted" surface before users can opt out of specific facts is a bad trust ordering.
+**Delivers:** New `decide_proactive_callback()` pure function (TDD, sibling of `decide_ambient_roast`) → new `proactive_callback` `@tasks.loop` in `bot.py`, piggybacking on existing `idle_check` loneliness state, rarer cadence + longer per-user cooldown than ambient roasts, hard daily cap alongside the probability roll, silent skip on empty `recall()` result.
+**Addresses:** Proactive callbacks (target feature 4).
+**Avoids:** Pitfall 3 (creepy-callback risk — anchor to active moments only, never a cold timer/DM; conservative default cadence, tune from live feedback).
 
-### Phase 11.5: Prompt injection + callback-roast integration (capstone)
-**Rationale:** Needs recall (11.2) and real stored content (11.4); this is the payoff.
-**Delivers:** build_chat_prompt(memories=...) optional kwarg + accuracy-safe USER CONTEXT injection; wire recall() into /ask, /roast, _generate_ambient_roast. Roast cites a true SQL stat AND a recalled episode; memories framed as candidate ammo the model may NOOP.
-**Avoids:** Pitfalls 7 (defer-first), 9 (ammo framing), 11 (cap).
-
-### Phase 11.6: Hygiene & ops
-**Rationale:** Last in build order but **in-scope for v1, not deferred polish** — unbounded memory is the #1 companion-bot failure.
-**Delivers:** delete_expired_memories decay sweep (~90d low-salience); daily memory-sweep background task (mirrors cache_cleanup/ytdlp_update @tasks.loop); contradiction supersede. Per-user cap eviction already lands in 11.3.
-**Avoids:** Pitfalls 13 (stale/contradictory), 14 (unbounded growth), 17 (premature/IVFFlat index).
+### Phase 17: Vision / Multimodal Roasting
+**Rationale:** Architecturally independent of everything above (different Gemini call shape, no taste-memory dependency) but sequenced last deliberately — it is the highest-blast-radius new surface (unprompted content generation from arbitrary user-uploaded images) and benefits from the content-safety/cadence-gating discipline already proven out by Phase 16.
+**Delivers:** `logic/vision.py` (`decide_vision_roast`, pure, TDD) → `GeminiService.describe_image()` with explicit `safety_settings` (`BLOCK_MEDIUM_AND_ABOVE` per adjustable category, never `BLOCK_NONE`) → new isolated `cogs/vision.py` filtering `message.attachments` by `content_type.startswith("image/")`, designated-channel-only, priority-2 on the shared 15 RPM limiter, silent decline (no fallback template) on any safety refusal, first-image-only cap on multi-image messages, synchronous fetch-at-receipt (CDN URLs expire).
+**Addresses:** Vision/multimodal roasting (target feature 5, VIS-01/02).
+**Avoids:** Pitfall 1 (content-safety/legal liability — application-level hard-rule prompt layer beyond Gemini's own filters, never treat refusal as retryable); Pitfall 2 (quota/privacy blowout — cadence gate + priority-2 + hard daily cap); Pitfall 8 (attachment edge cases — content-type allowlist, size ceiling, synchronous fetch, single-image cap).
 
 ### Phase Ordering Rationale
 
-- **Retrieval before write** because dedup is itself a retrieval call (hard dependency).
-- **Distillation triggers before the callback capstone** because the roast integration needs real stored content to surface.
-- **Hygiene last in build order but shipped in v1** — research is unanimous that cap + decay + sensitivity gate are not optional polish.
-- **No ANN index in v1** — seq scan is sub-ms at the expected scale; cargo-culting an index (especially IVFFlat on an empty table) is an anti-pattern.
+- **Foundation-before-consumers, structured-before-orchestration, low-risk-before-new-surfaces** — this ordering is independently confirmed by ARCHITECTURE.md's "Suggested Build Order" and FEATURES.md's "MVP Recommendation," which converge on the same sequence almost exactly.
+- **Taste-graph and skip-aware auto-queue are SQL-first, not RAG-first** — they can ship even if the new memory kind's tuning slips, since they read `song_history`/`user_artist_counts` directly and only optionally enhance with semantic flavor.
+- **`/memory forget` must land before proactive callbacks** — shipping more autonomous memory-surfacing behavior without a working delete path first is explicitly flagged as a bad trust ordering by both FEATURES.md and PITFALLS.md.
+- **Vision is sequenced last for blast-radius reasons, not dependency reasons** — it could technically be built in parallel with the taste-brain track, but every research file independently recommends deferring it until the content-safety/cadence patterns are freshly proven by the proactive-callback work.
 
 ### Research Flags
 
-**Recommend a short research/validation spike at the START of Phase 11** (before 11.2 retrieval lands) to tune the numeric priors against this bot real scale and budget. All of the following are **tuned priors, not verified constants** (MEDIUM confidence): top-k=8, similarity floor 0.70, dedup threshold 0.90, per-user cap ~150, 90-day decay, rerank weights (relevance 1.0 + recency 0.5 + salience 0.7 + novelty 0.5), inject 1-3 facts / ~300-500 tokens.
+Phases likely needing deeper research during planning:
+- **Phase 17 (Vision):** exact free-tier RPD/TPM numbers are MEDIUM confidence (third-party trackers, not the account-gated AI Studio dashboard); tiling token-cost formula for large images is LOW confidence. Neither is load-bearing (RPM, not TPM, is the binding constraint at this bot's scale) but should be spot-verified against the live AI Studio dashboard before finalizing `MAX_VISION_IMAGE_BYTES`/cooldown config values.
+- **Phase 16 (Proactive callbacks):** cadence/"creepy threshold" numbers are MEDIUM-LOW confidence — synthesized product-design reasoning, not citation-verified against Discord-specific case studies. Treat `PROACTIVE_CALLBACK_CHANCE`/`_COOLDOWN_SECONDS`/`_INTERVAL_SECONDS` as spike-tunable defaults, not settled values — plan to observe live and retune.
 
-- **Phase 11.2 / 11.3:** numeric defaults (floor, top-k, dedup threshold, rerank weights) — validate empirically; they are starting points.
-- **Phase 11.1, 11.5, 11.6:** standard patterns, well-documented against the real files — **skip research-phase**; the integration points, boot ordering, prompt site, and sweep task pattern are all verified HIGH.
+Phases with standard patterns (skip research-phase):
+- **Phase 13 (Semantic memory foundation):** direct extension of already-shipped, well-documented Phase 11 `MemoryService` plumbing — kind-agnostic by design, zero code change needed in `services/memory.py`/`models/memory.py`.
+- **Phase 14 (Smarter music brain):** SQL aggregation + existing Gemini auto-queue prompt pattern, both already proven in this codebase (`logic/skip_stats.py`/`/skips` is a direct analog).
+- **Phase 15 (RAG reach):** plumbing already built kwarg-compatible in Phase 11; this is verification/tuning, not new architecture.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | pgvector/asyncpg init= codec + Gemini embeddings verified via Context7; text-embedding-004 deprecation + 100 RPM quota via Google docs. |
-| Features | HIGH (architecture) / MEDIUM (numeric defaults) | Mem0, Generative Agents, companion-bot design converge on patterns; exact thresholds tuned to this bot, flagged for the spike. |
-| Architecture | HIGH | All integration points verified against the real files (bot.py, database.py, gemini.py, prompts.py, cogs/ai.py, cogs/events.py, models/*). |
-| Pitfalls | HIGH (integration/budget) / MEDIUM (retrieval-quality defaults) | Boot ordering, codec, dims, limiter verified; quality thresholds tuned. |
+| Stack | HIGH | Context7-verified against the actually-installed `google-genai==2.8.0`; zero new dependencies needed, cross-confirmed by all four research files |
+| Features | MEDIUM-HIGH | Grounded in shipped v1.2 infra + official Gemini safety docs; proactive-callback cadence norms are synthesized product reasoning (no Discord-specific case studies found), explicitly flagged LOW-MEDIUM within FEATURES.md |
+| Architecture | HIGH | Grounded in direct reads of `bot.py`, `services/memory.py`, `services/gemini.py`, `cogs/*`, `database.py`, `logic/*`, `config.py`, plus Context7-verified multimodal API shape |
+| Pitfalls | HIGH on rate-limiter/architecture mechanics; MEDIUM on vision token-cost/safety specifics; MEDIUM-LOW on creepy-callback thresholds (explicitly no formal research base for Discord bots specifically) |
 
-**Overall confidence:** HIGH for the mechanics and build order; MEDIUM only on the tunable retrieval-quality numbers, which are explicitly flagged for a validation spike.
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Numeric defaults (floor 0.70, top-k 8, dedup 0.90, cap 150, decay 90d, rerank weights):** tuned priors. Handle with a short empirical spike at the start of Phase 11 and observe retrieval quality during 11.2-11.5.
-- **Stale text-embedding-004 reference:** the milestone brief and PROJECT.md still name it. Correct to gemini-embedding-001 during planning.
-- **Salience scoring source:** how salience is assigned at write time (event type vs. distiller-judged) is under-specified — resolve in 11.3/11.4 planning.
-- **Session-end trigger boundary:** exactly where the batch distill fires (voice-session-end vs. daily bg task vs. on_message hook) needs a concrete decision in 11.4.
+- **Exact taste memory salience/decay tier** (`taste_episode` weight, whether a distinct `taste_shift` kind is warranted) is a config-value judgment call flagged for requirements/roadmap, not resolved by this research — mirrors the `MAX_IMAGES_PER_USER_PER_DAY`-style precedent of deciding exact numbers during planning.
+- **Proactive callback cadence constants** (`PROACTIVE_CALLBACK_CHANCE`, cooldown, interval) are directional starting points only (0.15-0.20 chance, 1-2hr cooldown, 10-15min poll suggested) — explicitly flagged as spike-tunable from live observation, not settled.
+- **Whether to retrofit `safety_settings` onto the existing `chat()`/`generate_image()` calls** (`/ask`, `/imagine`) is a latent gap STACK.md surfaced but did not resolve — both currently rely on Gemini's OFF-by-default filtering for trusted text input. Flag as a small hardening task decision for requirements, not a v1.3 stack blocker.
+- **Whether generative jams extend `cogs/library.py` (existing `/jam` home) or land in a new cog** is an open placement question noted in ARCHITECTURE.md's New Components table — resolve during Phase 14 planning.
+- **Whether a distinct "pause proactive callbacks for me" toggle is needed separately from `/memory forget`** is explicitly flagged by PITFALLS.md as worth deciding before Phase 16, since forgetting a fact and opting out of the *surface* are different asks.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Context7 /pgvector/pgvector-python — register_vector signature, asyncpg pool init= pattern, per-connection set_type_codec, ValueError on missing vector type, HNSW vector_cosine_ops, <=> operator.
-- Context7 /googleapis/python-genai (v1.33.0) — aio.models.embed_content, EmbedContentConfig(output_dimensionality=, task_type=), gemini-embedding-001.
-- Gemini API embeddings docs + Google Developers Blog — model GA status, MRL 768/1536/3072 tiers, default 3072.
-- Existing code (verified): bot.py:_initialize_once, database.py (SCHEMA_SQL, K-04 pool tuning), services/gemini.py (_RateLimiter, priority tiers), personality/prompts.py (USER CONTEXT, 4 build_chat_prompt callers), cogs/ai.py, cogs/events.py, models/*.
+- Context7 `/googleapis/python-genai` — `Part.from_bytes`, `SafetySetting`/`HarmCategory` signatures, verified against installed `google-genai==2.8.0`
+- Context7 `/rapptz/discord.py` — `Attachment` API surface
+- Direct codebase reads (this repo): `bot.py`, `config.py`, `services/gemini.py`, `services/memory.py`, `models/memory.py`, `database.py`, `cogs/ai.py`, `cogs/events.py`, `cogs/library.py`, `logic/autoqueue.py`, `logic/roasts.py`, `personality/prompts.py`, `requirements.txt`, `.planning/PROJECT.md`, `CLAUDE.md`
+- ai.google.dev/gemini-api/docs/safety-settings — default-OFF-for-2.5/3-models finding, harm category list, CSAM/child-safety always-on
 
 ### Secondary (MEDIUM confidence)
-- Mem0 (arXiv 2504.19413) — ADD/UPDATE/DELETE/NOOP, similarity dedup, temporal supersede.
-- Generative Agents (arXiv 2304.03442) — recency x relevance x importance retrieval, exponential decay.
-- Companion-bot memory design + RAG retrieval-default write-ups — distilled facts, ~0.7 cosine threshold, decay/archive, context rot from unbounded saves.
-- TokenMix gemini-embedding-001 guide — free-tier ~100 RPM, dimension tiers.
+- ai.google.dev/gemini-api/docs/image-understanding — supported MIME types, 20MB inline-data limit, token/tiling cost estimates
+- ai.google.dev/gemini-api/docs/rate-limits — confirms tier-dependent limits, does not surface exact free-tier numbers
+- WebSearch aggregation (multiple third-party trackers) — free-tier RPM/TPM/RPD figures, multimodal-counts-as-one-request confirmation
 
 ### Tertiary (LOW confidence)
-- text-embedding-004 deprecation date 2026-01-14 (Google deprecation notice, corroborated by community thread) — directionally certain (deprecated), exact date secondary.
+- WebSearch: "Discord bot 'remembers you' proactive callback design pattern avoid spammy creepy" — no strong Discord-specific case studies found; proactive-callback cadence recommendations are synthesized from this bot's own existing cadence-gating conventions plus general chatbot-proactivity reasoning — validate empirically against live usage
+- Tiling token-cost formula for very large images — single WebFetch summary, not cross-verified; not load-bearing at this bot's scale (RPM, not TPM, is binding)
 
 ---
-*Research completed: 2026-06-26*
+*Research completed: 2026-07-02*
 *Ready for roadmap: yes*

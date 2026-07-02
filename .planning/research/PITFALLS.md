@@ -1,375 +1,316 @@
 # Pitfalls Research
 
-**Domain:** Adding `pgvector` + Gemini-embeddings RAG long-term memory to an existing discord.py + asyncpg→Neon + google-genai bot (Dexter, v1.2 / Phase 11)
-**Researched:** 2026-06-26
-**Confidence:** HIGH on integration + budget mechanics (verified via Context7 `/pgvector/pgvector-python`, existing `database.py`/`services/gemini.py`, and STACK.md); MEDIUM on retrieval-quality numeric defaults (tuned to this bot's scale, validate in the research spike).
+**Domain:** Adding semantic music memory, taste-aware auto-queue, RAG-into-`/roast`/`/ask`, proactive callbacks, and vision/multimodal roasting to an existing discord.py + `google-genai` + Neon/`pgvector` personality bot on the **free Gemini Developer API tier** (Dexter v1.3 "Taste Brain")
+**Researched:** 2026-07-02
+**Confidence:** HIGH on rate-limiter/architecture mechanics (verified against `services/gemini.py`, `services/memory.py`, `cogs/events.py`, `config.py`); MEDIUM on Gemini vision token-cost and safety-filter specifics (verified via official docs, but free-tier numeric RPD/TPM values are account-tier-dependent and not published as stable constants — confirm in AI Studio before locking config); MEDIUM-LOW on "creepy callback" thresholds (no formal research exists for Discord bots specifically — synthesized from social-computing UX conventions + this bot's own existing cadence-gate pattern).
 
-> **Sub-phase labels used below** (the Phase 11 plan should adopt these as the build order — they follow the FEATURES.md dependency graph):
-> - **11.1 Store & Integration** — `CREATE EXTENSION`, `user_memories` schema, asyncpg vector codec in pool `init=`
-> - **11.2 Embedding Service** — `gemini-embedding-001` calls + a *separate* embedding rate limiter
-> - **11.3 Retrieval** — scoped ANN search, similarity floor, Python re-rank, injection cap
-> - **11.4 Write / Distill** — event + session-end fact distillation, write-time dedup
-> - **11.5 Callback Roast** — SQL-stat × recalled-episode integration, accuracy guarantee
-> - **11.6 Hygiene & Ops** — per-user cap, decay/expiry, contradiction supersede, migration/backfill, index, cold-start
+> Feature areas below map to the five v1.3 target features in PROJECT.md. Exact phase numbers are TBD by the roadmap (continuing at Phase 13); pitfalls reference the **feature area**, and the roadmap should assign phase numbers preserving the dependency order already implied by PROJECT.md (semantic memory foundation → music brain + RAG reach → proactive callbacks → vision, which is architecturally independent and should stay isolated).
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: `register_vector` runs before the `vector` type exists (extension-vs-pool ordering)
+### Pitfall 1: Vision roasting becomes a content-safety / legal liability, not just a UX bug
 
 **What goes wrong:**
-The bot crashes at startup — every connection the pool warms fails its `init=` callback. `register_vector(conn)` raises `ValueError: unknown type: public.vector` because the `vector` type OID can't be introspected. Unlike `halfvec`/`sparsevec` (whose absence pgvector-python suppresses for backward-compat), a missing **`vector`** type is a hard `ValueError` — verified via Context7. With `min_size>=2` the pool tries to register the codec on warm connections immediately, so the failure surfaces on boot, not lazily.
+Dex is pointed at `gemini-2.5-flash` with an image attachment and asked to produce a sarcastic caption. Three distinct failure modes compound:
+1. A user posts CSAM, gore, or another Trust & Safety violation. Gemini's **non-configurable** core-harm classifier (child safety, CSAM, PII) blocks generation regardless of `HarmBlockThreshold` settings — but if the bot's error handling treats *any* refusal as "try again" or "fall back to a generic joke," it can end up commenting on the image anyway via a template fallback, or retry-loop against a request that will never succeed (burning RPM budget on a request guaranteed to fail).
+2. A user posts a legal-but-sensitive image (a medical photo, an ID card, a screenshot containing another person's private info, a photo of a minor who isn't the poster) that clears Gemini's *adjustable* filters (harassment / hate speech / sexually explicit / dangerous content — these are threshold-tunable, not hard blocks) but is still inappropriate to publicly roast in a shared Discord channel.
+3. The roast itself — even of a "safe" image — can be wrong in a way that's actively harmful: commenting on someone's body, misgendering someone in a photo, or reading medical/disability equipment as a joke prop.
 
 **Why it happens:**
-`CREATE EXTENSION vector` and the codec-registering pool are created in the wrong order. The current `init_db()` runs `SCHEMA_SQL` *over the pool* — but if `CREATE EXTENSION` lives only inside `SCHEMA_SQL` and the pool's `init=` already calls `register_vector`, the chicken-and-egg fires: the pool can't warm a connection (init fails) so `init_db()` never gets to run the DDL.
+The existing `/imagine` path already treats "refused" as a single bucket (`generate_image` returns `None` on refusal — `services/gemini.py:209-248`, `GeminiRefusalError` is *defined* but never raised anywhere in the codebase today). That pattern is fine for a bot-generated image (worst case: no image, mildly funny "I refuse to draw this" line). It is **not** fine for vision, where the risky content already exists (a real photo of a real person) and the harm is in Dex *commenting* on it, not in generating it. Developers porting the existing refusal-as-None pattern to vision will silently under-guard: no image reaches the model → fine; image reaches the model, model complies, output is inappropriate → the existing pattern has no gate for this because it was never a risk in the pure-text/pure-generation case.
 
 **How to avoid:**
-Run `CREATE EXTENSION IF NOT EXISTS vector;` on a **throwaway `asyncpg.connect()`** (or a no-`init` bootstrap pool) *before* creating the long-lived codec-registering pool. Keep the `CREATE EXTENSION` line at the very top of `SCHEMA_SQL` too (idempotent, plain DDL — fits the no-`$N`-params multi-statement constraint), but the extension must be guaranteed present before any `init=register_vector` connection is warmed. Order: `connect()` → `CREATE EXTENSION` → `close()` → `create_pool(init=_init_connection)`.
+- Set explicit `HarmBlockThreshold` on all four adjustable categories for the vision call — do NOT use `BLOCK_NONE` (confirmed via official docs: `BLOCK_NONE` only disables the *probabilistic* filter for that category; it does not disable the hard-coded CSAM/child-safety block, so there is no upside to loosening it here, only downside).
+- Treat `finish_reason == SAFETY` / a refusal response as **"do not roast, silently skip"** — never fall back to a generic personality line when the *reason* generation was blocked was a safety trigger. A fallback line defeats the purpose of the block. This is a new branch distinct from "Gemini is rate-limited" or "Gemini is down," where the guaranteed-template-fallback pattern correctly applies (Critical Rule: "Gemini-first personality output with guaranteed template fallback" is about *availability*, not about *safety refusals* — do not conflate the two).
+- Add an **application-level opt-out list of content categories Dex will not comment on even if Gemini allows it**: no comments on bodies/appearance, no comments implying a photo shows a minor, no medical/disability-equipment jokes. Bake this into the vision system prompt as hard rules, not just rely on the model's own judgment (mirrors the existing "never sacrifice accuracy for personality" prompt-engineering discipline already used for `/ask`).
+- Log every vision-safety refusal to the error channel at DEBUG (not the roast/error channel that pings the owner) so patterns can be reviewed without creating a "the bot is monitoring what gets blocked" chilling effect in-channel.
+- Never retry a safety-refused request — refusal is not a transient failure, retrying wastes RPM budget on a request that structurally cannot succeed.
 
 **Warning signs:**
-`ValueError: unknown type: public.vector` in boot logs; pool creation hangs/raises; works on a DB where the extension was manually pre-created but fails on a fresh Neon branch.
+- A vision roast fires on an image that should have been blocked (spot-check refusal logs weekly during rollout).
+- The vision cog has a single `try/except` around the whole Gemini call with one fallback branch (red flag: safety and rate-limit/API-down are being treated identically).
+- No system-prompt section enumerating "never comment on X."
 
-**Phase to address:** 11.1 Store & Integration
+**Phase to address:** Vision / multimodal roasting (last v1.3 phase, per PROJECT.md ordering) — VIS-02 is explicitly the content-safety guardrail requirement; this pitfall should shape its acceptance criteria, not be discovered after ship.
 
 ---
 
-### Pitfall 2: Assuming `statement_cache_size=0` breaks the vector codec (it does NOT — but the misbelief causes hand-rolled serialization)
+### Pitfall 2: Vision roasting on every posted image is a free-tier quota and privacy time bomb
 
 **What goes wrong:**
-A dev "works around" a non-existent problem: believing Neon's required `statement_cache_size=0` (set for PgBouncer transaction mode, K-04) is incompatible with `register_vector`, they skip the codec and hand-serialize vectors as `'[1,2,3,...]'` strings. asyncpg then returns embeddings as **text**, not lists; distance queries silently degrade or comparisons happen against string literals; round-trip float precision is lossy.
+The obvious implementation — `on_message` sees any attachment with an image content-type, sends it to Gemini, posts a caption — has two compounding costs: (1) each call consumes a shared-budget RPM slot *and* a non-trivial token allowance (Gemini tiles images into 258-token blocks per ~768×768 region; a typical phone-camera screenshot posted to Discord easily lands at 1,000–1,600+ input tokens per call, before the reply itself), and (2) it reacts to *every* image regardless of whether the user wanted commentary — memes, screenshots of a friend's private message, someone's ID for a form, a photo shared for a completely unrelated reason. On an active server, image-posting frequency can exceed message frequency that currently drives `/ask`/auto-queue, so an unthrottled vision path can dominate the shared 15 RPM budget and starve `/ask` and music auto-queue — the exact starvation failure the priority-tier rate limiter was built to prevent for embeddings (Critical Rule 1), except vision has no separate limiter to protect it from or be protected by.
 
 **Why it happens:**
-Conflation of two unrelated mechanisms. `register_vector` calls `conn.set_type_codec(...)` — a **per-connection codec registration**, NOT a prepared statement. `statement_cache_size=0` only disables prepared-statement caching. They don't interact. The STACK.md verified this; Context7 confirms the codec is registered per-connection in `init=`.
+"React to images in chat" reads like a drop-in extension of the existing emoji-reaction pattern (`_handle_message_reactions`, YouTube/Spotify link → 👀), which is unthrottled by design because emoji reactions cost nothing. Vision is not free — it's an API call on the same budget `/ask` depends on, plus it's commenting on content the user did not opt into having analyzed.
 
 **How to avoid:**
-Use the real codec: `from pgvector.asyncpg import register_vector` inside the pool `init=` callback. Pass/receive plain Python `list[float]`. Keep `statement_cache_size=0`, `ssl='require'`, `max_inactive_connection_lifetime=240` exactly as-is — all three coexist with the codec. Never serialize vectors to strings by hand.
+- Cadence-gate vision the same way ambient roasts are already gated: a probability roll (mirror `UNPROMPTED_ROAST_CHANCE` pattern) **and** a per-channel or per-user cooldown, so Dex doesn't comment on every image, only sometimes — this is both a quota control and a "not creepy/naggy" control (see Pitfall 4, same root cause).
+- Route vision calls through **priority 2** (background, reject-if-wait>10s) on the shared limiter, never priority 1 — an unprompted image roast must never make a user's `/ask` wait. This mirrors the existing priority-tier discipline exactly (`_RateLimiter.acquire`, `services/gemini.py:74-102`).
+- Designated-channel-only, same as every other unprompted behavior (Critical Rule 9) — do not scan attachments bot-wide.
+- Consider a hard per-day or per-hour vision-call budget distinct from the roll-based gate, so a burst of image-posting (e.g., someone dumping a meme folder) can't chew through the day's RPD in minutes. `MAX_IMAGES_PER_USER_PER_DAY` already exists for `/imagine` outbound generation — a parallel cap for inbound vision analysis is the same shape of guardrail.
+- Skip animated images (GIFs) and very small images (emoji-sized) before spending a call — cheap pre-filters that avoid burning budget on content unlikely to be roast-worthy.
 
 **Warning signs:**
-`'[...]'` string-building for embeddings anywhere in the codebase; `ORDER BY embedding <=> $1` returning nonsense order; query results where the embedding column is a `str` not a `list`.
+- `/stats` RPM-headroom panel (`GeminiService.rpm_headroom`, already exists) shows the budget saturating during periods of heavy image posting, not heavy `/ask` use.
+- `/ask` responses start feeling slow/delayed after vision ships, with no other explanation.
+- Vision fires visibly on back-to-back images in the same channel within seconds.
 
-**Phase to address:** 11.1 Store & Integration
+**Phase to address:** Vision / multimodal roasting — the cadence gate and priority-2 routing are core scope for this phase (VIS-01), not an afterthought.
 
 ---
 
-### Pitfall 3: Vector dimension mismatch — default 3072 output vs `vector(768)` column and the 2000-dim ANN cap
+### Pitfall 3: Proactive callbacks cross from "delightful" to "the bot is watching me"
 
 **What goes wrong:**
-Two distinct failures: (a) `gemini-embedding-001` returns **3072 dims by default**; inserting that into a `vector(768)` column throws `expected 768 dimensions, not 3072` on every write. (b) If someone "fixes" it by making the column `vector(3072)`, the HNSW/IVFFlat index becomes **impossible to create** — pgvector's ANN indexes cap at **2000 dimensions**. Either the feature can't store, or it can't be indexed.
+A background surface that volunteers a memory unprompted — "hey, you were really into [artist] last week, want more of that?" — is qualitatively different from the *existing* ambient-roast pattern (voice join/leave, late-night, repeat-song) because those are all triggered by an **event the user just performed in the moment**. A callback that reaches back into memory and surfaces it at an arbitrary later time reads as surveillance the first time it lands on the wrong moment: firing during a serious conversation, firing right after a user explicitly stopped talking about something (breakup, job loss — anything the memory-sensitivity gate in Phase 11 was built to filter, but proactive surfacing adds a *timing* dimension that recall-for-a-question doesn't have), or simply firing too often so it stops feeling like insight and starts feeling like a scripted "engagement" nudge.
 
 **Why it happens:**
-`output_dimensionality` is not set on the `embed_content` config (it defaults to 3072), or it's set inconsistently between the write path (`RETRIEVAL_DOCUMENT`) and the read path (`RETRIEVAL_QUERY`) — a 768-d query vector can't be compared against 3072-d stored vectors.
+The existing ambient-roast infrastructure (`cogs/events.py`, per-user cooldown dict, `UNPROMPTED_ROAST_CHANCE`) is trivially reusable — call `MemoryService.recall()`, pick a fact, post it, done. But that infrastructure was tuned for *reactive* triggers (something just happened) at a *known-good* moment (a voice join is inherently a moment where a light comment lands fine). A proactive callback has no such anchor moment by default; if the roadmap treats "reuse the roast cooldown dict" as sufficient, it will under-guard the one dimension that's actually new: **is right now a good moment to bring up something from the past, unprompted, with no triggering action from the user in this instant.**
 
 **How to avoid:**
-Set `output_dimensionality=768` on **both** the document-embed and query-embed calls, and pin the column to `vector(768)`. Centralize the dimension in one config constant (`EMBEDDING_DIMS = 768`) used by both the SQL schema and the embed config so they can't drift. 768 is below the 2000-dim ANN cap, so HNSW works; it's also the smallest Google MRL quality tier (cheap + indexable).
+- Anchor callbacks to *some* proximate trigger, not a pure timer — e.g., only fire during/adjacent to an already-happening interaction (after a `/play` completes, when the user is already active in the channel), never as a cold "ping out of nowhere" while the user has been inactive.
+- Cap frequency **per-user, across the whole surface**, more conservatively than ambient roasts — this is a new channel of attention, additive to existing roasts/reactions, so its budget should be a fraction of the existing roast cadence, not equal to it. Consider a hard daily cap per user (e.g., at most 1) in addition to a probability roll, mirroring the two-layer gate (`chance` + `cooldown`) already used for voice-join roasts.
+- Reuse the memory-sensitivity gate (`is_sensitive()` in `models/memory.py`, Phase 11) as a **necessary but not sufficient** filter — sensitivity-screens content at write time; proactive surfacing needs an additional recency/freshness check so a callback doesn't resurrect something the user has clearly moved on from (see Pitfall 5, same underlying "stale memory" risk, amplified here because surfacing is unprompted rather than answering a direct question).
+- Give users an explicit, discoverable opt-out (the planned `/memory forget` covers forgetting a *fact*; consider whether "stop proactive callbacks for me" needs to be a distinct, lighter-weight toggle rather than requiring users to delete their whole memory history to make it stop).
+- Ship this behind a conservative default (low chance, high cooldown) and treat the numeric tuning as something to dial in from live observation, exactly as `UNPROMPTED_ROAST_CHANCE = 0.30` was presumably tuned by feel for a single community rather than derived analytically.
 
 **Warning signs:**
-`expected N dimensions, not M` insert errors; HNSW `CREATE INDEX` failing with "column cannot have more than 2000 dimensions"; retrieval returning zero or garbage matches because query and stored dims differ.
+- A callback fires twice in the same day for the same user.
+- A callback references something from more than ~1-2 weeks ago with no signal the topic is still live (see Pitfall 5).
+- Anecdotal server feedback uses words like "weird," "watching," "creepy," or "stalker" — treat this as a stop-ship signal for the feature's default cadence, not just a personality-tone note.
 
-**Phase to address:** 11.1 Store & Integration (column) + 11.2 Embedding Service (config constant)
+**Phase to address:** Proactive callbacks (fourth v1.3 feature area per PROJECT.md ordering, after RAG reach lands `/memory forget` as the escape hatch) — the cadence design should be reviewed explicitly against this pitfall before merge, not discovered live.
 
 ---
 
-### Pitfall 4: Embedding on every message — budget burn, noise, and context rot at the source
+### Pitfall 4: Memory cross-user leakage — the existing guard is real but the surface area is growing
 
 **What goes wrong:**
-Wiring a distill+embed call into `on_message` (or embedding every `/ask` turn) generates a Gemini call per message. Even on the embedding endpoint's higher quota, a busy channel floods it; worse, it fills `user_memories` with thousands of low-value rows ("lol", "skip this") that drown the genuinely roast-worthy facts in retrieval. This is the #1 documented companion-bot failure (context rot).
+Phase 11 already scopes `search_memories` with a `WHERE user_id = $1` clause (`services/memory.py:114`, explicitly flagged in its own docstring as "cross-user guard T-11-03a"). That guard is sound for the *existing* callers (ambient roast, `/roast @user` presumably passing the target's `user_id`). The risk in v1.3 is **not** that the guard breaks — it's that new call sites (`/ask` with RAG wired in, `/memory`, taste-graph discovery, generative jams pulling shared listening history) multiply the number of places `recall()`/`search_memories` get invoked, and any one new call site that passes the wrong `user_id` (e.g., the *asker's* ID when the intent was "recall what we know about the mentioned user," or a guild-wide taste query that accidentally omits the `user_id` filter because taste-graph is conceptually "server-wide") reintroduces exactly the leak the guard was built to prevent — one user's private roast ammo surfacing in another user's `/ask` answer or the shared `/jam`.
 
 **Why it happens:**
-"More memory = smarter" intuition; the easiest hook is the message event. Distillation cost and retrieval-noise cost are invisible until the store is already polluted.
+`recall(user_id, guild_id, query_text)` takes `user_id` as a plain parameter with no compile-time enforcement that the caller passed the *correct* one for the interaction's actual subject. The taste-graph and generative-jam features are new because they are explicitly **multi-user / server-wide** in a way `/ask` and ambient roasts are not (a shared `/jam` playlist already exists as a distinct concept from personal `user_favorites` — see Key Decisions in PROJECT.md). Code written for "aggregate across users for a jam recommendation" is one accidental refactor away from a query that forgets to scope by user for a *personal* recall.
 
 **How to avoid:**
-Two write triggers only (per FEATURES.md): **event-triggered** (milestone, repeat-song roast, striking `/ask`, explicit stated preference — hooks that already fire in `events.py`) and **periodic distillation** (voice-session-end or daily, one batched Gemini call producing 0–3 atomic facts). Never write per message turn.
+- Any new RAG call site added in v1.3 must be traced back to "whose memory is this and does the interaction's actual subject match the `user_id` passed" as an explicit code-review checklist item, not assumed correct by pattern-matching on existing calls.
+- For genuinely multi-user surfaces (taste-graph, generative jams), design the query as an **explicit aggregate** (e.g., a dedicated `search_memories_multi_user` or a guild-scoped taste-signal table distinct from personal `user_memories`) rather than looping `recall()` per-user and hoping nothing crosses — an explicit aggregate function makes the multi-user intent visible in the schema/API instead of implicit in caller discipline.
+- `/memory` (inspect/forget) must itself be scoped to `interaction.user.id` only — a user must never be able to inspect or forget another user's memories via the command, and the command's confirmation/echo must not leak fact *content* to anyone but the owning user (ephemeral response).
+- Add a regression test (this bot already has a `logic/` pure-function test-coverage convention from Phase 10) asserting `search_memories` and any new multi-user aggregate never returns rows for `user_id`s outside the requested scope, given a fixture with 2+ users' memories seeded.
 
 **Warning signs:**
-Embedding/distill call count scales with chat volume; `user_memories` row count growing by hundreds/day; retrieval surfacing trivial filler.
+- A `/roast @user` or taste-graph response contains a detail that doesn't match the target user's known history (best caught by the requester noticing something "off," which is a bad primary detection mechanism — prefer the test above).
+- Any new SQL query touching `user_memories` that doesn't have a `user_id = $N` (or an explicit, reviewed multi-user aggregate) in its WHERE clause.
 
-**Phase to address:** 11.4 Write / Distill
-
----
-
-### Pitfall 5: Embedding facts SQL already answers — accuracy drift + wasted budget
-
-**What goes wrong:**
-Storing "carlos has queued 14 songs" as an embedded memory. The number is frozen at write time; the live count keeps changing. At roast time Gemini may read the **stale embedded number** instead of live SQL — a direct Critical-Rule-5 accuracy violation ("never sacrifice factual accuracy"). It also wastes embedding budget on data a `SELECT COUNT(*)` answers exactly.
-
-**Why it happens:**
-"It's data about the user, so store it" — failing to separate the deterministic/structured layer (`song_history`, `user_artist_counts`, streaks) from the semantic/episodic layer.
-
-**How to avoid:**
-Embed **only** what SQL can't express: stated opinions, reactions, notable one-off events, recurring bits. **Never embed counts, dates, or rankings.** The callback-roast prompt gets numbers from a live `SELECT` passed as ground-truth context; the embedded memory supplies only the *episode* ("right after you swore you were done with the killers"). Number from SQL, color from pgvector.
-
-**Warning signs:**
-Memory facts containing digits/counts; roasts citing numbers that disagree with `/history` or `/leaderboard`; distillation prompt asking the model to record statistics.
-
-**Phase to address:** 11.4 Write / Distill (what-to-store rule) + 11.5 Callback Roast (number-from-SQL guarantee)
-
----
-
-### Pitfall 6: Routing embeddings through the shared 15 RPM chat limiter — starving `/ask`
-
-**What goes wrong:**
-Embeddings get fed through the existing `_RateLimiter` (15 RPM, shared by chat + image). Background fact-distillation and retrieval embeds then consume slots that user `/ask` and `/imagine` commands need, making the bot feel laggy or rejecting user commands — for no reason, because embeddings hit a **separate Google quota (~100 RPM)**.
-
-**Why it happens:**
-There's already one `_RateLimiter` in `services/gemini.py` and it's tempting to reuse it for "all Gemini calls." But it models *one* quota; embeddings are a *different* quota.
-
-**How to avoid:**
-Give embeddings their **own** `_RateLimiter` instance (size conservatively, e.g. 60 RPM, under the 100 RPM ceiling). Keep it entirely off the chat 15-slot window. Treat fact-storage embeds as **priority 2** (skip if saturated — a missed fact-write is harmless). Batch writes: `embed_content(contents=[...])` takes a list, so N facts = 1 call.
-
-**Warning signs:**
-`/ask` latency or rate-limit rejections rising after memory ships; `rpm_usage` on the chat limiter climbing during idle (background distillation eating the chat budget).
-
-**Phase to address:** 11.2 Embedding Service
-
----
-
-### Pitfall 7: Synchronous embed call on the command critical path blows the 3s interaction window
-
-**What goes wrong:**
-Retrieval embeds the query *before* responding, inline in a slash command handler. The Gemini embed round-trip (plus a possible Neon cold-start) exceeds Discord's 3s `defer()`/respond deadline → "the application did not respond" error, even though the roast eventually computes.
-
-**Why it happens:**
-Retrieval feels like "just one more lookup" and gets dropped into the synchronous part of the handler, before `defer()` or before `interaction.followup`.
-
-**How to avoid:**
-`defer()` (or respond) **first**, then do the embed + ANN search + roast generation in the deferred/`followup` path via `asyncio.create_task()` — the same discipline already mandated for `/ask` and `/play`. For ambient (non-interaction) roasts there's no 3s clock, but still run retrieval off the event hot path. The memory layer must add **zero** synchronous latency before the interaction ack.
-
-**Warning signs:**
-"application did not respond" on memory-augmented commands; p95 command latency spiking; embed calls located above `await interaction.response.defer()`.
-
-**Phase to address:** 11.3 Retrieval (called from 11.5 Callback Roast)
-
----
-
-### Pitfall 8: No similarity threshold — garbage recall poisons every roast
-
-**What goes wrong:**
-ANN search always returns the top-k *nearest* vectors, even when the nearest is barely related. Without a floor, a roast about someone joining voice pulls "the closest memory" — which might be about a totally different topic — and Dex confidently references something irrelevant. Retrieval *always* finding something is the trap.
-
-**Why it happens:**
-`ORDER BY embedding <=> $1 LIMIT k` never returns empty (unless the table is empty), so devs assume "it found a match." Cosine distance has no inherent "too far" cutoff.
-
-**How to avoid:**
-Apply a **cosine-similarity floor (~0.70)** after the ANN fetch (fetch top-k=8, drop everything below the floor, keep top 1–3). If nothing clears the floor, inject **nothing** — Dex falls back to the existing taste summary. Make "no memory is better than a wrong memory" an explicit rule.
-
-**Warning signs:**
-Roasts referencing events the user never did; callbacks that feel non-sequitur; retrieval logs showing low-similarity rows being injected.
-
-**Phase to address:** 11.3 Retrieval
-
----
-
-### Pitfall 9: Letting embedded memory override factual accuracy (Critical Rule 5 violation)
-
-**What goes wrong:**
-The model treats injected memory text as authoritative fact and invents or contradicts reality — e.g. a stale "loves taylor swift" memory drives a roast even though the user just declared the opposite, or a distilled fact was itself a hallucination from a sloppy distill prompt and is now cited as truth. This breaks the product's core contract (accuracy first, sarcasm second).
-
-**Why it happens:**
-Memories are injected as plain prompt text indistinguishable from ground truth; the distillation step can hallucinate facts that then get embedded and recalled as "real."
-
-**How to avoid:**
-(a) Numbers always from live SQL, never from memory (see Pitfall 5). (b) Label injected memories in the prompt as *candidate ammo* — instruct Gemini to weave one in "only if it lands," and that it may NOOP rather than force a fact. (c) Constrain the distillation prompt to extract only what was actually stated/observed (third-person, atomic, no inference). (d) Prefer most-recent `created_at` and supersede contradictions on write so stale preferences don't resurface.
-
-**Warning signs:**
-Roasts asserting things the user contradicts; distilled facts containing inferred/embellished claims; a memory that's demonstrably false surfacing in output.
-
-**Phase to address:** 11.4 Write / Distill (faithful distillation) + 11.5 Callback Roast (candidate-ammo framing) + 11.6 Hygiene (contradiction supersede)
-
----
-
-### Pitfall 10: Roasting genuinely sensitive content + storing PII
-
-**What goes wrong:**
-The distiller captures and the bot later roasts something it shouldn't — a user venting about a death, a breakup, mental-health disclosure, real address/phone/email. Personality bot + long-term recall makes this far worse than a one-off chat: a sensitive disclosure becomes durable, re-surfaceable roast ammo. Also a privacy/data-retention liability (durable storage of personal data).
-
-**Why it happens:**
-The distill prompt extracts "notable events" without a sensitivity filter; CLAUDE.md already says "dial back sarcasm for serious/emotional questions" for live chat, but that guard doesn't automatically extend to what gets *stored*.
-
-**How to avoid:**
-(a) Sensitivity gate in the distill prompt: explicitly exclude grief, health, self-harm, relationships-in-distress, financial/identity info, and anything that reads as a vulnerable disclosure — do not store it. (b) PII scrub: never store emails/phones/addresses/real names beyond the Discord handle. (c) Carry the existing "serious/emotional → dial back" rule into both the write gate and the roast prompt. (d) Provide an owner `/forget` control to prune a bad memory.
-
-**Warning signs:**
-Memory rows containing emotional/medical/contact content; a roast landing on a sensitive topic in testing; user complaints. Treat any of these as a stop-ship.
-
-**Phase to address:** 11.4 Write / Distill (sensitivity + PII gate) — ship in v1, not "after validation"
+**Phase to address:** RAG reach (`/roast` + `/ask` wiring + `/memory`) — this is the phase that multiplies call sites; the taste-graph/jam multi-user surfaces (Smarter music brain phase) inherit the same discipline and should reuse whatever scoping pattern RAG reach establishes rather than inventing a second one.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 11: Prompt bloat — too many memories injected
+### Pitfall 5: Stale or contradicted memories get surfaced as if still true
 
-**What goes wrong:** Injecting top-k raw (5–8 memories) bloats the system prompt, dilutes the personality/few-shot exemplars, costs tokens, and makes roasts unfocused.
-**How to avoid:** Inject **1–3** facts max, hard-capped at ~300–500 tokens, slotted into the existing `USER CONTEXT` block of `DEXTER_SYSTEM_PROMPT`. Re-rank in Python and keep only the top few.
-**Warning signs:** System prompt length creeping up; roasts trying to reference multiple memories at once; personality feeling diluted.
-**Phase to address:** 11.3 Retrieval
+**What goes wrong:**
+A memory written weeks ago ("user X is really into [artist]") gets surfaced by `recall()` or a proactive callback after the user's taste has visibly moved on — the auto-queue skip data, more recent `song_history`, or newer memories all show a shift, but the recalled fact is picked because it scores well on similarity/salience without the reranker weighing "has this been contradicted by more recent, higher-confidence signal." Phase 11's `rerank()` already includes a recency weight and a novelty penalty on `last_surfaced_at` (`config.MEMORY_RERANK_RECENCY_WEIGHT`, `MEMORY_RERANK_NOVELTY_WEIGHT`) — but recency-of-the-memory-itself is not the same signal as "is this still true," and the accuracy firewall (Phase 11 Key Decision: "hard numbers come from live SQL, never from embedded facts") only guards *numeric* accuracy, not *directional* accuracy (taste has changed vs. taste hasn't).
 
-### Pitfall 12: No write-time dedup — store fills with near-duplicates
+**Why it happens:**
+The existing rerank formula optimizes retrieval relevance (similarity × recency × salience × novelty), not truthiness-over-time. Nothing in the current pipeline cross-checks a recalled fact against fresher structured data (`song_history`, `user_artist_counts`) before injection — this matters more in v1.3 because taste-aware auto-queue and generative jams are *exactly* the features most likely to actively contradict an old memory (a user's listening pattern is the ground truth the memory was distilled from in the first place).
 
-**What goes wrong:** The same fact ("done with the killers") gets distilled and stored 30 times across sessions; retrieval returns 5 copies of it; the corpus bloats.
-**How to avoid:** Dedup gate on every write — embed candidate, search that user's top-1 existing memory, if cosine similarity **>0.90** NOOP (bump `hit_count`/`last_seen_at`) instead of inserting (Mem0 ADD/UPDATE/NOOP). Requires retrieval to exist first.
-**Warning signs:** Duplicate-looking rows per user; retrieval returning the same fact multiple times.
-**Phase to address:** 11.4 Write / Distill (depends on 11.3 Retrieval)
+**How to avoid:**
+- Where a recalled memory concerns music taste specifically, cross-check against recent `user_artist_counts`/`song_history` before using it to drive a *decision* (auto-queue selection) — use memory as flavor/roast text, never as the sole input to what gets queued. This mirrors the existing "memory is roast ammo, not a number source" firewall, extended to "memory is roast ammo, not a queue-decision source" for the music brain.
+- Consider a lighter decay curve or explicit "superseded" marking for taste-kind memories specifically, since taste memories churn faster than personality/history facts (a repeat-song roast fact stays true forever; a "likes artist X" fact has a much shorter half-life).
+- For proactive callbacks specifically (Pitfall 3), bias toward *higher* recency weight than `/ask`/`/roast` recall uses, since a stale callback is more visibly wrong (unprompted) than a stale fact folded into an answer to a direct question.
 
-### Pitfall 13: Stale / contradictory memories surfacing
+**Warning signs:**
+- A callback or roast references a taste fact contradicted by the last 2 weeks of `song_history` for that user.
+- `MEMORY_DECAY_DAYS`/salience-floor tuning from Phase 11 (tuned for general facts) is reused unmodified for the new "taste episode" memory kind without revisiting whether the same horizon fits.
 
-**What goes wrong:** Old preference ("loves country") and new one ("hates country") both stored; retrieval surfaces the stale one and the roast is wrong.
-**How to avoid:** On write, if a candidate contradicts an existing fact, UPDATE/supersede rather than keeping both. At retrieval, prefer the most recent `created_at`. Recency term in the re-rank score.
-**Warning signs:** Roasts citing outdated preferences; two opposing facts for one user.
-**Phase to address:** 11.6 Hygiene & Ops
-
-### Pitfall 14: Unbounded per-user memory growth (context rot)
-
-**What goes wrong:** Memory per user grows forever → retrieval noise rises, ANN slows, embedding/storage cost climbs. Cited as the primary companion-bot failure mode.
-**How to avoid:** Per-user cap (~150); on exceed, evict lowest `salience × recency × hit_count`. Decay/expiry: low-salience conversational memories get `expires_at` ≈ 90 days; high-salience persists. Daily sweep deletes expired rows. Ship with v1, not later.
-**Warning signs:** Per-user row counts climbing without bound; retrieval quality degrading over weeks; ANN latency rising.
-**Phase to address:** 11.6 Hygiene & Ops
-
-### Pitfall 15: Same callback fired every session (anti-repeat missing)
-
-**What goes wrong:** The most-similar memory is also the most-often-surfaced; Dex reuses the same callback every session and it stops being funny / feels broken.
-**How to avoid:** Track `last_surfaced_at`/`surface_count`; add a novelty penalty in the re-rank score so recently-fired memories are down-weighted. Surprising-but-relevant beats top-1 similarity.
-**Warning signs:** Users noting "it always says the same thing"; one memory dominating `surface_count`.
-**Phase to address:** 11.3 Retrieval (re-rank) — P2, add after validation per FEATURES.md
+**Phase to address:** Semantic music memory (foundation phase) should decide the taste-memory kind's decay/rerank parameters deliberately rather than inheriting Phase 11's general-fact defaults; Smarter music brain phase should enforce "memory informs, structured data decides" for auto-queue.
 
 ---
 
-## Ops Pitfalls
+### Pitfall 6: `/memory forget` deletes the row but not everything derived from it
 
-### Pitfall 16: Migration / backfill against the live Neon DB
+**What goes wrong:**
+A user runs `/memory forget` expecting a fact to be gone. If the implementation only does `DELETE FROM user_memories WHERE id = $1`, that's actually sufficient for the embedding itself (pgvector stores the embedding *in* the row, not in a separate index structure the app must also clean — HIGH confidence, this is standard pgvector column-storage behavior already implied by the Phase 11 schema). The real gaps are downstream: any *cached* recall result already injected into an in-flight conversation isn't retracted, and — more importantly — if the forgotten fact had already been referenced in a **later** distilled memory (e.g., a milestone/callback roast that got itself written back into memory as a new episode, or a generative-jam "continue this jam" episode derived partly from the now-forgotten taste fact), that derivative memory persists and can effectively resurrect the "forgotten" information indirectly.
 
-**What goes wrong:** Adding the extension + table to the production Neon DB, or backfilling embeddings for historical data, done carelessly: a long-running backfill loop hammers the embedding quota, holds connections through Neon's scale-to-zero, or a non-idempotent migration partially applies.
-**How to avoid:** Schema change is pure idempotent DDL (`CREATE EXTENSION IF NOT EXISTS` + `CREATE TABLE IF NOT EXISTS`) in `SCHEMA_SQL` — safe to re-run. **Do not bulk-backfill history** — the design starts the memory store empty and accumulates forward (FEATURES.md). If any backfill is ever wanted, batch it, throttle through the embedding limiter at priority 2, and run it as a one-off script, not in `init_db()`.
-**Warning signs:** `init_db()` doing row-level work; a backfill loop in the boot path; embedding quota exhaustion right after deploy.
-**Phase to address:** 11.1 Store & Integration (schema) + 11.6 Hygiene & Ops (any backfill)
+**Why it happens:**
+`remember()`/`distill_and_remember()` create new memories from bot-generated text (roast responses, jam summaries) as well as from user behavior — this is a legitimate part of the design (memory that compounds on itself), but it means "delete the source fact" doesn't transitively delete facts that were derived *from* observing the source fact's effects (e.g., Dex roasting the user about it, which itself got distilled into a new memory).
 
-### Pitfall 17: IVFFlat on an empty/tiny table; premature/expensive index
+**How to avoid:**
+- Ship `/memory forget` with an accurate scope statement to the user: it deletes the specific stored fact and its embedding; it does not (unless explicitly built to) find and delete facts that were distilled from Dex's own commentary about the original fact. Set this expectation explicitly in the command's response text rather than implying total erasure.
+- If full "right to be forgotten" semantics matter for this bot (reasonable for a personality bot roasting real people), consider a `/memory forget-all` scoped to a user that clears their entire `user_memories` row set, not just single-fact forgetting, as the actually-reliable erasure path.
+- Verify the DELETE actually removes the pgvector embedding column (not just a "soft delete"/tombstone flag) — check the Phase 11 schema definition in `database.py` for whether `evict_lowest_salience`/deletion helpers do hard deletes (they should, based on the sweep/eviction pattern already described in `services/memory.py`, but confirm for the new `/memory forget` code path specifically since it's a new caller).
 
-**What goes wrong:** Creating an IVFFlat index on a near-empty `user_memories` trains centroids on garbage → poor recall, needs a rebuild once data lands. Or cargo-culting any ANN index when a seq scan over a few-hundred-row corpus is already sub-millisecond.
-**How to avoid:** At this scale (hundreds–low-thousands of rows) **skip the ANN index** — `ORDER BY embedding <=> $1 LIMIT k` is sub-ms on a seq scan. When an index becomes worthwhile (≫10k rows), use **HNSW** (`vector_cosine_ops`), which needs no training data and works from row zero — never IVFFlat on this corpus. Index only at ≤2000 dims (768 is fine).
-**Warning signs:** `CREATE INDEX ... ivfflat` on a small table; index added before measuring; recall worse after indexing.
-**Phase to address:** 11.6 Hygiene & Ops (only if/when corpus grows)
+**Warning signs:**
+- A "forgotten" fact's substance reappears in a later roast (via a derivative memory that wasn't cleared).
+- `/memory forget` responds with a success message but a follow-up `/memory` inspect still surfaces semantically-equivalent content from a different row.
 
-### Pitfall 18: Cold-start latency on the first query (Neon scale-to-zero + first embed)
+**Phase to address:** RAG reach (`/memory` command scope).
 
-**What goes wrong:** First memory query after idle hits Neon's scale-to-zero wake (seconds) *and* a cold embed call, stacking latency — risky if it lands on a command's 3s window.
-**How to avoid:** Pitfall 7's defer-first pattern absorbs it for interactions. The existing pool guards (`min_size>=2`, `max_inactive_connection_lifetime=240`) keep warm connections so the vector codec stays registered and the DB stays awake during activity. Don't run retrieval synchronously before the interaction ack.
-**Warning signs:** First-query-after-idle slowness; SSL-EOF on the first memory query (the K-04 Neon failure class — confirm pool tuning is inherited by the codec pool).
-**Phase to address:** 11.1 Store & Integration (pool inherits K-04 tuning) + 11.3 Retrieval (off hot path)
+---
+
+### Pitfall 7: Auto-queue feedback loop narrows the playlist into a filter bubble
+
+**What goes wrong:**
+"Taste-aware auto-queue that learns from `was_skipped`" (already a tracked column per CLAUDE.md schema) can converge into a self-reinforcing loop on a shared server: it recommends what was previously accepted, gets accepted again (confirmation bias — accepting isn't the same as loving it, sometimes it's just not bothering to skip), and the taste model narrows toward an increasingly generic "safe" genre while variety-seeking recommendations that *would* have been skipped never get tried in the first place because the model learned to avoid anything skip-adjacent. This is worse in a **shared server** context than a personal-recommendation system: auto-queue optimizes toward whichever users are most active/vocal (skip button = signal), silently under-serving quieter members' taste, and multiple users' conflicting taste signals get averaged into bland middle-of-the-road picks that satisfy no one.
+
+**Why it happens:**
+`was_skipped` is a strong, easy-to-use negative signal; there's no equivalent strong positive signal (a song playing to completion isn't necessarily "loved," it might just be tolerated background noise), so a naive model trained more on avoiding skips than pursuing genuine engagement will drift toward the statistically safest, least-skippable common denominator — generic, inoffensive picks — rather than toward what any specific listener actually wants. Phase 12 already validates hallucinated *track identity* (token-set containment against the YouTube result) — that guards against the model inventing songs that don't exist, not against the model converging on a boring but real subset of songs.
+
+**How to avoid:**
+- Explicitly inject some exploration/diversity budget into auto-queue selection (don't purely exploit the skip-avoidance signal) — e.g., reserve a fraction of auto-queued picks per round for genre/artist not recently played, even if slightly higher skip-risk.
+- Track auto-queue picks per *contributing user* where the session has multiple listeners, not just server-wide aggregate taste, so the "ignored" memory (already an existing Phase 2 concept — track skip rate on auto-queued songs) doesn't collapse multiple people's distinct taste into one blended profile.
+- Treat "cold-start" (a session/user with little history) as an explicit branch, not an edge case that falls through to whatever the empty-history code path happens to do — fall back to genre/mood-based recommendation from the *currently playing* session context (existing `AUTO_QUEUE_SONGS_PER_ROUND`/session-lookback pattern from Phase 2) rather than a global-server-average taste that may not represent anyone in the current voice channel.
+- Cap how heavily any single memory-derived taste signal can dominate a round's picks (mirrors the existing `MEMORY_INJECT_CAP` discipline of capping how much any one signal source can dominate a single generation).
+
+**Warning signs:**
+- Auto-queue picks trend toward a narrowing genre/artist set over weeks, visible in `/skips` analytics (already shipped in Phase 12) or `user_artist_counts` diversity dropping server-wide.
+- A quiet/less-active user's taste never shows up in auto-queue picks despite being logged in `song_history`.
+- New users (cold-start) get generic/bland picks indistinguishable from the server-average rather than anything responsive to what they just played.
+
+**Phase to address:** Smarter music brain.
+
+---
+
+### Pitfall 8: Message-content intent + attachment edge cases silently break vision
+
+**What goes wrong:**
+The `message_content` intent is already enabled (required today for message-buffer context), so the bot *can* see attachments — but "an image was posted" has more edge cases than "there's a URL in `message.attachments`": images embedded via URL in the message *text* rather than as a Discord attachment (a pasted link to an external image host) won't appear in `message.attachments` at all; Discord CDN attachment URLs are **ephemeral/signed and expire** — if the vision call is deferred, retried, or run through a background queue rather than handled synchronously in `on_message`, the fetch can 404 by the time it runs; non-image attachments (video, other file types) need a content-type check before being handed to the vision model; multiple images in one message need a decision (comment on the first only? all of them, multiplying cost?); and edited messages that *add* an image after the fact won't be caught by an `on_message`-only listener (would need `on_message_edit` too, which most implementations correctly skip as unnecessary scope).
+
+**Why it happens:**
+The existing `on_message` handler (`cogs/events.py:347-364`) does zero attachment inspection today — vision is entirely new surface area, so there's no existing pattern to copy correctly or incorrectly from within this codebase; every edge case has to be designed fresh.
+
+**How to avoid:**
+- Filter to `message.attachments` with `content_type` starting `image/` (Discord provides this) before any Gemini call — explicitly do not attempt to fetch arbitrary URLs found in message text (scope creep + SSRF-adjacent risk fetching arbitrary user-supplied URLs server-side).
+- Handle vision synchronously within the `on_message` flow (fetch attachment bytes immediately, don't defer to a later background pass) specifically because Discord attachment URLs are signed/expiring — don't build a queue-and-process-later architecture for this without also either re-fetching the message or caching the bytes at receipt time.
+- Cap to the first image if multiple are attached (matches "one emoji max," "one comment max" personality economy — commenting on every image in a multi-image post is spammy and multiplies quota cost for one message).
+- Explicitly skip GIFs/video/non-static images (either by content-type or a max-file-size heuristic) rather than sending them to a vision model built for still images.
+
+**Warning signs:**
+- Vision "randomly" fails on some images with a fetch/404 error in logs — check whether it's happening on deferred/retried calls specifically (expired CDN URL).
+- Cost/RPM spikes disproportionate to message count — check for multi-image messages triggering multiple calls.
+
+**Phase to address:** Vision / multimodal roasting.
+
+---
+
+## Minor Pitfalls
+
+### Pitfall 9: Fire-and-forget errors in new background paths vanish silently
+
+**What goes wrong:**
+Phase 9 already solved this generally (`utils/tasks.py` `make_task` — done-callback surfaces fire-and-forget exceptions to logs/error channel, per CLAUDE.md Implementation Gotchas). The risk in v1.3 isn't that the fix doesn't exist — it's that **new** fire-and-forget call sites (proactive callback scheduling, background taste-graph recomputation, vision analysis dispatched from `on_message`) get written as raw `asyncio.create_task(...)` without routing through `make_task`, because it's easy to pattern-match on the *older*, pre-Phase-9 auto-queue/`distill_and_remember` style (which is itself already correctly self-contained with internal try/except, per `services/memory.py`) rather than the explicit `make_task` wrapper convention.
+
+**How to avoid:**
+Grep for every new `asyncio.create_task(` added in v1.3 diffs and confirm each one either (a) routes through `make_task`, or (b) has the same self-contained catch-everything-and-log discipline `MemoryService.remember`/`distill_and_remember` already demonstrate. Make this an explicit code-review checklist line for v1.3, since it's a cross-cutting concern touching every new feature area.
+
+**Phase to address:** All v1.3 phases — call out as a standing review checklist item, not owned by one phase.
+
+---
+
+### Pitfall 10: Blocking the event loop with synchronous image/embedding work
+
+**What goes wrong:**
+Vision and taste-graph features are natural places to reach for a synchronous image-processing library (e.g., PIL to resize/validate an image before sending to Gemini) or a synchronous numpy/sklearn call for taste-graph clustering. Any CPU-bound synchronous call inside an `async def` handler blocks the entire bot's event loop — stalling every guild's playback callback handling, not just the one interaction — same class of bug the codebase already guards against for FFmpeg (explicit subprocess handling, never blocking).
+
+**How to avoid:**
+Any non-trivial synchronous CPU work (image resize/validation, taste-graph clustering/aggregation over more than a handful of rows) should go through `asyncio.to_thread(...)` or be pushed into the existing background-task pattern rather than awaited inline. Keep it in mind specifically for: image pre-validation before the vision API call, and any taste-graph "compute a graph/cluster" step if it's done in-process rather than via a SQL aggregate query (prefer SQL aggregation over in-Python clustering where possible — it's both faster and avoids the blocking risk entirely).
+
+**Phase to address:** Smarter music brain (taste-graph), Vision / multimodal roasting.
 
 ---
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Skip the ANN index (seq scan) | No index build, no IVFFlat-on-empty risk | Slows >10k rows | **Acceptable now** — sub-ms at this scale; add HNSW later |
-| Hand-serialize vectors as `'[..]'` strings | "Avoids" the codec | Text round-trip, lossy, broken distance queries | **Never** — use `register_vector` |
-| Embed at 3072 (default) | One less config line | Unindexable (>2000 cap), 4× storage, insert mismatch | **Never** — set 768 |
-| Reuse the 15 RPM chat limiter for embeddings | One limiter, less code | Starves `/ask`; conflates two quotas | **Never** — separate limiter |
-| No similarity floor on retrieval | Simpler query | Garbage recall, Rule-5 risk | **Never** — floor ~0.70 |
-| No per-user cap / decay | Ship faster | Context rot — the #1 companion-bot failure | **Never** — ship cap+decay in v1 |
-| No sensitivity/PII gate on writes | Simpler distill prompt | Durable storage of sensitive data; harmful roasts | **Never** — stop-ship |
-| Backfill all history at launch | "Instant memory" | Quota burn, partial migration risk | Avoid; start empty, accumulate forward |
+|----------|-------------------|-----------------|------------------|
+| Reuse `UNPROMPTED_ROAST_CHANCE`-style single probability roll for proactive callbacks with no additional daily cap | Fast to ship, one config constant | Creepy-factor risk (Pitfall 3) goes untested until live feedback | Never for callbacks — always pair a roll with a hard per-user daily cap |
+| Loop `recall()` per-user for taste-graph instead of a dedicated multi-user aggregate query | Reuses existing function, no new SQL | Silent cross-user leak risk if any loop iteration passes the wrong `user_id` (Pitfall 4) | Only for a throwaway prototype/spike, never merged |
+| Treat all Gemini vision refusals as "fall back to generic roast" | Simplest error handling, one code path | Defeats content-safety guardrails (Pitfall 1) — literally the risk being guarded against | Never |
+| Skip cold-start branch for auto-queue, let empty-history fall through to whatever default exists | Less code | New users get server-average bland picks, feels broken (Pitfall 7) | Acceptable only if server has one dominant listener already (single-user or near-single-user community) |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| pgvector + asyncpg pool | `register_vector` before `CREATE EXTENSION` → `ValueError: unknown type: public.vector` | Run `CREATE EXTENSION` on a bootstrap connection *before* `create_pool(init=register_vector)` |
-| pgvector + Neon PgBouncer | Believing `statement_cache_size=0` breaks the codec | Codec is per-connection (`set_type_codec`), not a prepared stmt — coexists fine |
-| `gemini-embedding-001` dims | Leaving default 3072 vs `vector(768)` column | Set `output_dimensionality=768` on **both** doc + query embeds; one shared config constant |
-| Embedding task_type | Same task_type for store and query | `RETRIEVAL_DOCUMENT` on write, `RETRIEVAL_QUERY` on read — mismatching degrades recall |
-| Gemini quota model | Routing embeds through the 15 RPM chat limiter | Separate ~60 RPM embedding limiter; embeds are a different Google quota (~100 RPM) |
-| Discord 3s interaction | Synchronous embed before `defer()` | `defer()` first, embed/search/roast in `followup` via `create_task()` |
-| google-genai SDK | Using deprecated `google-generativeai` for embeddings | `client.aio.models.embed_content(...)` on the existing `genai.Client` |
-| Embedding model | Using `text-embedding-004` (deprecated 2026-01-14) | `gemini-embedding-001` |
+|-------------|-----------------|-------------------|
+| Gemini vision (`gemini-2.5-flash`, multimodal) | Assuming vision calls are "free" against the 15 RPM budget because they're framed as a "reaction," not a "command" | Route through the same shared limiter at **priority 2**, same as background auto-queue — an unprompted image roast must never contend with `/ask`/`/imagine` |
+| Gemini safety settings | Setting `BLOCK_NONE` on all categories to "let more images through" | Leave adjustable categories at a sane default threshold; `BLOCK_NONE` has no upside since CSAM/child-safety blocking is non-configurable and always-on regardless |
+| Discord CDN attachment URLs | Fetching attachment bytes in a deferred/queued background task | Fetch synchronously at message-receipt time — CDN URLs are signed and expire |
+| pgvector / `user_memories` (new call sites) | Assuming the existing `WHERE user_id` guard in `search_memories` automatically protects every new caller | Every new call site must explicitly pass and verify the correct `user_id` scope; add a cross-user regression test |
+| `/memory forget` | Treating a single-row DELETE as complete erasure | Document the actual scope (source fact only, not derivative memories) or build `forget-all` for real erasure semantics |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Embedding every message | Quota burn, store bloat | Event + session-end triggers only | Immediately on any active channel |
-| No per-user cap | Retrieval noise, slow ANN | ~150/user cap + decay sweep | Weeks of accumulation |
-| IVFFlat on tiny corpus | Poor recall, rebuild needed | HNSW or no index | At index-creation time on small data |
-| Unbatched fact writes | N calls for N facts | `embed_content(contents=[list])` = 1 call | Multi-fact distillation passes |
-| Sync embed on hot path | "Did not respond"; latency spikes | Defer-first + create_task | First-query-after-idle / under load |
+|------|----------|------------|-----------------|
+| Unthrottled vision on every image attachment | RPM budget saturates, `/ask` starts feeling slow/delayed | Cadence gate (chance + cooldown) + priority-2 routing + designated-channel-only | First burst of image-heavy chatter after ship (could be day one) |
+| Proactive callback timer with no daily cap | Same user gets multiple unprompted callbacks per day | Hard per-user daily cap alongside the probability roll | Immediately, on the first unlucky roll streak for an active user |
+| In-Python taste-graph clustering on every invocation instead of cached/SQL-aggregated | Command latency grows with `song_history` size; risks event-loop blocking (Pitfall 10) | Precompute/cache taste-graph on a schedule, or push aggregation into SQL | Once `song_history` reaches a size where in-Python grouping takes more than a few hundred ms |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Storing PII (email/phone/address/real name) | Durable personal-data liability | PII scrub in distill gate; store only Discord handle |
-| Distilling sensitive disclosures (grief, health, self-harm) | Durable, re-surfaceable harmful roast ammo | Sensitivity exclusion list in distill prompt; carry "serious → dial back" into the write gate |
-| Hallucinated distilled "facts" stored as truth | Rule-5 accuracy violation; reputational | Constrain distiller to observed/stated, atomic, third-person; no inference |
-| Stale embedded numbers vs live SQL | Roast cites wrong count | Never embed counts; numbers from live `SELECT` only |
-| No owner prune control | Bad memory poisons roasts permanently | `/forget` owner command |
+| Treating Gemini's safety filters as the only content-safety gate for vision | Legal/ToS exposure if the model complies with a request Gemini allows but is still inappropriate to roast (nudity-adjacent-but-not-blocked, images of minors who aren't clearly the poster, private/medical images) | Add an application-level system-prompt hard-rule layer on top of Gemini's own filters (Pitfall 1) |
+| Fetching arbitrary image URLs found in message *text* (not Discord attachments) | SSRF-adjacent risk (bot server fetching attacker-controlled URLs), plus scope creep | Scope strictly to `message.attachments` with `content_type` starting `image/` |
+| `/memory` inspect echoing another user's fact content to the invoker (via a malformed target-user parameter) | Cross-user privacy leak of roast-ammo-grade personal facts | Scope `/memory` hard to `interaction.user.id`; never accept a target-user argument for inspect/forget |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Same callback every session | Feels broken, stops being funny | `last_surfaced_at` + novelty penalty in re-rank |
-| Roast referencing irrelevant memory | Confusing, breaks immersion | Similarity floor ~0.70; inject nothing if nothing clears it |
-| Forced memory injection | Awkward shoehorned roasts | Hand memory as *candidate ammo*; let Gemini NOOP |
-| Memory overwhelming personality | Loses Dexter's voice | Cap 1–3 facts / ~300–500 tokens in `USER CONTEXT` |
+|---------|-------------|-------------------|
+| Vision comments on every image, including ones users didn't want analyzed (private screenshots, ID photos shared for an unrelated reason) | Feels invasive; erodes trust in the designated channel | Cadence-gate + skip anything ambiguous rather than commenting; when in doubt, stay silent |
+| Proactive callback lands mid-serious-conversation | Feels tone-deaf at best, upsetting at worst | Anchor callbacks to an already-active, low-stakes moment (music playback, casual chatter), never a cold interrupt |
+| Auto-queue converges to bland server-average picks | Feels like the bot "stopped listening" to individual taste | Preserve exploration budget + per-user signal tracking within shared sessions (Pitfall 7) |
+| `/memory forget` implies total erasure but leaves derivative memories | User trusts a false sense of privacy control | Accurate command copy about scope, or a real `forget-all` |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Vector codec:** Works in dev where extension was manually created — verify boot order creates `CREATE EXTENSION` *before* the `init=register_vector` pool on a fresh Neon branch.
-- [ ] **Dimensions:** Inserts succeed — verify `output_dimensionality=768` is set on *both* doc and query embeds and matches the `vector(768)` column.
-- [ ] **Embedding limiter:** Embeds work — verify they use a *separate* limiter and never touch the 15 RPM chat window (check `/ask` latency unaffected during background distillation).
-- [ ] **Similarity floor:** Retrieval returns rows — verify a below-threshold result injects *nothing* rather than a weak match.
-- [ ] **Accuracy:** Roast reads well — verify every *number* comes from live SQL, not an embedded memory.
-- [ ] **Sensitivity gate:** Distillation runs — verify a test grief/health/PII message is *not* stored.
-- [ ] **Hygiene:** Store fills — verify per-user cap eviction and the decay sweep actually delete rows.
-- [ ] **3s window:** Memory-augmented command responds — verify `defer()` fires before any embed call.
-- [ ] **Dedup:** Repeated facts — verify a >0.90-similar candidate NOOPs instead of inserting a duplicate.
-- [ ] **Template fallback:** Embedding API down — verify the roast still fires from the template path (existing Gemini-first discipline).
+- [ ] **Vision content-safety:** Often missing an application-level hard-rule layer beyond Gemini's own filters — verify the system prompt explicitly forbids appearance/body/medical commentary, not just relying on the model's judgment.
+- [ ] **Vision refusal handling:** Often missing the distinction between "safety refusal → silently skip" vs. "rate-limited/API error → template fallback" — verify these are two different code branches, not one.
+- [ ] **Proactive callback cadence:** Often missing a hard per-user daily cap in addition to the probability roll — verify both exist, not just the roll.
+- [ ] **Multi-user RAG call sites (taste-graph, jams):** Often missing an explicit multi-user-scoped query distinct from personal `recall()` — verify no per-user loop that could leak scope.
+- [ ] **`/memory forget`:** Often missing coverage of derivative memories (facts distilled from Dex's own commentary about the forgotten fact) — verify the command's stated scope matches its actual behavior.
+- [ ] **Auto-queue cold-start:** Often missing an explicit branch — verify new users/sessions get session-context-based recommendations, not silently-empty or bland server-average picks.
+- [ ] **Attachment content-type filtering:** Often missing a check that skips GIFs/video/non-image attachments before spending a vision API call — verify the filter exists before the Gemini call, not after.
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Extension/pool ordering crash | LOW | Pre-create extension; reorder boot; redeploy |
-| Hand-serialized vectors shipped | MEDIUM | Add `register_vector`; re-read column as list; no data loss if dims correct |
-| Embedded stale numbers | MEDIUM | Stop embedding counts; purge number-bearing rows; route numbers to SQL |
-| Store polluted (every-message writes) | MEDIUM | Add triggers+dedup; bulk-delete low-salience/duplicate rows; let it re-accumulate |
-| Context rot (unbounded growth) | MEDIUM | Apply cap + decay sweep retroactively; re-evaluate retrieval quality |
-| Sensitive content stored | LOW–MEDIUM | `/forget` or admin delete; add the gate; audit existing rows |
-| 3072-dim column (unindexable) | MEDIUM | Re-embed at 768 into a new `vector(768)` column; or switch to `halfvec`; migrate |
+|---------|-----------------|------------------|
+| Vision roasted an inappropriate image before guardrails were tightened | MEDIUM | Delete the bot's message if still possible, tighten the system-prompt hard-rule layer and safety thresholds, add the specific case to a regression checklist, review error-channel logs for similar near-misses |
+| Proactive callback creeped out the server | LOW | Reduce chance/raise cooldown in config immediately (no redeploy needed if these are env-tunable), consider pausing the feature entirely behind a flag while retuning |
+| Cross-user memory leak discovered in `/ask` or taste-graph | HIGH | Immediately audit every `search_memories`/`recall()` call site for missing `user_id` scoping, add the regression test from Pitfall 4, consider a full memory-table review for any facts that may have already leaked and whether affected users need direct notice |
+| Auto-queue visibly converged into a bland filter bubble | LOW-MEDIUM | Temporarily widen the exploration budget in config, backfill `/skips` analytics review to identify the narrowing pattern, consider a manual "reset taste memory" for the affected server |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| 1. Extension-vs-pool ordering | 11.1 | Clean boot on a fresh Neon branch (no manual extension) |
-| 2. `statement_cache_size` misbelief | 11.1 | Codec returns `list[float]`; `<=>` order correct; K-04 pool flags intact |
-| 3. Dimension mismatch / ANN cap | 11.1 + 11.2 | Inserts succeed; HNSW creatable; single dims constant |
-| 4. Embedding every message | 11.4 | Write-call count flat vs chat volume |
-| 5. Embedding SQL-known facts | 11.4 + 11.5 | No digits in memory rows; numbers match `/history` |
-| 6. Sharing the 15 RPM limiter | 11.2 | `/ask` latency unaffected during distillation |
-| 7. Sync embed blocks 3s | 11.3 / 11.5 | No "did not respond"; embed after `defer()` |
-| 8. No similarity floor | 11.3 | Below-floor result injects nothing |
-| 9. Memory overrides accuracy | 11.4 + 11.5 + 11.6 | Numbers from SQL; contradictions superseded; ammo framing |
-| 10. Sensitive content / PII | 11.4 | Grief/health/PII test message not stored |
-| 11. Prompt bloat | 11.3 | ≤3 facts, ≤~500 tokens injected |
-| 12. No write-time dedup | 11.4 (needs 11.3) | >0.90 candidate NOOPs |
-| 13. Stale/contradictory memories | 11.6 | Newer fact supersedes; recency in re-rank |
-| 14. Unbounded growth | 11.6 | Cap eviction + decay sweep delete rows |
-| 15. Repeated callbacks | 11.3 (P2) | Novelty penalty down-weights recent surfaces |
-| 16. Live migration/backfill | 11.1 + 11.6 | Idempotent DDL; no backfill in boot path |
-| 17. IVFFlat-on-empty / premature index | 11.6 | No index until measured need; HNSW when added |
-| 18. Cold-start latency | 11.1 + 11.3 | Warm pool inherits K-04; retrieval off hot path |
+|---------|-------------------|----------------|
+| Content-safety / legal risk of vision roasting (P1) | Vision / multimodal roasting | Safety-refusal branch is distinct from API-error branch in code review; refusal logs reviewed during rollout; system prompt has explicit hard-rule section |
+| Vision quota/privacy blowout from unthrottled reactions (P2) | Vision / multimodal roasting | `/stats` RPM headroom stays stable through an image-heavy test period; cadence gate + priority-2 routing present in code review |
+| Proactive callback creepiness (P3) | Proactive callbacks | Daily-cap + probability-roll both present; callbacks anchored to an active-moment trigger, not a cold timer; live feedback monitored post-ship |
+| Cross-user memory leakage on new call sites (P4) | RAG reach (foundation for the pattern); Smarter music brain (inherits it) | Regression test asserting scoped queries never cross `user_id`; code review checklist item for every new `recall()`/`search_memories` caller |
+| Stale/contradicted memory surfaced as current (P5) | Semantic music memory (foundation); Smarter music brain (enforcement) | Taste-kind memory decay/rerank params deliberately set, not inherited unmodified from Phase 11 general-fact defaults; auto-queue uses structured `song_history`/`user_artist_counts` as the decision source, memory as flavor only |
+| `/memory forget` incomplete erasure (P6) | RAG reach | Command copy accurately states scope; hard-delete confirmed (not soft-delete) for the direct row |
+| Auto-queue feedback loop / filter bubble (P7) | Smarter music brain | Exploration budget present in selection logic; per-user signal tracked within shared sessions; cold-start has an explicit branch |
+| Attachment/message_content edge cases (P8) | Vision / multimodal roasting | Content-type filter present before any Gemini call; synchronous fetch-at-receipt-time confirmed; multi-image messages capped to one |
+| Fire-and-forget errors vanish in new background paths (P9) | All v1.3 phases (standing review item) | Every new `asyncio.create_task` in the diff routes through `make_task` or has equivalent self-contained error handling |
+| Event-loop blocking from synchronous image/clustering work (P10) | Smarter music brain; Vision / multimodal roasting | No CPU-bound synchronous call inside an `async def` without `asyncio.to_thread`; taste-graph aggregation done in SQL where feasible |
 
 ## Sources
 
-- Context7 `/pgvector/pgvector-python` — `register_vector(conn, schema)` signature; `ValueError` on missing `vector` type (suppressed only for `halfvec`/`sparsevec`); `init=` pool pattern; per-connection `set_type_codec` — HIGH
-- STACK.md (this milestone) — verified asyncpg+pgvector+Neon integration, 768-dim/2000-dim cap, `gemini-embedding-001`, separate 100 RPM embedding quota, `text-embedding-004` deprecation 2026-01-14 — HIGH
-- FEATURES.md (this milestone) — write triggers, dedup >0.90, similarity floor 0.70, top-k=8→1–3, per-user cap ~150, 90-day decay, context-rot prior art (Mem0, Generative Agents, companion bots) — HIGH (architecture) / MEDIUM (numeric defaults)
-- Existing code: `services/gemini.py` (`_RateLimiter`, priority tiers, defer discipline), `database.py` (`SCHEMA_SQL` plain-DDL constraint, asyncpg pool helpers), CLAUDE.md/PROJECT.md (K-04 Neon pool tuning, Critical Rule 5, 3s interaction rule, serious→dial-back) — HIGH
+- `services/gemini.py` (this repo) — existing `_RateLimiter` priority-tier mechanics, `GeminiRefusalError` defined-but-unused, `generate_image` refusal-as-`None` pattern
+- `services/memory.py` (this repo) — Phase 11 RAG `recall`/`remember`/`distill`/`sweep` pipeline, existing cross-user guard (`search_memories` `WHERE user_id`), sensitivity/number safety gates, fire-and-forget error-swallowing discipline
+- `cogs/events.py` (this repo) — existing ambient-roast cadence-gate pattern (probability + per-user cooldown dict), `on_message` handler with zero attachment inspection today (vision is greenfield)
+- `.planning/PROJECT.md`, `CLAUDE.md` (this repo) — v1.3 scope, Critical Rules, Phase 9-12 Implementation Gotchas this research builds on rather than repeats
+- [Gemini API safety settings](https://ai.google.dev/gemini-api/docs/safety-settings) — confirmed CSAM/child-safety filtering is non-configurable and always-on; four adjustable harm categories are separate from this hard block; MEDIUM-HIGH confidence (official docs, cross-checked via WebSearch summary)
+- [Gemini API image understanding](https://ai.google.dev/gemini-api/docs/image-understanding) — confirmed base image token cost (258 tokens for images ≤384px per dimension) and tiling behavior for larger images (768×768 tiles, 258 tokens each); MEDIUM confidence (fetched via WebFetch, page did not include free-tier-specific numeric RPD/TPM caps)
+- [Gemini API rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) — confirmed free-tier numeric RPM/TPM/RPD values are account/tier-dependent and surfaced live in AI Studio rather than published as static docs constants; LOW-MEDIUM confidence on any specific number, recommend verifying current limits in AI Studio before finalizing config for the vision phase
+- General WebSearch on Gemini 2.5 Flash free-tier pricing/limits — MEDIUM-LOW confidence, third-party summaries vary and reference figures that shift; treat as directional only, verify against AI Studio at implementation time
 
 ---
-*Pitfalls research for: pgvector + Gemini-embeddings RAG memory on the existing Dexter stack (v1.2 / Phase 11)*
-*Researched: 2026-06-26*
+*Pitfalls research for: Dexter v1.3 "Taste Brain" (semantic music memory, taste-aware auto-queue, RAG reach, proactive callbacks, vision/multimodal roasting)*
+*Researched: 2026-07-02*

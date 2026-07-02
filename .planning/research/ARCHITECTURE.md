@@ -1,422 +1,451 @@
-# Architecture Research
-
-**Domain:** RAG long-term memory integrated into a shipped, layered discord.py bot (cogs → services → models, asyncpg→Neon, google-genai). Milestone v1.2 / Phase 11.
-**Researched:** 2026-06-26
-**Confidence:** HIGH — integration points verified against the real files (`bot.py`, `database.py`, `services/gemini.py`, `personality/prompts.py`, `cogs/ai.py`, `cogs/events.py`, `models/*`). Stack/feature decisions inherited from the sibling STACK.md / FEATURES.md (HIGH).
-
-> **Mandate:** integrate, do NOT redesign. The existing layered architecture (cogs call services via `self.bot`, services wired in `bot.py:_initialize_once`, `database.py` owns the pool + idempotent `SCHEMA_SQL`, `prompts.py` builds the system prompt, Gemini-first-with-template-fallback discipline) is fixed. RAG memory bolts on as **one new service + one new model module + one new table + four touched call sites**.
-
----
-
-## Standard Architecture
-
-### System Overview (where the new pieces live)
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          COGS (Discord I/O)                            │
-│  ┌────────────┐   ┌────────────┐   ┌───────────────────────────────┐  │
-│  │ cogs/ai.py │   │cogs/events │   │ cogs/ai.py try_auto_queue     │  │
-│  │ /ask /roast│   │ ambient    │   │ (banter distill trigger, opt) │  │
-│  └─────┬──────┘   │ roast      │   └──────────────┬────────────────┘  │
-│        │          └─────┬──────┘                  │  WRITE trigger     │
-│  READ  │  READ          │  READ                   │  (distill+store)   │
-├────────┼────────────────┼─────────────────────────┼───────────────────┤
-│        ▼                ▼                          ▼                    │
-│              SERVICES (logic, no Discord types)                        │
-│  ┌──────────────────────────┐      ┌──────────────────────────────┐   │
-│  │ services/memory.py  ★NEW │─────▶│ services/gemini.py (EXISTING)│   │
-│  │  MemoryService           │ chat │  GeminiService.chat (distill)│   │
-│  │  - recall()  READ        │ embed│  + embed_content (NEW method)│   │
-│  │  - remember() WRITE      │◀─────│  own _RateLimiter (embeddings)│   │
-│  │  - dedup, rerank, sweep  │      └──────────────────────────────┘   │
-│  └──────────┬───────────────┘                                         │
-│             │ uses pure scoring fns                                    │
-│             ▼                                                          │
-│  ┌──────────────────────────┐   ┌────────────────────────────────┐    │
-│  │ models/memory.py    ★NEW │   │ personality/prompts.py (MOD)   │    │
-│  │  MemoryFact dataclass +  │   │  build_chat_prompt(...,         │    │
-│  │  pure rerank/decay fns   │   │     memories=) → USER CONTEXT  │    │
-│  │  (TDD seam)              │   └────────────────────────────────┘    │
-│  └──────────┬───────────────┘                                         │
-├─────────────┼──────────────────────────────────────────────────────── ┤
-│             ▼            DATA (database.py + Neon)                      │
-│  ┌──────────────────────────────────────────────────────────────┐     │
-│  │ database.py (MOD): SCHEMA_SQL += CREATE EXTENSION vector;     │     │
-│  │   + user_memories table; + insert/search/bump/sweep helpers   │     │
-│  │ bot.py (MOD): create_pool(init=register_vector) + ext-first   │     │
-│  └──────────────────────────────────────────────────────────────┘     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐      │
-│  │ song_history │  │ user_profiles│  │ user_memories  ★NEW       │      │
-│  │ (numbers=    │  │ (numbers=    │  │ (episodes/opinions =      │      │
-│  │  ground truth)│  │  ground truth)│  │  vector recall)          │      │
-│  └──────────────┘  └──────────────┘  └──────────────────────────┘      │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-The new service sits exactly where every other service sits — wired in `bot.py:_initialize_once()`, attached as `bot.memory_service`, accessed by cogs via `self.bot.memory_service`. No layer is restructured.
-
-### Component Responsibilities
-
-| Component | New / Mod | Responsibility | Implementation |
-|-----------|-----------|----------------|----------------|
-| `services/memory.py` `MemoryService` | **NEW** | Owns the RAG lifecycle: `recall()` (embed query → search → rerank → top 1–3), `remember()` (distill → embed → dedup → insert/bump), `sweep()` (decay + per-user cap). Holds its own embedding `_RateLimiter`. | Class, constructed with `pool` + `gemini_service`, mirrors `QueuePersistenceService(bot.pool)` wiring. |
-| `models/memory.py` | **NEW** | `MemoryFact` dataclass (the record type) + **pure** scoring functions: `rerank(candidates, now)`, `recency_weight(created_at)`, `novelty_penalty(last_surfaced_at)`, `dedup_decision(similarity)`. No DB, no Discord — the unit-test seam (mirrors `database.py:compute_streak` / `models/server_state` patterns). | dataclass + module-level pure fns. |
-| `database.py` | **MOD** | Add `CREATE EXTENSION IF NOT EXISTS vector;` + `user_memories` DDL to `SCHEMA_SQL`. Add query helpers: `insert_memory`, `search_memories`, `bump_memory`, `delete_expired_memories`, `count_memories`, `evict_memories`. All `$N`-parameterised, pool-acquire style. | Same conventions as existing favorites/playlist helpers. |
-| `bot.py:_initialize_once` | **MOD** | (1) Run `CREATE EXTENSION` **before** the codec-registering pool exists; (2) pass `init=_register_vector` to `create_pool`; (3) wire `bot.memory_service = MemoryService(bot.pool, bot.gemini_service)`; (4) start the daily memory-sweep background task. | Minimal additions to the existing init sequence. |
-| `services/gemini.py` `GeminiService` | **MOD** | Add `embed(texts, task_type, priority)` async method (`client.aio.models.embed_content`, `gemini-embedding-001`, `output_dimensionality=768`) backed by a **separate** `_RateLimiter` instance (NOT the shared 15 RPM chat limiter). | New method + second limiter field. |
-| `personality/prompts.py` `build_chat_prompt` | **MOD** | Accept optional `memories: list[str] | None = None`; render them into a labelled sub-block inside the existing `USER CONTEXT:` section with an accuracy-safe instruction. | Backward-compatible optional param. |
-| `config.py` | **MOD** | New constants: `EMBEDDING_MODEL`, `EMBED_DIM=768`, `EMBED_RPM_LIMIT`, `MEMORY_TOP_K`, `MEMORY_SIM_FLOOR`, `MEMORY_DEDUP_THRESHOLD`, `MEMORY_PER_USER_CAP`, `MEMORY_DECAY_DAYS`, rerank weights, `MEMORY_INJECT_MAX`. | Plain module constants. |
-| `cogs/ai.py`, `cogs/events.py` | **MOD** | Call `recall()` before building the prompt (READ); call `remember()` on notable events (WRITE). | Touch 4 build sites + ≥1 write hook. |
-
----
-
-## Recommended Project Structure (delta only)
-
-```
-dexter/
-├── services/
-│   ├── gemini.py          # MOD: + embed(), + second _RateLimiter
-│   └── memory.py          # ★NEW: MemoryService (recall/remember/sweep)
-├── models/
-│   └── memory.py          # ★NEW: MemoryFact dataclass + pure scoring fns (TDD)
-├── database.py            # MOD: SCHEMA_SQL (+vector ext, +user_memories), + helpers
-├── bot.py                 # MOD: ext-first ordering, pool init=, wire memory_service, sweep task
-├── personality/
-│   └── prompts.py         # MOD: build_chat_prompt(memories=...) injection
-├── config.py              # MOD: embedding + retrieval + hygiene constants
-├── cogs/
-│   ├── ai.py              # MOD: /ask + /roast recall; try_auto_queue write hook
-│   └── events.py          # MOD: ambient-roast recall; notable-event write hook
-└── tests/
-    └── test_memory.py     # ★NEW: pure rerank/decay/dedup tests (no DB/Discord)
-```
-
-### Structure Rationale
-
-- **`services/memory.py` (not extending `gemini.py`):** the RAG lifecycle (distill→embed→dedup→store→retrieve→rerank) is its own concern with its own state (embedding limiter, scoring policy). `gemini.py` stays a thin SDK wrapper — it only gains a generic `embed()` primitive, consistent with its "no personality logic" docstring. This mirrors how `queue_persistence.py` is a service distinct from `database.py`.
-- **`models/memory.py` separates pure logic from I/O:** the project's testing convention is "pure logic gets TDD; Discord/process code is untested-by-design." Rerank/recency/novelty/dedup math is pure and deterministic → it lives in `models/` next to `server_state`/`user_profile`, exactly like `database.py:compute_streak` lives apart from the DB write. `MemoryService` orchestrates; `models/memory.py` decides.
-- **DB stays in `database.py`:** new helpers join `add_favorite`/`save_playlist`/`set_resolution_cache` — same pool-acquire, `$N`-param, idempotent-DDL house style. No new persistence layer.
-
----
-
-## Architectural Patterns
-
-### Pattern 1: Three-layer memory, numbers stay in SQL (accuracy firewall)
-
-**What:** Dexter already has short-term (`MessageBuffer`) and structured/deterministic (`song_history`, `user_profiles`) memory. RAG is the **third, episodic** layer. The firewall rule: **the vector store NEVER holds numbers a `SELECT COUNT(*)` can answer.** It holds opinions/episodes/banter only.
-**When to use:** every write decision. If the fact is "queued mr brightside 14 times" → that's SQL, do not embed. If it's "swore he was done with the killers" → embed.
-**Trade-offs:** prevents the embedded store from drifting out of sync with live counts (a direct Critical-Rule-5 accuracy violation). Costs a little discipline in the distillation prompt. This is non-negotiable per `prompts.py` ("Accurate first... Reference the user's music history... real play counts").
-
-### Pattern 2: Separate embedding rate limiter (don't touch the 15 RPM budget)
-
-**What:** `GeminiService` gets a **second** `_RateLimiter` instance for embeddings, sized to the embedding endpoint's ~100 RPM quota (configure conservatively, e.g. 60 RPM). The existing single shared 15 RPM limiter stays exclusively for chat + image generation.
-**When to use:** every `embed()` call.
-**Trade-offs:** embeddings hit a *different Google quota*, so funnelling them through the 15-slot chat window would needlessly starve `/ask`. Cost: one more `_RateLimiter` field + a `priority` arg on `embed()`. Write/distill embeds = priority 2 (skip if saturated; a missed fact is harmless). Retrieval embed = priority 1-ish but has a template fallback.
-
-**Example:**
-```python
-# services/gemini.py — GeminiService.__init__
-self._rate_limiter = _RateLimiter()                       # existing, 15 RPM (chat+image)
-self._embed_limiter = _RateLimiter(max_requests=config.EMBED_RPM_LIMIT)  # NEW
-
-async def embed(self, texts: list[str], *, task_type: str, priority: int = 2) -> list[list[float]]:
-    await self._embed_limiter.acquire(priority)            # NOT self._rate_limiter
-    resp = await self._client.aio.models.embed_content(
-        model=config.EMBEDDING_MODEL,                      # "gemini-embedding-001"
-        contents=texts,                                    # LIST → batch many in one call
-        config=types.EmbedContentConfig(
-            output_dimensionality=config.EMBED_DIM,        # 768 (indexable)
-            task_type=task_type,                           # RETRIEVAL_DOCUMENT | RETRIEVAL_QUERY
-        ),
-    )
-    return [e.values for e in resp.embeddings]
-```
-
-### Pattern 3: pgvector codec registration — extension-first, then `init=` (the one real trap)
-
-**What:** `register_vector(conn)` raises `ValueError` if the `vector` type does not yet exist on the connection. The pool's `init=` callback fires on **every** connection at pool-creation time — *before* `init_db()` runs `SCHEMA_SQL`. So `CREATE EXTENSION` must run on a throwaway connection **before** `create_pool(init=...)`.
-**When to use:** boot, exactly once, in `_initialize_once()`.
-**Trade-offs:** one extra short-lived connection at startup. Verified compatible with the existing Neon pool tuning — `register_vector` is a per-connection `set_type_codec`, NOT a prepared statement, so `statement_cache_size=0` does not break it (STACK.md §2).
-
-**Example (the real `bot.py:_initialize_once` change, lines ~297–306):**
-```python
-from pgvector.asyncpg import register_vector
-
-# 1) Ensure the vector type exists BEFORE the codec-registering pool is built.
-_boot = await asyncpg.connect(
-    dsn=config.sanitize_database_url(config.DATABASE_URL),
-    ssl="require", statement_cache_size=0,
-)
-try:
-    await _boot.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-finally:
-    await _boot.close()
-
-# 2) Now the long-lived pool can register the codec on every connection.
-async def _register_vector(conn: asyncpg.Connection) -> None:
-    await register_vector(conn)
-
-bot.pool = await asyncpg.create_pool(
-    dsn=config.sanitize_database_url(config.DATABASE_URL),
-    min_size=config.DB_POOL_MIN, max_size=config.DB_POOL_MAX,
-    command_timeout=30, ssl="require",
-    max_inactive_connection_lifetime=config.DB_MAX_INACTIVE_CONN_LIFETIME,
-    statement_cache_size=config.DB_STATEMENT_CACHE_SIZE,
-    init=_register_vector,                  # <-- only new line on create_pool
-)
-await init_db(bot.pool)                     # SCHEMA_SQL also has the idempotent ext + table
-```
-> Note: `SCHEMA_SQL` *also* carries `CREATE EXTENSION IF NOT EXISTS vector;` (idempotent, harmless second run) so a fresh DB created another way is still correct. The bootstrap connection only exists to satisfy the `init=` ordering on the very first boot.
-
-### Pattern 4: Retrieve-and-inject, no extra generation call on the user's critical path
-
-**What:** the memory layer adds **zero** generation calls to a roast/`/ask` response. The roast generation is the *existing* `gemini.chat()` call; memory only enriches its system prompt. The only added call on the read path is **one cheap embedding** (separate quota).
-**When to use:** every READ.
-**Trade-offs:** keeps the 15 RPM budget untouched for user-facing latency; the embedding adds ~one network round-trip, acceptable behind a `defer()`.
-
----
-
-## Data Flow
-
-### WRITE flow (event → distilled fact → vector store)
-
-```
-notable event in a cog
-  (repeat-song roast / milestone / striking /ask exchange / voice-session-end batch)
-        │
-        ▼
-cogs/* calls  bot.memory_service.remember(user_id, guild_id, raw_context_text)
-        │
-        ▼  MemoryService.remember():
-   1. distill:   gemini_service.chat(DISTILL_PROMPT, [raw_context], priority=2)
-                 → 0–3 atomic, third-person, declarative sentences (NO numbers)
-   2. embed:     gemini_service.embed(facts, task_type="RETRIEVAL_DOCUMENT", priority=2)
-   3. dedup:     for each fact → database.search_memories(user_id, vec, k=1)
-                 → if top-1 cosine sim > MEMORY_DEDUP_THRESHOLD (~0.90):
-                       database.bump_memory(id)   # NOOP/UPDATE: ++hit_count, touch last_seen_at
-                   else:
-                       database.insert_memory(user_id, guild_id, fact, vec, salience, ...)
-   4. cap guard: if database.count_memories(user_id) > MEMORY_PER_USER_CAP:
-                       database.evict_memories(user_id)   # lowest salience×recency×hit_count
-        │
-        ▼
-   user_memories row(s) committed to Neon
-```
-- **Triggers (FEATURES.md §2):** event-triggered (rare, already-firing hooks in `events.py`/`ai.py`) + periodic session-end batch (one priority-2 call). NEVER per-message.
-- **Priority 2 throughout** — distill + embed both background; a missed write is harmless and must never starve `/ask`.
-
-### READ flow (roast moment → recall → prompt injection)
-
-```
-roast / response moment
-  (/ask, /roast, ambient voice-join roast, repeat/milestone roast)
-        │
-        ▼
-cog calls  facts = await bot.memory_service.recall(user_id, guild_id, query_text)
-        │
-        ▼  MemoryService.recall():
-   1. embed query:  gemini_service.embed([query_text], task_type="RETRIEVAL_QUERY", priority=1)
-   2. ANN search:   database.search_memories(user_id, guild_id, qvec, k=MEMORY_TOP_K≈8)
-                    →  WHERE user_id=$1 [AND guild_id=$2]
-                       ORDER BY embedding <=> $qvec   (cosine distance)
-                       LIMIT $k
-   3. floor:        drop rows with cosine similarity < MEMORY_SIM_FLOOR (~0.70)
-   4. rerank:       models.memory.rerank(rows, now)
-                    score = 1.0·relevance + 0.5·recency + 0.7·salience + 0.5·novelty
-                    → keep top MEMORY_INJECT_MAX (1–3) fact strings
-   5. (optional)    database.bump_memory(...) last_surfaced_at/surface_count for anti-repeat
-        │
-        ▼
-   cog calls  build_chat_prompt(mood, user_summary, seasonal, memories=facts)
-        │
-        ▼
-   gemini_service.chat(system_prompt, conversation, priority=1)   ← EXISTING call, unchanged signature on chat()
-```
-- If nothing clears the floor → `recall()` returns `[]` → `build_chat_prompt(..., memories=None)` → identical to today's behavior (graceful degrade).
-- The embedding query is the only added call; everything else is the existing chat path.
-
-### Key Data Flows
-
-1. **Stat × episode callback (the payoff):** SQL provides the true number (`get_user_summary` / a `COUNT`), pgvector provides the recalled episode; both are handed to Gemini as *candidate ammo* with "weave one in only if it lands; never invent specifics." Numbers always real, phrasing from the model.
-2. **Dedup-on-write requires read-first:** `remember()` calls `search_memories` before inserting — retrieval must be built before write (dependency below).
-
----
-
-## Exact Prompt-Injection Site (accuracy-rule-safe)
-
-**File:** `personality/prompts.py`. **Anchor:** the existing `USER CONTEXT:` block of `DEXTER_SYSTEM_PROMPT` (lines 57–60), which today renders only `{user_context}` (the SQL taste summary from `get_user_summary`).
-
-**Change:** add an optional `memories` param to `build_chat_prompt` and render a clearly-labelled sub-block **after** `{user_context}`, inside the same section. Keep `{user_context}` (the numbers) first so it remains the dominant, authoritative context.
-
-```python
-# personality/prompts.py  (DEXTER_SYSTEM_PROMPT, USER CONTEXT region)
-USER CONTEXT:
-{user_context}
-
-{memory_context}        # <-- NEW slot, empty string when no memories cleared the floor
-```
-
-```python
-def build_chat_prompt(mood, user_summary, seasonal, memories: list[str] | None = None) -> str:
-    ...
-    if memories:
-        memory_context = (
-            "THINGS YOU REMEMBER ABOUT THIS USER (episodes/opinions, not stats):\n"
-            + "\n".join(f"- {m}" for m in memories)
-            + "\nUse at most one of these, and only if it genuinely lands. "
-              "Do NOT invent details beyond these lines. "
-              "All numbers/counts come from USER CONTEXT above — never from these memories."
-        )
-    else:
-        memory_context = ""
-    return DEXTER_SYSTEM_PROMPT.format(..., memory_context=memory_context).rstrip()
-```
-
-**Why this is accuracy-safe (Critical Rule 5):**
-- Memories are episodic/opinion sentences with **no numbers** (enforced at write time, Pattern 1). The model cannot read a stale count from them.
-- The injected instruction explicitly pins numbers to the SQL `USER CONTEXT` block and forbids inventing detail — reinforcing `DEXTER_SYSTEM_PROMPT`'s existing "Accurate first... do not make things up."
-- Empty-string fallback means the no-memory path is byte-identical to today's prompt → zero regression risk for users with no stored facts.
-- **Backward-compatible signature:** `memories` defaults to `None`, so the four existing `build_chat_prompt` callers compile unchanged; they opt in by passing the recalled list.
-
----
-
-## Call Sites That Change (against the real files)
-
-| File:Site | Current | Change | Direction |
-|-----------|---------|--------|-----------|
-| `cogs/ai.py:ask` (build at L119) | `build_chat_prompt(mood, user_summary, seasonal)` | `facts = await self.bot.memory_service.recall(uid, gid, question)` → pass `memories=facts` | READ |
-| `cogs/ai.py:roast` (build at L179) | `build_chat_prompt(mood, user_summary, seasonal)` | recall on `target.id` using scenario text → pass `memories=facts` | READ |
-| `cogs/ai.py:try_auto_queue` (L252) | recommendation prompt only | optional: distill auto-queue skip outcome ("ignored memory") into a fact | WRITE (optional, P2) |
-| `cogs/events.py:_generate_ambient_roast` (build at L131) | `build_chat_prompt("normal", user_context, "")` | recall on `member.id` using `scenario` → pass `memories=facts` | READ |
-| `cogs/events.py:on_voice_state_update` / repeat-song / milestone hooks | fire roast | add `await self.bot.memory_service.remember(...)` on notable events | WRITE |
-| `cogs/events.py:on_message` (L305) | feeds `MessageBuffer` | (session-end batch) distill recent buffer → facts; trigger lives here or in a bg task | WRITE (batch) |
-| `personality/prompts.py:build_chat_prompt` (L91) | 3 params | + `memories` param + injection | MOD (core) |
-| `bot.py:_initialize_once` (L297–306) | pool create + `init_db` | ext-first bootstrap, `init=_register_vector`, wire `bot.memory_service`, start sweep task | MOD |
-| `database.py:SCHEMA_SQL` (L67) + helpers | tables + helpers | + `CREATE EXTENSION vector` + `user_memories` + 6 helpers | MOD |
-| `services/gemini.py:GeminiService` | chat + image | + `embed()` + `_embed_limiter` | MOD |
-| `config.py` | — | + embedding/retrieval/hygiene constants | MOD |
-
-**`build_chat_prompt` is the linchpin** — it has exactly four callers (`/ask`, `/roast`, ambient roast, and itself), all discoverable by grep. The optional-param strategy means changing it cannot silently break a caller.
-
----
-
-## Suggested Build Order (Phase 11 sub-phases)
-
-Ordered to respect the dependency chain in FEATURES.md (`schema → retrieval → write/dedup → distillation triggers → callback integration → hygiene`). Each sub-phase is independently verifiable (pure-logic TDD + clean boot).
-
-**11.1 — Foundation: schema + extension + codec + config (NEW, no behavior change)**
-- `database.py`: `CREATE EXTENSION IF NOT EXISTS vector;` + `user_memories` table + index in `SCHEMA_SQL`.
-- `bot.py`: extension-first bootstrap connection + `init=_register_vector` on `create_pool`.
-- `config.py`: all new constants.
-- Verify: clean boot against Neon, table + extension present, codec registered, no regression. **No retrieval/write yet.**
-
-**11.2 — Embedding primitive + retrieval read path (depends on 11.1)**
-- `services/gemini.py`: `embed()` + separate `_embed_limiter`.
-- `database.py`: `search_memories` (ANN, scoped, floor applied in Python).
-- `models/memory.py`: `MemoryFact` + pure `rerank`/`recency_weight`/`novelty_penalty` (TDD — `tests/test_memory.py`).
-- `services/memory.py`: `recall()` (embed query → search → floor → rerank → top 1–3). Returns `[]` cleanly when empty.
-- Verify: unit tests green; `recall()` returns sane facts against seeded rows.
-
-**11.3 — Write path + dedup (depends on 11.2 — must search before inserting)**
-- `database.py`: `insert_memory`, `bump_memory`, `count_memories`, `evict_memories`.
-- `services/memory.py`: `remember()` distill→embed→dedup(>0.90 NOOP/bump else insert)→cap-guard.
-- `models/memory.py`: `dedup_decision(similarity)` pure fn (TDD).
-- Verify: dedup unit tests; a repeated fact bumps `hit_count` instead of duplicating.
-
-**11.4 — Distillation triggers (depends on 11.3)**
-- Hook `remember()` into the already-firing notable-event paths in `cogs/events.py` (repeat-song, milestone, late-night) and `cogs/ai.py` (`try_auto_queue` ignored-memory).
-- Add the session-end / daily batch distill (one priority-2 call over `MessageBuffer`).
-- Verify: events produce 0–3 facts; no per-message writes; priority-2 never blocks `/ask`.
-
-**11.5 — Prompt injection + callback-roast integration (capstone; depends on 11.2 for recall, 11.4 for content)**
-- `personality/prompts.py`: `memories` param + `USER CONTEXT` injection (accuracy-safe).
-- Wire `recall()` + `memories=` into `/ask`, `/roast`, `_generate_ambient_roast`.
-- Verify: a roast cites a true SQL stat AND a recalled episode; no-memory users get the unchanged prompt.
-
-**11.6 — Hygiene (ship with v1, not later — FEATURES.md flags unbounded memory as the #1 failure)**
-- `database.py`: `delete_expired_memories` (decay sweep, ~90d on low salience).
-- `bot.py`: daily memory-sweep background task (mirrors `cache_cleanup`/`ytdlp_update` `@tasks.loop` + `before_loop` `wait_until_ready` pattern).
-- Per-user cap eviction already in `remember()` (11.3); sweep handles decay.
-- Verify: expired rows deleted; cap holds; ANN recall quality stable.
-
-> **Why this order:** retrieval (11.2) precedes write (11.3) because dedup *is* a retrieval call. Distillation triggers (11.4) need the write path to exist. The callback-roast (11.5) is the integration capstone — it needs both recall (11.2) and real stored content (11.4). Hygiene (11.6) is last only in build order, but is in-scope for v1, not deferred polish.
-
----
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Registering the vector codec before the extension exists
-**What people do:** add `init=register_vector` to `create_pool` and rely on `init_db`/`SCHEMA_SQL` to create the extension afterwards.
-**Why it's wrong:** `init=` fires on every connection *during* `create_pool`, before `init_db` runs → `register_vector` raises `ValueError` (type missing) → boot fails.
-**Do this instead:** run `CREATE EXTENSION IF NOT EXISTS vector;` on a throwaway `asyncpg.connect()` **before** `create_pool(init=...)` (Pattern 3).
-
-### Anti-Pattern 2: Embedding numbers / counts (vector-SQL drift)
-**What people do:** embed "queued mr brightside 14 times" because it's "data about the user."
-**Why it's wrong:** the embedded number freezes; live SQL keeps counting. Gemini may roast with the stale embedded number → accuracy violation (Critical Rule 5) + context rot.
-**Do this instead:** numbers always from a live `SELECT`; embed only opinions/episodes/banter (Pattern 1).
-
-### Anti-Pattern 3: Routing embeddings through the shared 15 RPM chat limiter
-**What people do:** reuse `self._rate_limiter` for `embed()`.
-**Why it's wrong:** embeddings have a separate ~100 RPM quota; sharing the 15-slot window starves `/ask` for no benefit.
-**Do this instead:** a second `_RateLimiter` for embeddings (Pattern 2).
-
-### Anti-Pattern 4: Per-message distillation / writing on every turn
-**What people do:** call `remember()` on every `on_message`.
-**Why it's wrong:** a Gemini distill per message is unaffordable at 15 RPM and mostly stores noise → context rot, slow ANN.
-**Do this instead:** event-trigger + session-end batch only (11.4).
-
-### Anti-Pattern 5: Changing `chat()`'s signature or adding a generation call on the read path
-**What people do:** thread memory through a new `gemini.chat()` variant or make a second LLM call to "rerank."
-**Why it's wrong:** breaks the existing thin-wrapper contract and adds latency/budget to the user's critical path.
-**Do this instead:** enrich the *system prompt* via `build_chat_prompt(memories=...)`; rerank in Python (`models/memory.py`); the only added read-path call is one cheap embedding (Pattern 4).
-
-### Anti-Pattern 6: Unbounded per-user memory
-**What people do:** "never forget" — no cap, no decay.
-**Why it's wrong:** companion-bot post-mortems cite this as the #1 recall-degradation cause; retrieval noise + slow ANN + drift.
-**Do this instead:** per-user cap (~150) + decay sweep (~90d low-salience), shipped in v1 (11.6).
-
----
-
-## Scaling Considerations
-
-| Scale (fact corpus) | Architecture |
-|---------------------|--------------|
-| Hundreds–low thousands (expected) | **No ANN index needed** — seq scan over 768-d vectors with `ORDER BY embedding <=> $1 LIMIT k` is sub-millisecond. Don't cargo-cult an index. |
-| ~10k+ rows | Add `HNSW (vector_cosine_ops)` index — works from row zero (no training), unlike IVFFlat. Index only at ≤2000 dims (768 is fine). |
-| Much larger / multi-community | Revisit `halfvec`, partitioning by guild, or a dedicated vector DB — explicitly out of scope for a single-community bot. |
-
-### Scaling Priorities
-1. **First "bottleneck" is recall quality, not speed** — tune the 0.70 floor + rerank weights before touching indexes. At this scale latency is a non-issue.
-2. **Second is the 15 RPM chat budget** — already protected by the separate embedding limiter + priority-2 writes; the read path adds no generation call.
-
----
+# Architecture Research — v1.3 "Taste Brain"
+
+**Domain:** Integration architecture for new features into an existing Discord bot
+**Researched:** 2026-07-02
+**Confidence:** HIGH (grounded in direct reads of bot.py, services/memory.py, services/gemini.py,
+cogs/ai.py, cogs/events.py, database.py, models/memory.py, logic/*, config.py, plus a Context7
+verification of the `google-genai` multimodal `Part.from_bytes` API)
+
+> **Mandate:** integrate, do NOT redesign. This supersedes the Phase 11 (v1.2) ARCHITECTURE.md
+> that previously lived at this path — that research is now historical; this file addresses
+> the v1.3 "Taste Brain" milestone (semantic music memory, smarter auto-queue/discovery/jams,
+> RAG into `/roast`+`/ask`, proactive callbacks, vision).
+
+## Summary
+
+v1.3 does not need a new storage layer, a new rate-limit budget, or a new task-scheduling
+mechanism — it needs five additions layered onto exactly the seams v1.2 already built:
+
+1. **Taste memory** extends `user_memories`/`MEMORY_SALIENCE_BASE_WEIGHTS` with new `kind`
+   values, written by a new distillation pass over `song_history` (not message buffer).
+   It is consumed two ways: qualitative flavor via the *existing* `MemoryService.recall()`
+   (kind-agnostic, no code change needed there), and quantitative signal via *new* structured
+   SQL aggregates in `database.py` (never embedded — the accuracy firewall from Phase 11
+   forbids putting SQL-known numbers in vector text).
+2. **Taste-graph / recommendation logic** is a new pure `logic/taste.py` module (scoring,
+   ranking, "what to suggest next") fed by a new `services/taste.py` that orchestrates SQL +
+   Gemini + (optionally) `MemoryService.recall()` — because three consumers (auto-queue, a
+   new discovery command, generative jams) would otherwise duplicate the same fetch/rank
+   glue across cogs.
+3. **RAG into `/roast` + `/ask`**: zero new components — `recall()` is already wired into
+   both (dormant only in the sense that the injected memories are currently just whatever
+   `kind`s exist; once taste memories are written, they show up for free).
+4. **Proactive callbacks** are a new `@tasks.loop` in `bot.py` (mirroring `memory_sweep` /
+   `memory_distill_batch` placement, NOT cog-owned — no background loop in this codebase
+   lives inside a cog), gated by a new pure decision function mirroring
+   `logic/roasts.py:decide_ambient_roast`.
+5. **Vision** is a new `cogs/vision.py` (mirrors the `imagine.py` vs `ai.py` split — vision
+   is its own feature domain, not an addition to `events.py`), with a new
+   `GeminiService.describe_image()` method verified against the current `google-genai` API
+   (`types.Part.from_bytes(data=..., mime_type=...)` inside `types.Content`), sharing the
+   existing 15 RPM chat limiter at priority=2 (background/ambient, never contends with
+   `/ask`).
+
+No new tables, no new Postgres extensions, no new rate limiters, no new external services.
+Every new piece slots into an existing pattern that already has a name in this codebase.
 
 ## Integration Points
 
-### External Services
+### (a) Taste/listening memory kind
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Gemini embeddings (`gemini-embedding-001`) | `gemini_service.embed()` → `client.aio.models.embed_content`, 768-d MRL, `task_type` per direction | Separate 100 RPM quota; own limiter; `RETRIEVAL_DOCUMENT` on write, `RETRIEVAL_QUERY` on read (mismatching degrades recall). |
-| Neon Postgres + pgvector | `register_vector` in pool `init=`; `vector(768)` column; `<=>` cosine | Extension-first ordering (Pattern 3); `statement_cache_size=0` verified compatible; cosine is scale-invariant → no numpy normalisation. |
+**Extend `user_memories` + `MEMORY_SALIENCE_BASE_WEIGHTS`. Do not create a separate table.**
 
-### Internal Boundaries
+- `models/memory.py` (`MemoryFact`, `apply_floor`, `rerank`, `dedup_decision`,
+  `choose_eviction`, `compute_salience`, `decay_predicate`) and `services/memory.py`
+  (`recall`/`remember`/`distill`/`distill_and_remember`/`sweep`) are already fully generic
+  over `kind` — `database.search_memories` has no `kind` filter, only `WHERE user_id = $1`.
+  Adding new kinds requires **zero changes** to the recall/rerank/dedup/eviction pipeline.
+- Add new keys to `config.MEMORY_SALIENCE_BASE_WEIGHTS` (`config.py:181`), e.g.:
+  - `"taste_episode": 0.3` — a periodic, qualitative distillation of a user's listening
+    vibe ("gravitates toward moody synth-pop late at night"). Sits just above
+    `daily_batch` (0.2) on the existing ordinal ladder — background-confidence signal,
+    not milestone-tier.
+  - Optionally `"taste_shift": 0.4` if the roadmap wants a distinct "your taste is
+    drifting" signal, matching `auto_queue_ignored`'s tier (negative-preference class).
+  - **Do not** invent a `kind` for skip-rate learning — that stays structured (see below).
+- **What writes it, and when:** a new daily/periodic distillation pass, structurally a
+  sibling of `bot.py:memory_distill_batch` (`bot.py:808-889`) but reading `song_history` +
+  `user_artist_counts` instead of `bot.message_buffer`. Candidate hook points, in order of
+  preference:
+  1. **New `@tasks.loop` `taste_distill_batch`** (daily, off-peak like the existing 02:30/
+     03:00/04:00 UTC loops — pick an unused slot, e.g. 03:30 UTC, to avoid Neon
+     thundering-herd per the existing comment at `bot.py:906-909`). For each user active in
+     `song_history` in the last 24h, build a compact raw-text summary (top artists, any
+     new-artist binge, any single-artist repeat) and call
+     `memory_service.distill_and_remember(kind="taste_episode", ...)`. This reuses
+     `distill()`'s existing number/PII backstop (`is_sensitive`, `contains_number`) for free
+     — important, since raw song titles/counts must never leak into the embedded text
+     (accuracy firewall, Critical Rule 5).
+  2. **Event hook at queue-exhaustion / session-end** (where `try_auto_queue` already fires,
+     `cogs/music.py:787`) is a secondary/optional trigger for a "session recap" fact,
+     mirroring the `auto_queue_ignored` fire-and-forget pattern already in
+     `cogs/ai.py:402-435` — same `make_task(..., bot=self.bot)` call shape.
+- **Two distinct data paths — do not conflate them:**
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| cogs ↔ `MemoryService` | `self.bot.memory_service.recall()/remember()` | Same `self.bot.<service>` access pattern as `youtube_service`, `gemini_service`, `queue_persistence`. |
-| `MemoryService` ↔ `GeminiService` | constructor injection (`MemoryService(pool, gemini_service)`) | Reuses the one wired `genai.Client`; no second SDK client. |
-| `MemoryService` ↔ `database.py` helpers | direct `await database.search_memories(pool, ...)` | Same pool-acquire/`$N` style as favorites/playlists. |
-| `MemoryService` ↔ `models/memory.py` | pure function calls (rerank/decay/dedup) | The TDD seam; no I/O crosses this boundary. |
-| cogs ↔ `prompts.build_chat_prompt(memories=)` | optional kwarg | Backward-compatible; empty path == today's prompt. |
+  | Signal | Storage | Why |
+  |---|---|---|
+  | Qualitative vibe/genre commentary (roast ammo, jam flavor) | `user_memories`, new `kind`s, via `MemoryService` | Matches existing episodic-RAG design; feeds `/roast`, `/ask`, discovery flavor text, jam prompts for free through `recall()` |
+  | Skip-rate / artist-affinity weighting for auto-queue ranking | `song_history.was_skipped` + `user_artist_counts` (existing tables), read via **new** structured SQL helpers | Numbers/counts must come from live SQL, never from embedded vector text (Phase 11 accuracy firewall, `models/memory.py:contains_number`, CLAUDE.md Critical Rule 5) |
+
+### (b) Taste-graph / recommendation logic — pure `logic/` vs service
+
+- **New pure module: `logic/taste.py`** (mirrors `logic/autoqueue.py`'s
+  `validate_youtube_match` and `logic/roasts.py`'s `decide_ambient_roast` conventions — no
+  Discord, no asyncio, no DB, no `random`/`datetime.now()`; nondeterministic values passed
+  in by the caller). Candidate pure functions:
+  - `compute_artist_affinity(play_counts: dict[str,int], skip_counts: dict[str,int]) -> list[ArtistAffinity]`
+    — combine play count and skip penalty into a ranked affinity score. This is the
+    taste-graph's scoring core and is the single highest-value thing to unit-test, since it
+    is exactly the kind of branchy arithmetic that caused the three named scar regressions
+    in Phase 10.
+  - `filter_recent_repeats(candidates, recently_played, window) -> list[...]` — discovery/
+    jam-generation novelty filter (don't resuggest what's already in the last N plays).
+  - `rank_discovery_candidates(affinities, candidate_pool) -> list[...]` — feeds the new
+    `/discover`-style command.
+  - A scoring hook auto-queue's suggestion loop can call before/alongside the current
+    unconditional accept in `cogs/ai.py:311-364` (`try_auto_queue`'s per-suggestion loop) —
+    e.g. `should_deprioritize_artist(artist, skip_rate, threshold)`.
+  - Reuse `logic/autoqueue.py:validate_youtube_match` unchanged — it stays the
+    YouTube-result-vs-suggestion string validator; taste scoring is a distinct concern
+    layered before/after it, not a replacement.
+- **New service: `services/taste.py` (`TasteService`)**. Justification: three consumers
+  (auto-queue in `cogs/ai.py`, a new taste-graph discovery command, generative jams in
+  `cogs/library.py` or a new cog) would otherwise each independently glue together SQL +
+  Gemini + `logic/taste.py` + optional `MemoryService.recall()`. Centralizing that glue in
+  one service is exactly why `MemoryService` itself exists (its own docstring: "This file is
+  the only place that wires together GeminiService.embed(), the database... and the
+  pure-logic scoring functions"). `TasteService` should own:
+  - `get_taste_profile(user_id | guild_id) -> TasteProfile` — structured SQL fetch
+    (artist counts + skip stats) + `logic/taste.py:compute_artist_affinity`.
+  - `recommend_candidates(profile, count) -> list[dict]` — Gemini prompt call (new prompt
+    builder in `personality/prompts.py`, parsed with the same tolerant-JSON pattern as
+    `cogs/ai.py:parse_suggestions`) + `logic/taste.py` filtering.
+  - `taste_flavor_text(user_id, guild_id, anchor) -> list[str]` — thin pass-through to
+    `self._memory.recall(...)` for qualitative flavor, kept in the service so callers don't
+    each re-derive the recall-anchor string convention.
+  - Constructor takes `(pool, gemini_service, memory_service)` and is wired in
+    `bot.py:_initialize_once` right after `bot.memory_service` is constructed
+    (`bot.py:415-418`), following the exact same `if hasattr(bot, "gemini_service")` /
+    `if hasattr(bot, "memory_service")` guard chain — taste features degrade silently when
+    Gemini is unconfigured, same as memory does today.
+- **Cog layer** (`cogs/ai.py::try_auto_queue`, a new discovery command, jam-generation)
+  stays orchestration-only: call `bot.taste_service`, never touch `database.py` or
+  `logic/taste.py` directly — mirrors how `cogs/ai.py` today calls `MemoryService.recall()`
+  rather than `database.search_memories` directly.
+
+### (c) How the music brain retrieves taste
+
+- **Structured (primary, for auto-queue ranking):** new `database.py` helpers, siblings of
+  the existing `get_user_skip_rate` (`database.py:1224-1246`, Phase 12 precedent for exactly
+  this kind of guild+user-scoped aggregate). Add something like
+  `get_artist_play_and_skip_counts(pool, *, guild_id, user_id | None) -> list[Record]`
+  joining `song_history` (`title`/`artist`/`was_skipped`) with `user_artist_counts`
+  (`play_count`). This is what `services/taste.py` calls before invoking
+  `logic/taste.py:compute_artist_affinity`. **Not** a call through `MemoryService` — numbers
+  must come from live SQL per the accuracy firewall, and this needs to run on every
+  auto-queue round (priority=2, latency-sensitive), where an extra embedding round-trip
+  would be wasteful.
+- **Semantic (secondary, for qualitative flavor — jam prompts, discovery blurbs):** reuse
+  `MemoryService.recall()` completely unchanged. Because `search_memories` has no `kind`
+  filter, `taste_episode` facts written by the new distillation pass will surface through
+  the *existing* recall call sites in `cogs/events.py:_generate_ambient_roast` and
+  `cogs/ai.py`'s `/ask` and `/roast` automatically, ranked by the same salience/recency/
+  novelty composite as every other memory kind — this is what "RAG into `/roast` + `/ask`"
+  in the milestone brief actually means: no new recall plumbing, just new facts flowing
+  through the pipe that already exists.
+- **Gotcha to flag for the roadmap:** `recall()` is scoped to a single `user_id`
+  (`services/memory.py:60-97`, `database.py:search_memories` `WHERE user_id = $1`). A
+  guild-wide "taste-graph discovery" command needs guild-scoped structured aggregation
+  (`song_history WHERE guild_id = $1`, cross-user), not N per-member `recall()` calls (which
+  would burn N embed-RPM slots per invocation). Use the structured path for anything
+  guild-scoped; reserve `recall()` for anything user-scoped and qualitative. This mirrors
+  how `auto_queue_ignored` already writes (`cogs/ai.py:402-435`) — one `distill_and_remember`
+  call **per voice member**, individually scoped — but that pattern should not be reused for
+  *reading* a guild aggregate; it's fine for *writing* per-user signal.
+
+### (d) Proactive callbacks
+
+- **New `@tasks.loop`, placed in `bot.py`, not inside a cog.** Every existing background
+  loop in this codebase (`idle_check`, `cache_cleanup`, `ytdlp_update`, `status_rotation`,
+  `memory_distill_batch`, `memory_sweep`) lives at module scope in `bot.py`, each with a
+  paired `.before_loop` (`wait_until_ready`) and `.error` handler routed through
+  `_post_loop_error` (`bot.py:637-664`). A new `proactive_callback` loop should follow that
+  exact template — including registration in `_cleanup_partial_init`'s stop-list
+  (`bot.py:280-281`) so a botched boot doesn't leave it firing against a torn-down pool.
+- **Cadence / "good moment" heuristic** — new pure decision function,
+  `logic/roasts.py:decide_proactive_callback(...)` (extend the existing file rather than a
+  new `logic/proactive.py`, since it is conceptually a sibling of `decide_ambient_roast` and
+  shares `is_late_night`/cooldown-style helpers), taking:
+  - `chance_roll: float` — new `config.PROACTIVE_CALLBACK_CHANCE` (suggest 0.15–0.20, lower
+    than `UNPROMPTED_ROAST_CHANCE`'s 0.30 since this fires on a timer across *all* guilds
+    rather than on a per-event trigger — a higher chance would spam).
+  - `seconds_since_last: float` + new `config.PROACTIVE_CALLBACK_COOLDOWN_SECONDS` (suggest
+    1–2 hours, not `AMBIENT_ROAST_CEILING_SECONDS`'s 300s — this is a per-guild cooldown
+    tracked in a new module-level dict in `bot.py`, e.g. `_last_proactive_callback:
+    dict[int, float]`, same shape as `_last_loop_error_post`).
+  - `has_active_voice: bool` + `human_count: int` — reuse the exact `bot.voice_clients` +
+    `[m for m in vc.channel.members if not m.bot]` scan already in `idle_check`
+    (`bot.py:670-681`).
+  - **Avoiding spam / picking a good moment:** the single strongest signal already in the
+    codebase is `idle_check`'s loneliness accumulator (`vc._idle_loneliness_seconds`,
+    `bot.py:703-740`) — it already detects "voice is occupied but quiet" and gates a
+    once-per-silence-window post. Rather than building a second quiet-detector, the
+    proactive-callback loop should run at a coarser interval (e.g. every 10–15 min, new
+    `config.PROACTIVE_CALLBACK_INTERVAL_SECONDS`) and only consider guilds where
+    `vc._loneliness_posted` is already `True` (i.e., idle_check has already established the
+    channel is quiet) — piggybacking on existing state instead of recomputing "is this a
+    good moment" from scratch. This keeps the two loops decoupled (different concerns,
+    different config knobs) while sharing the one signal that actually matters.
+- **Fetch + post:** on a pass, call `memory_service.recall(user_id, guild_id, anchor)` for
+  one human member of a quiet, occupied voice channel (pick randomly among eligible members
+  — do not always pick the same one, or a per-guild "who's in voice" tiebreak will visibly
+  favor one user). Feed the result into a small Gemini call at **priority=2** (background —
+  never contend with `/ask`), reusing `build_chat_prompt`'s `memories=` parameter
+  (`personality/prompts.py:133-180`) with a new scenario string like "volunteer one
+  unprompted callback line, referencing the memory below, to no one in particular — you're
+  just talking". Post via `_resolve_dexter_channel` (`bot.py:101-141`), same
+  `allowed_mentions=discord.AllowedMentions.none()` discipline as every other ambient post.
+  If `recall()` returns `[]` (nothing above the similarity floor for a generic anchor —
+  likely, since there's no specific query text), **skip the post entirely** rather than
+  falling back to a generic line; a proactive callback with no memory to reference isn't a
+  callback, it's just noise indistinguishable from the loneliness message that already
+  exists.
+
+### (e) Vision / multimodal roasting
+
+- **New cog: `cogs/vision.py`**, not an extension of `cogs/events.py::on_message`. Rationale:
+  this codebase already resolved the identical fork once — image *generation* is its own
+  `cogs/imagine.py`, separate from `cogs/ai.py`, even though both are Gemini text/prompt
+  flows. Vision (image *understanding*) is the same shape of decision: its own feature
+  domain, its own cooldown/cadence state, its own content-safety gate — bolting it onto
+  `events.py::on_message` (already handling message-buffer feeding + reactions + thanks
+  detection) would tangle three unrelated concerns in one already-dense listener. discord.py
+  supports multiple cogs registering `on_message` listeners without conflict (both fire),
+  so this costs nothing structurally.
+- **Image bytes fetch:** `discord.Attachment.read()` — built into discord.py, no new HTTP
+  client needed. In `on_message`: filter
+  `message.attachments` for `a.content_type and a.content_type.startswith("image/")`, then
+  `image_bytes = await attachment.read()`; pass `attachment.content_type` through as the
+  MIME type.
+- **New `GeminiService` method** (`services/gemini.py`), verified against the current
+  `google-genai` Python SDK via Context7 (`/googleapis/python-genai`):
+  ```python
+  async def describe_image(
+      self, image_bytes: bytes, mime_type: str, prompt: str, priority: int = 2,
+  ) -> str | None:
+      await self._rate_limiter.acquire(priority)   # SAME 15 RPM budget as chat() — no new limiter
+      response = await self._client.aio.models.generate_content(
+          model=config.GEMINI_MODEL,                # gemini-2.5-flash — vision-capable, confirmed via Context7
+          contents=[
+              types.Content(role="user", parts=[
+                  types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                  types.Part.from_text(text=prompt),
+              ]),
+          ],
+          config=types.GenerateContentConfig(system_instruction=system_prompt),
+      )
+      ...
+  ```
+  Confirmed API shape (Context7, `googleapis/python-genai`, `docs/index.html` +
+  `google/genai/types.py`): `types.Part.from_bytes(data=..., mime_type=...)` combined with a
+  text `Part` inside one `types.Content`, passed to `generate_content` — the same call shape
+  `chat()` already uses (`services/gemini.py:189-196`), just with an image `Part` appended.
+  **Shares `self._rate_limiter`** (the existing 15 RPM chat/image budget), never
+  `self._embed_limiter` — matches the milestone framing ("draws on the shared 15 RPM
+  budget"). Use **priority=2** (background/ambient — mirrors `_generate_ambient_roast`'s
+  priority=2 Gemini calls in `cogs/events.py:154`), since vision roasting is unprompted
+  ambient behavior, not a user-invoked command; it must never starve `/ask`.
+  Reuse the existing `GeminiRefusalError` exception (already defined at
+  `services/gemini.py:27-28` but currently unused — `generate_image` just returns `None` on
+  an empty response instead of raising it) as the vision content-safety signal path, or at
+  minimum treat an empty/refused response the same way `generate_image` already does
+  (`services/gemini.py:240-248`).
+- **Cadence + safety gating:** new pure function, `logic/vision.py:decide_vision_roast(...)`
+  (new small module — this isn't a natural extension of `logic/roasts.py`'s ambient-roast
+  gates since it has a different trigger shape — image-presence rather than
+  voice-state/message-content), taking a chance roll + per-channel/user cooldown (new
+  `config.VISION_ROAST_CHANCE`, `config.VISION_ROAST_COOLDOWN_SECONDS`), mirroring
+  `cooldown_elapsed`/`decide_ambient_roast`'s structure exactly. Designated-channel-only
+  applies here too (Critical Rule 9 / CLAUDE.md) — reuse `_get_ambient_channel`-style
+  resolution to confirm the message's channel is the ambient/music channel before reacting,
+  or explicitly gate to `config.DEXTER_CHANNEL_ID` only (stricter — recommended, since an
+  unprompted image roast in an arbitrary channel is a bigger blast-radius mistake than a
+  voice-join roast). VIS-01/02 content-safety guardrails: rely primarily on Gemini's own
+  safety filtering (empty/refused response → silently skip, never retry, never post a
+  fallback template — unlike ambient roasts, there's no safe generic fallback for "describe
+  this image sarcastically" when the model has refused), plus a hard content-type allowlist
+  (`image/png`, `image/jpeg`, `image/webp`, `image/gif` — reject anything else without
+  calling Gemini at all) and an attachment-size ceiling before ever reading bytes.
+
+## New Components
+
+| Component | Type | Location | Depends on |
+|---|---|---|---|
+| Taste memory kinds | Config extension | `config.py: MEMORY_SALIENCE_BASE_WEIGHTS` | none |
+| `taste_distill_batch` | `@tasks.loop` | `bot.py` (module scope) | `MemoryService`, `song_history`/`user_artist_counts` |
+| Artist play/skip aggregate helper(s) | DB helper(s) | `database.py` | `song_history`, `user_artist_counts` (existing tables) |
+| `logic/taste.py` | Pure logic module | new file | none (pure) |
+| `services/taste.py` (`TasteService`) | Service | new file | pool, `GeminiService`, `MemoryService`, `logic/taste.py`, new DB helpers |
+| `/discover`-style taste-graph command | Slash command | `cogs/ai.py` or new `cogs/discover.py` | `TasteService` |
+| Generative jam suggestion path | Cog logic | `cogs/library.py` (jam save/add flow) or `cogs/ai.py` | `TasteService` |
+| `proactive_callback` | `@tasks.loop` | `bot.py` (module scope) | `MemoryService`, `bot.voice_clients`, `_resolve_dexter_channel` |
+| `decide_proactive_callback` | Pure logic fn | `logic/roasts.py` (extend) | none (pure) |
+| `/memory` inspect/forget command | Slash command | new `cogs/memory.py` or added to `cogs/library.py` | `MemoryService`, new DB helpers (list/delete by user) |
+| `cogs/vision.py` | New cog | new file | `GeminiService.describe_image`, `logic/vision.py` |
+| `GeminiService.describe_image()` | Service method | `services/gemini.py` (extend) | existing `self._rate_limiter` (no new limiter) |
+| `logic/vision.py` (`decide_vision_roast`) | Pure logic module | new file | none (pure) |
+| Vision prompt builder | Prompt fn | `personality/prompts.py` (extend) | none (pure) |
+
+## Modified Components
+
+| File | Change |
+|---|---|
+| `config.py` | New `MEMORY_SALIENCE_BASE_WEIGHTS` keys (`taste_episode`, etc.); new `PROACTIVE_CALLBACK_*`, `VISION_ROAST_*` knobs; new `TASTE_*` tuning knobs (mirrors Phase 11's `MEMORY_*` and Phase 12's `AUTO_QUEUE_SEARCH_CANDIDATES`-style additions) |
+| `database.py` | New structured aggregate helper(s) for artist play/skip counts; new helpers for `/memory` (list a user's memories, delete-by-id scoped to `user_id`) |
+| `bot.py` | Two new `@tasks.loop` functions (`taste_distill_batch`, `proactive_callback`) with `.before_loop`/`.error` pairs; both added to `_cleanup_partial_init`'s stop-list (`bot.py:280-281`) and the start-guard block (`bot.py:446-460`); `TasteService` wired in `_initialize_once` next to `MemoryService` (`bot.py:415-418`); new module-level cooldown dict for proactive callbacks |
+| `logic/roasts.py` | New `decide_proactive_callback()` pure function, sibling of `decide_ambient_roast` |
+| `cogs/ai.py::try_auto_queue` | Insert a `TasteService`/`logic/taste.py` scoring pass into the per-suggestion loop (`cogs/ai.py:311-364`) so skip-weighted artists are deprioritized before the existing `validate_youtube_match` check, not instead of it |
+| `personality/prompts.py` | New prompt builder(s) for taste-graph recommendations (parallel to `build_recommendation_prompt`) and for the proactive-callback / vision-roast scenario text |
+| `services/gemini.py` | New `describe_image()` method, reusing `self._rate_limiter` |
+| `services/memory.py` | **No code change required** — kind-agnostic by design; only the caller-supplied `kind` string and `config.MEMORY_SALIENCE_BASE_WEIGHTS` lookup change |
+| `models/memory.py` | **No code change required** for the memory-kind extension itself; may need a `decay_predicate` review if new kinds want different decay tiers (currently governed by `salience`, already ordinal) |
+
+## Data Flow
+
+### Taste memory write (new)
+
+```
+song_history + user_artist_counts (existing tables)
+    ↓ (daily, taste_distill_batch @tasks.loop in bot.py)
+raw-text per-user summary (top artists, binges — NO counts embedded)
+    ↓
+MemoryService.distill_and_remember(kind="taste_episode", ...)   [UNCHANGED service code]
+    ↓ distill() LLM pass + is_sensitive/contains_number backstop [UNCHANGED]
+    ↓ remember() embed + dedup + cap-evict                        [UNCHANGED]
+user_memories row (kind="taste_episode")
+```
+
+### Taste memory read — qualitative (existing pipe, new content)
+
+```
+/roast, /ask, ambient roast, (new) proactive_callback, (new) jam-generation flavor
+    ↓
+MemoryService.recall(user_id, guild_id, anchor)   [UNCHANGED — kind-agnostic]
+    ↓ ANN + floor + rerank + cap                    [UNCHANGED]
+list[str] facts — now may include taste_episode facts alongside milestone/daily_batch/etc.
+    ↓
+build_chat_prompt(..., memories=facts)              [UNCHANGED]
+```
+
+### Taste signal read — structured (new path, for auto-queue ranking)
+
+```
+song_history.was_skipped + user_artist_counts.play_count
+    ↓ (new database.py helper, per guild/user)
+services/taste.py: TasteService.get_taste_profile()
+    ↓
+logic/taste.py: compute_artist_affinity()  [pure, unit-tested]
+    ↓
+cogs/ai.py: try_auto_queue() candidate loop — deprioritize/filter before validate_youtube_match
+```
+
+### Proactive callback (new)
+
+```
+bot.py: idle_check (existing, 60s loop) marks vc._loneliness_posted = True
+    ↓ (state read, not re-derived)
+bot.py: proactive_callback (new, ~10-15 min loop)
+    ↓ decide_proactive_callback(chance_roll, cooldown, quiet_and_occupied) → bool
+    ↓ (if True) pick one human member of a quiet occupied VC
+MemoryService.recall(member_id, guild_id, generic_anchor)   [UNCHANGED]
+    ↓ [] → skip entirely; non-empty → continue
+Gemini chat(priority=2) with a "volunteer this unprompted" scenario
+    ↓
+_resolve_dexter_channel(guild).send(...)
+```
+
+### Vision (new)
+
+```
+cogs/vision.py: on_message(message)
+    ↓ filter: attachments with image/* content_type, in designated channel
+decide_vision_roast(chance_roll, cooldown_elapsed) → bool   [new pure fn, logic/vision.py]
+    ↓ (if True)
+attachment.read() → image_bytes                              [discord.py built-in]
+    ↓
+GeminiService.describe_image(image_bytes, mime_type, prompt, priority=2)   [new method]
+    ↓ shares self._rate_limiter (15 RPM) — NOT self._embed_limiter
+response text (or None/refusal → skip silently, no fallback template)
+    ↓
+message.channel.send(response)
+```
+
+## Suggested Build Order
+
+Foundation before consumers, structured-data plumbing before AI orchestration, low-risk
+extensions before new cogs:
+
+1. **Taste memory foundation** — `config.py` new `MEMORY_SALIENCE_BASE_WEIGHTS` keys +
+   new structured `database.py` aggregate helper(s) (artist play/skip counts) + new
+   `taste_distill_batch` `@tasks.loop` in `bot.py`. This is the "retrievable substrate"
+   the milestone brief names explicitly as the foundation phase; everything else reads
+   from it. Ship this first and let it run for at least a day of real usage before building
+   consumers, so there's actual `taste_episode` data to validate recall/scoring against
+   (mirrors the Phase 11 pattern of a live-Neon spike before retrieval landed).
+2. **`logic/taste.py` (pure, TDD)** — `compute_artist_affinity`, novelty filtering, ranking.
+   No dependencies beyond the new DB helpers' return shape. Build and unit-test this before
+   `services/taste.py` exists, same as `logic/autoqueue.py` predates its cog integration.
+3. **`services/taste.py` (`TasteService`)** — wires `logic/taste.py` + the new DB helpers +
+   `GeminiService` + `MemoryService`. Wire into `bot.py:_initialize_once` immediately after
+   `MemoryService` construction.
+4. **Smarter auto-queue** — extend `cogs/ai.py::try_auto_queue`'s suggestion loop to call
+   `TasteService`/`logic/taste.py` scoring before `validate_youtube_match`. This is the
+   first real consumer and validates the whole taste pipeline end-to-end on existing,
+   well-understood code.
+5. **Taste-graph discovery command + generative jams** — second and third consumers of
+   `TasteService`, built once step 4 has proven the service contract works.
+6. **RAG into `/roast` + `/ask`** — effectively free once step 1 is live (facts flow through
+   the unchanged `recall()` pipe); this step is really "verify it's landing well, tune
+   `MEMORY_CALLBACK_CHANCE`/weights for the new kind if needed," not new plumbing.
+7. **`/memory` inspect/forget command** — new DB helpers (list/delete-by-id scoped to
+   `user_id`) + a small new or extended cog. Independent of steps 2-6; can be built any time
+   after step 1, but sequenced here because it's a good place to validate that the new
+   `taste_episode` facts are sane before they start feeding autonomous behavior (proactive
+   callbacks) in step 8.
+8. **Proactive callbacks** — depends on `MemoryService.recall()` having *something* worth
+   surfacing (steps 1+6 validated), plus `idle_check`'s loneliness state (already live).
+   New `decide_proactive_callback` pure fn first (TDD), then the `bot.py` loop.
+9. **Vision** — fully independent of steps 1-8 (no taste-memory dependency); can be built in
+   parallel with the taste-brain track if desired, but sequenced last here because it is the
+   highest-blast-radius new surface (unprompted content generation from arbitrary user
+   images) and benefits from the content-safety gating patterns (refusal handling, cadence
+   gates) being freshly proven out by proactive callbacks in step 8. Order internally:
+   `logic/vision.py` (pure, TDD) → `GeminiService.describe_image()` → `cogs/vision.py`.
+
+**Dependency graph in one line:** `taste memory foundation → logic/taste.py → services/taste.py
+→ {auto-queue, discovery command, jams} → (parallel) RAG-into-roast/ask (free) + /memory
+command → proactive callbacks → vision (independent, sequenced last for risk reasons)`.
+
+## Testability (logic/ seam) per new piece
+
+| New pure logic | Module | Inputs are primitives? | Notes |
+|---|---|---|---|
+| `compute_artist_affinity` | `logic/taste.py` | Yes — `dict[str,int]` play/skip counts | Highest-value test target; branchy scoring arithmetic is exactly the Phase-10 scar pattern |
+| `filter_recent_repeats` / `rank_discovery_candidates` | `logic/taste.py` | Yes — lists of dicts/dataclasses | |
+| `decide_proactive_callback` | `logic/roasts.py` | Yes — chance_roll, cooldown seconds, bools, mirrors `decide_ambient_roast` exactly | |
+| `decide_vision_roast` | `logic/vision.py` | Yes — chance_roll, cooldown seconds | |
+| `taste_distill_batch`, `proactive_callback`, `cogs/vision.py::on_message`, `TasteService`, `GeminiService.describe_image` | glue (bot.py / services / cogs) | N/A | Untested-by-design per this codebase's convention — Discord/process glue verified by clean boot + structural review, not mocked tests |
 
 ## Sources
 
-- Existing code (HIGH): `bot.py:_initialize_once` (pool wiring L297–306, `@tasks.loop` + `before_loop` patterns), `database.py` (`SCHEMA_SQL`, idempotent DDL, `$N` helper style, `compute_streak` pure-fn seam), `services/gemini.py` (`GeminiService`, `_RateLimiter`, `aio.models` async pattern), `personality/prompts.py` (`DEXTER_SYSTEM_PROMPT` `USER CONTEXT` block, `build_chat_prompt` 4 callers), `cogs/ai.py` (`/ask` L119, `/roast` L179, `try_auto_queue` L252), `cogs/events.py` (`_generate_ambient_roast` L131, voice/notable-event hooks), `models/user_profile.py` + `models/server_state.py` (model-layer conventions).
-- Sibling research (HIGH): `.planning/research/STACK.md` (pgvector/asyncpg `init=` codec, `gemini-embedding-001` @768, separate embedding limiter, extension-first trap), `.planning/research/FEATURES.md` (three-layer memory, accuracy firewall, write triggers, retrieval defaults, hygiene, dependency order).
-- Mem0 / Generative Agents / companion-bot prior art (MEDIUM, via FEATURES.md) — distilled-facts, dedup, decay, recency×relevance×salience rerank.
+- Direct reads (HIGH confidence, this codebase): `bot.py`, `services/memory.py`,
+  `services/gemini.py`, `models/memory.py`, `database.py`, `cogs/ai.py`, `cogs/events.py`,
+  `cogs/library.py`, `logic/autoqueue.py`, `logic/roasts.py`, `personality/prompts.py`,
+  `models/user_profile.py`, `utils/tasks.py`, `config.py`, `.planning/PROJECT.md`.
+- Context7 (HIGH confidence, verified 2026-07-02): `/googleapis/python-genai` —
+  `types.Part.from_bytes(data=..., mime_type=...)` API shape for multimodal image input,
+  confirming the vision integration pattern proposed for `GeminiService.describe_image()`.
 
 ---
-*Architecture research for: RAG long-term memory integration into the Dexter Discord bot (v1.2 / Phase 11)*
-*Researched: 2026-06-26*
+*Architecture research for: Dexter v1.3 "Taste Brain" milestone*
+*Researched: 2026-07-02*

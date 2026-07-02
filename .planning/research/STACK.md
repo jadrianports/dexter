@@ -1,303 +1,299 @@
-# Stack Research
+# Stack Research — v1.3 "Taste Brain"
 
-**Domain:** RAG long-term memory (pgvector-on-Neon + Gemini embeddings) bolted onto an existing discord.py + asyncpg + google-genai bot
-**Researched:** 2026-06-26
-**Confidence:** HIGH (pgvector/asyncpg integration + Gemini embeddings API verified via Context7; free-tier limits + text-embedding-004 deprecation verified via Google docs/blog)
+**Domain:** Additions to an existing, shipped Discord bot (Dexter) for vision/multimodal roasting + semantic music memory
+**Researched:** 2026-07-02
+**Confidence:** HIGH (Context7-verified against the installed SDK version)
 
-> **Scope:** This is a *stack-addition* research for milestone v1.2 / Phase 11. The existing stack
-> (Python 3.11, discord.py, asyncpg→Neon, google-genai, the shared 15 RPM `_RateLimiter`) is fixed and
-> NOT re-evaluated here. The only goal: store roast-worthy user facts as vectors in the **existing Neon
-> Postgres** via `pgvector`, embed them with the **existing Gemini API key**, and retrieve the most
-> semantically-relevant ones at roast time. Zero new infrastructure, zero new monthly cost.
+> **Scope:** This is a *stack-addition* research for milestone v1.3. The existing stack (Python
+> 3.11, discord.py, asyncpg→Neon, google-genai, pgvector, the shared 15 RPM `_RateLimiter`, the
+> separate 60 RPM embed limiter) is fixed and NOT re-evaluated here — it was already validated in
+> v1.2's STACK.md research. This document covers only the four NEW v1.3 features: vision/multimodal
+> roasting, semantic music memory / taste-graph, proactive memory callbacks, and `/memory`.
 
-## Headline Decisions (read this first)
+## Summary
 
-1. **Embedding model = `gemini-embedding-001`, NOT `text-embedding-004`.** `text-embedding-004` reached
-   its deprecation date on **2026-01-14** (already past as of today, 2026-06-26). The milestone brief and
-   PROJECT.md still name `text-embedding-004` — that is stale and must be corrected to `gemini-embedding-001`.
-2. **Embed at 768 dimensions** (via `output_dimensionality=768`), not the default 3072. 768 is the
-   pgvector *indexable* sweet spot (the `vector` type can only be indexed up to 2000 dims) and is the
-   smallest of Google's three "high-quality" MRL tiers. Storing at 3072 would block HNSW/IVFFlat entirely.
-3. **One new pip dependency only: `pgvector`** (the Python package, for the asyncpg vector codec + `Vector`
-   helper). Everything else (asyncpg, google-genai) is already installed.
-4. **Do NOT route embedding calls through the existing shared 15 RPM `_RateLimiter`.** Embeddings have a
-   *separate* 100 RPM free-tier quota at Google's end; sharing the chat limiter would needlessly starve
-   `/ask`. Give embeddings their own small limiter (or batch them so the call count is trivial).
+**No new dependencies are required for any of the four v1.3 features.** `requirements.txt` already
+has everything needed:
 
-## Recommended Stack
+- Vision/multimodal roasting → `google-genai` (installed: **2.8.0**, unpinned in `requirements.txt`)
+  already supports image input via `types.Part.from_bytes(...)` and safety configuration via
+  `types.GenerateContentConfig(safety_settings=[types.SafetySetting(...)])`. Verified against the
+  live installed version, not just docs.
+- Discord attachment bytes → `discord.py` `Attachment.read()` / `.content_type` / `.size` /
+  `.width` / `.height` are already in the dependency tree and sufficient; no image-processing
+  library (Pillow, etc.) is needed.
+- Music brain / taste-graph → `asyncpg` + `pgvector` (both already shipped in v1.2 for RAG memory)
+  plus plain SQL aggregation over `song_history` / `user_artist_counts` covers taste-graph
+  discovery and semantic retrieval. No graph library (networkx), no vector DB (Chroma/FAISS/Pinecone)
+  needed — pgvector on Neon already does cosine similarity at this scale.
+- Proactive callbacks / `/memory` command → pure orchestration over the existing `MemoryService`
+  (v1.2) + `asyncio` background task pattern already used for status rotation / idle checks. No
+  scheduling library (APScheduler etc.) needed.
 
-### Core Technologies
+The one thing that **is** new is a *config decision*, not a dependency: Gemini 2.5 models default
+`safety_settings` to **OFF** when unspecified (verified via official docs, see below). Today's
+`chat()`/`generate_image()` calls in `services/gemini.py` never pass `safety_settings`, which was a
+reasonable default for text-only trusted-input paths but becomes a real content-safety gap the
+moment untrusted user-uploaded images are fed into the model for vision roasting (VIS-01/02). This
+is a required code change (explicit `safety_settings` on the new vision call), not a new package.
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `pgvector` Postgres extension | **0.8.x** (Neon-provided) | Adds the `vector` column type + ANN index types + distance operators to the existing Neon Postgres | Zero new infra — it's an extension on the DB already in use. Neon ships pgvector on all plans (incl. free); enable per-database with `CREATE EXTENSION`. |
-| `pgvector` Python package | **0.4.x** (current; pin `>=0.3.6,<0.5`) | `from pgvector.asyncpg import register_vector` (type codec) + `from pgvector import Vector` (binary-safe wrapper) | The canonical, maintained asyncpg integration. Registers the `vector` codec so you pass/receive Python lists instead of hand-serialising `'[1,2,3]'` strings. |
-| `gemini-embedding-001` (Gemini API) | GA model | Turns fact text + query text into 768-d float vectors via the existing `google-genai` client | Current GA embedding model; uses Matryoshka (MRL) so you can truncate to 768/1536/3072. Free tier (100 RPM) covers a single-community bot easily. Replaces the deprecated `text-embedding-004`. |
-| `asyncpg` | **0.31.0** (already installed) | Pool + per-connection `init=` callback that registers the vector codec | Already the project's driver; its `create_pool(init=...)` hook is exactly where `register_vector` must run. No version bump needed. |
-| `google-genai` | already installed (≥1.x) | `client.aio.models.embed_content(...)` async embeddings | Same SDK and same `genai.Client` already wired in `services/gemini.py`. No new SDK. |
+## Stack Additions
 
-### Supporting Libraries
+**None required.** Table intentionally empty — every capability needed for v1.3 is already covered
+by the installed stack (`google-genai==2.8.0`, `discord.py`, `asyncpg`, `pgvector`). Anything that
+looks like it might need a new library is addressed by an existing dependency below.
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| (none required) | — | — | The RAG feature needs **only** the `pgvector` pip package. No `numpy`, no LangChain, no vector-DB client. |
-| `numpy` (optional) | any | L2-normalise 768-d vectors before storage if you choose cosine-equivalent inner-product indexing | Only if you go the `<#>` (inner-product) route. With the recommended cosine (`<=>`) route, normalisation is unnecessary — skip numpy. |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `psql` against Neon | One-time `CREATE EXTENSION` + sanity-check index | `CREATE EXTENSION IF NOT EXISTS vector;` is idempotent and belongs in `SCHEMA_SQL` (it's plain DDL, no `$N` params — fits the existing asyncpg multi-statement constraint). |
-| `EXPLAIN ANALYZE` | Confirm the ANN index is actually used (or confirm seq-scan is fine at this scale) | At a few thousand rows a seq scan is sub-ms; don't cargo-cult an index you can't measure. |
-
-## Installation
-
-```bash
-# The ONLY new dependency
-pip install "pgvector>=0.3.6,<0.5"     # add to requirements.txt
-
-# Already present — listed for completeness, do NOT reinstall/bump:
-#   asyncpg==0.31.0
-#   google-genai
-```
-
-```sql
--- One-time, idempotent; add to database.py SCHEMA_SQL (plain DDL, no $N params).
--- Must run BEFORE the pool's init= callback registers the vector codec (see Gotchas).
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-## The asyncpg + pgvector + Neon integration (the load-bearing part)
-
-This is the piece the brief flagged as "must not be hand-waved." Concrete pattern:
-
-### 1. Register the codec in the pool `init=` callback
-
-```python
-from pgvector.asyncpg import register_vector
-
-async def _init_connection(conn: asyncpg.Connection) -> None:
-    # Runs ONCE per physical connection as the pool creates it.
-    await register_vector(conn)   # registers the vector / halfvec / sparsevec codecs
-
-pool = await asyncpg.create_pool(
-    sanitize_database_url(config.DATABASE_URL),
-    ssl="require",                              # existing Neon requirement (K-04)
-    statement_cache_size=0,                     # existing Neon/PgBouncer requirement (K-04)
-    max_inactive_connection_lifetime=240,       # existing Neon scale-to-zero guard (K-04)
-    min_size=config.DB_POOL_MIN,
-    max_size=config.DB_POOL_MAX,
-    init=_init_connection,                      # <-- the only new line
-)
-```
-
-After `register_vector`, you pass/receive plain Python lists:
-
-```python
-# write a fact embedding (768 floats as a list)
-await conn.execute(
-    "INSERT INTO user_facts (user_id, fact, embedding) VALUES ($1, $2, $3)",
-    user_id, fact_text, embedding_list,          # embedding_list: list[float] len 768
-)
-
-# retrieve top-K most relevant facts for a user (cosine distance)
-rows = await conn.fetch(
-    "SELECT fact FROM user_facts"
-    " WHERE user_id = $1"
-    " ORDER BY embedding <=> $2"
-    " LIMIT $3",
-    user_id, query_embedding_list, k,
-)
-```
-
-### 2. How `statement_cache_size=0` interacts with `register_vector` — VERIFIED NON-ISSUE
-
-- `register_vector` works by introspecting the `vector` type's OID once and calling
-  `conn.set_type_codec(...)`. This is a **per-connection codec registration**, not a prepared statement,
-  so the existing `statement_cache_size=0` (set for Neon's PgBouncer transaction mode) does **not**
-  break it. The `init=` callback fires once per physical connection at creation, which is exactly the
-  right granularity — every pooled connection ends up with the codec.
-- This is the standard, documented pgvector-python asyncpg pattern (Context7 `/pgvector/pgvector-python`).
-  No special handling beyond putting `register_vector` in `init=`.
-
-### 3. Neon-specific ordering gotcha (the one real trap)
-
-- `register_vector` **raises `ValueError` if the `vector` type does not yet exist** when the codec is
-  registered. Because the `init=` callback fires on *every* connection at pool-creation time, the
-  `CREATE EXTENSION vector` must have already run. **Order of operations:**
-  1. Acquire a bootstrap connection (or run `SCHEMA_SQL` which now contains `CREATE EXTENSION IF NOT EXISTS vector;`) **before** the long-lived pool is created with the `init=` callback, **or**
-  2. Make the pool's `init=` tolerant on first boot.
-  Cleanest fit for this codebase: keep one-time `CREATE EXTENSION` at the very top of `SCHEMA_SQL`,
-  and make sure `init_db()` (which runs `SCHEMA_SQL`) executes against a connection created **before**
-  the codec-registering pool — or run the extension DDL on a throwaway `asyncpg.connect()` prior to
-  `create_pool(init=...)`.
-- Neon's `vector` type OID is stable per database; no per-request OID churn. With `min_size>=2` the
-  codec is registered on the warm connections at startup.
-
-## Vector index choice (HNSW vs IVFFlat) — justified for THIS scale
-
-| | HNSW | IVFFlat | No index (seq scan) |
+| Capability | Needs new library? | Covered by | Why existing stack suffices |
 |---|---|---|---|
-| Build needs data first? | No | **Yes** (needs representative rows to train centroids) | n/a |
-| Recall | Highest | Good if `lists`/`probes` tuned | Exact (100%) |
-| Build/memory cost | Higher | Lower | None |
-| Good at < ~10k rows? | Overkill but fine | Awkward (centroids on tiny data are poor) | **Perfectly fine, sub-ms** |
+| Send image bytes to Gemini for vision | No | `google-genai` 2.8.0 (installed) | `types.Part.from_bytes(data=..., mime_type=...)` — native SDK feature, present since early 0.x/1.x releases, confirmed live at 2.8.0 |
+| Read Discord image attachment bytes | No | `discord.py` (installed, `>=2.3.0`) | `discord.Attachment.read()` is a coroutine returning `bytes`; `.content_type`, `.size`, `.width`, `.height` give you mime/size/dimension validation with zero extra parsing |
+| Content-safety guardrails on image input | No | `google-genai` `types.SafetySetting` / `HarmCategory` / `HarmBlockThreshold` | Native `GenerateContentConfig(safety_settings=[...])` — same mechanism already usable for `chat()`, just not currently invoked anywhere in `services/gemini.py` |
+| Taste-graph discovery (artist/genre affinities) | No | `asyncpg` + existing `user_artist_counts` / `song_history` tables | Plain `GROUP BY artist ORDER BY play_count DESC` / co-occurrence SQL is sufficient at single-community scale; no graph theory needed for "top artists" / "artists that cluster with X" |
+| Semantic music memory (taste embeddings) | No | `pgvector` (installed, v1.2) + `gemini-embedding-001` (already wired in `GeminiService.embed()`) | Same `user_memories(vector(768))` pattern from v1.2 RAG — add a new memory `kind` (e.g. `"taste"`), reuse `remember()`/`recall()` wholesale |
+| Proactive background callback surface | No | `asyncio` background task pattern (`bot.py` — status rotation, idle check, `make_task` from Phase 9) | Same `tasks.loop`-or-manual-`asyncio.sleep` polling pattern already used 4x in the codebase; a new loop calling `recall()` + a cadence gate is orchestration, not new infra |
+| `/memory` inspect/forget command | No | `discord.py` `app_commands` (existing pattern) + `MemoryService` (v1.2) | Straight CRUD-style command on the existing `user_memories` table; no new surface |
 
-**Recommendation for a single-community bot:**
-- The fact corpus is realistically **hundreds to low-thousands of rows**. At that size a **sequential
-  scan over 768-d vectors is sub-millisecond** — an ANN index is not strictly necessary on day one.
-- When you do add an index (cheap insurance, and harmless), use **HNSW**, not IVFFlat. HNSW needs no
-  training data, so it works from row zero; IVFFlat's centroids are garbage on a tiny/empty table and
-  would need a rebuild once data lands.
-- **Operator class:** `vector_cosine_ops`; **query operator:** `<=>` (cosine distance). Gemini
-  embeddings are semantic-similarity vectors and cosine is the conventional, robust choice.
+## Vision Input — Call Shape
 
-```sql
--- Add when/if the corpus grows; HNSW works even on an empty table.
-CREATE INDEX IF NOT EXISTS idx_user_facts_embedding
-    ON user_facts USING hnsw (embedding vector_cosine_ops);
-```
-
-> Note: index this only at **768 dims**. The `vector` type's ANN indexes (HNSW/IVFFlat) cap at **2000
-> dimensions** — the default 3072-d `gemini-embedding-001` output would be *unindexable* without
-> switching to the `halfvec` type. Embedding at 768 sidesteps this entirely.
-
-## Gemini embeddings — exact call + quota integration
+Verified against Context7 `/googleapis/python-genai` docs and the installed `google-genai==2.8.0`.
+This slots directly into `services/gemini.py` alongside `chat()`/`generate_image()`/`embed()`,
+reusing `self._rate_limiter` (the shared 15 RPM budget — **not** a new limiter; a multimodal
+image+text request counts as a single request against RPM/RPD, confirmed via Gemini API rate-limits
+docs and multiple secondary sources).
 
 ```python
-from google.genai import types
+# services/gemini.py — new method, same shape as existing chat()/generate_image()
 
-# WRITE side (storing a fact) — task_type tunes the vector for being a stored document
-resp = await client.aio.models.embed_content(
-    model="gemini-embedding-001",
-    contents=[fact_text],                      # accepts a LIST → batch many facts in one call
-    config=types.EmbedContentConfig(
-        output_dimensionality=768,             # MRL truncation; 768 is indexable + cheap
-        task_type="RETRIEVAL_DOCUMENT",
-    ),
-)
-vec = resp.embeddings[0].values                # list[float], length 768
+async def analyze_image(
+    self,
+    image_bytes: bytes,
+    mime_type: str,
+    prompt: str,
+    priority: int = 2,   # background/ambient trigger, not a slash command — mirrors auto-queue's priority=2
+) -> str | None:
+    """Send an image + text prompt to Gemini for vision-based roasting.
 
-# READ side (retrieving for a roast) — different task_type for the query
-resp = await client.aio.models.embed_content(
-    model="gemini-embedding-001",
-    contents=[roast_context_text],
-    config=types.EmbedContentConfig(
-        output_dimensionality=768,
-        task_type="RETRIEVAL_QUERY",
-    ),
-)
-query_vec = resp.embeddings[0].values
+    Raises:
+        GeminiRateLimitError, GeminiAPIError, GeminiRefusalError
+    """
+    await self._rate_limiter.acquire(priority)
+
+    try:
+        response = await self._client.aio.models.generate_content(
+            model=config.GEMINI_MODEL,  # gemini-2.5-flash — same chat model, no new model ID
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                types.Part.from_text(text=prompt),
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=prompt,  # or reuse existing personality system prompt
+                safety_settings=VISION_SAFETY_SETTINGS,  # see Safety Settings section — REQUIRED, not optional
+            ),
+        )
+    except errors.APIError as e:
+        log.error(f"Vision API error (code={e.code}): {e.message}")
+        if e.code == 429:
+            raise GeminiRateLimitError("Gemini API rate limit hit") from e
+        raise GeminiAPIError(f"Gemini API error: {e.message}") from e
+    except Exception as e:
+        log.error(f"Vision unexpected error ({type(e).__name__}): {e}", exc_info=True)
+        raise GeminiAPIError(str(e)) from e
+
+    # Refusal / block detection — see Safety Settings section for the full check
+    if response.prompt_feedback and response.prompt_feedback.block_reason:
+        raise GeminiRefusalError(f"Prompt blocked: {response.prompt_feedback.block_reason}")
+    if not response.candidates:
+        raise GeminiRefusalError("No candidates returned (likely blocked)")
+    if response.candidates[0].finish_reason == "SAFETY":
+        raise GeminiRefusalError("Response blocked by safety filter")
+
+    return response.text if response.text else None
 ```
 
-Key facts (verified):
-- **Model name:** `gemini-embedding-001`. **Dimensions:** default 3072; supports MRL truncation to
-  **768 / 1536 / 3072** (Google's three recommended quality tiers). Use **768**.
-- **Normalization:** at 3072 the output is already normalised; at **768 you must L2-normalise yourself**
-  *if* you later switch to inner-product (`<#>`) indexing. With the recommended **cosine (`<=>`)**
-  operator, normalisation is irrelevant (cosine is scale-invariant) — so you can skip it. (This is why
-  the cosine route avoids the optional numpy dependency.)
-- **task_type matters:** use `RETRIEVAL_DOCUMENT` when embedding facts for storage and `RETRIEVAL_QUERY`
-  when embedding the roast context for lookup. Mismatching them measurably degrades retrieval quality.
-- **Response shape:** `response.embeddings` is a list of `ContentEmbedding`; each has `.values`
-  (`list[float]`). For a single input, use `response.embeddings[0].values`.
-- **Free-tier rate limit:** ~**100 RPM** for `gemini-embedding-001` — a **separate quota** from the
-  `gemini-2.x-flash` generation budget.
+**Discord attachment → bytes** (in the cog, e.g. `cogs/events.py` `on_message`):
 
-### Integration with the existing shared 15 RPM `_RateLimiter`
-
-- The existing `_RateLimiter` in `services/gemini.py` is **one shared 15 RPM counter for all generation
-  features** (chat + image). Embeddings hit a **different Google quota (100 RPM)**, so feeding them
-  through the same 15-slot window would needlessly contend with `/ask` and starve user commands for no
-  real benefit.
-- **Recommendation:** give embeddings a **separate `_RateLimiter` instance** sized conservatively
-  (e.g. 60 RPM, well under the 100 RPM ceiling), or — better — make the call count trivial via batching:
-  - `embed_content(contents=[...])` accepts a **list**, so a fact-extraction pass can embed many facts in
-    **one** request. Storing N facts ≈ 1 API call.
-  - Retrieval embeds **one** query string per roast → 1 call. Gate it to *callback* roasts only (not
-    every ambient roast) to keep call volume negligible.
-- **Priority:** fact-storage embeddings are background → treat as **priority 2** (reject/skip if the
-  limiter is saturated; a missed fact-write is harmless). Retrieval at roast time is user-facing-ish but
-  has a guaranteed template fallback, so it can also degrade gracefully.
-
-## Proposed schema addition (fits existing `SCHEMA_SQL` conventions)
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;          -- top of SCHEMA_SQL, runs before codec registration
-
-CREATE TABLE IF NOT EXISTS user_facts (
-    id          BIGSERIAL PRIMARY KEY,
-    user_id     TEXT NOT NULL,
-    guild_id    TEXT,
-    fact        TEXT NOT NULL,
-    embedding   vector(768) NOT NULL,           -- 768-d gemini-embedding-001 output
-    created_at  TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_user_facts_user ON user_facts(user_id, created_at DESC);
--- HNSW ANN index optional at this scale; add when corpus grows:
--- CREATE INDEX IF NOT EXISTS idx_user_facts_embedding
---     ON user_facts USING hnsw (embedding vector_cosine_ops);
+```python
+for attachment in message.attachments:
+    if not (attachment.content_type or "").startswith("image/"):
+        continue  # skip non-images (discord.py sets content_type from the upload)
+    if attachment.size > MAX_VISION_IMAGE_BYTES:  # new config knob, see below — guard before download
+        continue
+    image_bytes = await attachment.read()
+    reply = await gemini_service.analyze_image(
+        image_bytes, attachment.content_type, roast_prompt, priority=2,
+    )
 ```
 
-All consistent with the existing idempotent `CREATE TABLE IF NOT EXISTS` + plain-DDL pattern (no `$N`
-params, so it stays inside one `conn.execute(SCHEMA_SQL)`).
+### Supported inputs / limits (verified via `ai.google.dev/gemini-api/docs/image-understanding`)
 
-## Alternatives Considered
+- **Supported MIME types:** `image/png`, `image/jpeg`, `image/webp`, `image/heic`, `image/heif`.
+  Reject anything else before calling the API (Discord attachments can be arbitrary file types).
+- **Token cost:** 258 tokens if both dimensions ≤ 384px; larger images are tiled into 768×768 tiles
+  at 258 tokens/tile. Irrelevant to the 15 RPM budget (RPM is request-count-based) but relevant if
+  `MAX_AI_RESPONSE_LENGTH`-style token budgeting is ever added — not needed for v1.3.
+  **LOW confidence on exact tiling formula for very large images** — WebFetch summary only, not
+  independently re-verified against a second source; not load-bearing for v1.3 scope.
+- **Inline (`Part.from_bytes`) size limit:** total request size (text + system instruction + inline
+  image bytes) capped at **20MB**. Discord attachments can be up to 25MB (or more on boosted
+  servers) — **must validate `attachment.size` before download/send**, not just mime type. Suggest
+  a `MAX_VISION_IMAGE_BYTES` config knob (e.g. 8–10MB, well under the 20MB ceiling to leave room for
+  prompt text) and a personality-flavored rejection message for oversized images, mirroring the
+  existing `MAX_SONG_DURATION_SECONDS` reject pattern.
+- **Free tier confirms multimodal input is included** — no separate "vision" tier/paywall. Gemini
+  2.5 Flash free tier: 15 RPM / 1M TPM / 1,500 RPD (matches `config.GEMINI_RPM_LIMIT = 15` already
+  in place — no rate-limiter change needed). MEDIUM confidence on the exact RPD/TPM figures
+  (WebSearch-aggregated from third-party trackers, not the official AI Studio dashboard, which is
+  account-gated and can't be checked from here) — the RPM figure (15) is HIGH confidence since it
+  matches the value already hardcoded in `config.py`, which the user presumably set from their own
+  AI Studio dashboard.
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| `gemini-embedding-001` @ 768d | `text-embedding-004` | **Never** — deprecated 2026-01-14, already past. Listed only to flag the stale reference in the brief. |
-| Embed at **768** dims | 3072 (default) or 1536 | Only if retrieval quality at 768 proves insufficient — but 3072 forces `halfvec` to stay indexable and 4× the storage. Bump to 1536 before 3072. |
-| **HNSW** index (or none) | IVFFlat | Only at large, stable corpora (≫10k rows) where build time/memory matters and you can train centroids on representative data. Not this bot. |
-| Cosine `<=>` (`vector_cosine_ops`) | Inner product `<#>` (`vector_ip_ops`) | Marginally faster *if* you pre-normalise vectors. Not worth the extra normalisation step + numpy dep at this scale. |
-| `pgvector` pip package | Hand-rolled `'[1,2,3]'` string serialisation | Never — error-prone, no binary protocol, no type safety. The package is one dependency and removes a whole class of bugs. |
-| pgvector on existing Neon | Dedicated vector DB (Pinecone, Qdrant, Chroma, Redis) | Never for this milestone — violates the zero-new-infra / zero-cost constraint. The whole point is reusing Neon. |
+## Safety Settings
 
-## What NOT to Use
+**Verified via Context7 `/googleapis/python-genai` + `ai.google.dev/gemini-api/docs/safety-settings`.**
+
+### Critical finding: the default changed under you
+
+> "The default block threshold is **Off** for Gemini 2.5 and 3 models" when `safety_settings` is
+> unspecified.
+
+`services/gemini.py`'s existing `chat()` and `generate_image()` calls never pass `safety_settings`
+— today that's low-risk because the model only ever sees trusted inputs (system prompt + Discord
+text messages the bot already moderates via its own personality layer). **Vision roasting changes
+the trust boundary**: the model will now see arbitrary user-uploaded images with safety filtering
+effectively OFF unless you explicitly configure it. This is exactly what VIS-01/02 (content-safety
+guardrails) needs to close.
+
+### Configurable HarmCategory values (Gemini Developer API)
+
+| Category | Blocks |
+|---|---|
+| `HARM_CATEGORY_HARASSMENT` | Negative/harmful comments targeting identity or protected attributes |
+| `HARM_CATEGORY_HATE_SPEECH` | Rude, disrespectful, or profane content |
+| `HARM_CATEGORY_SEXUALLY_EXPLICIT` | References to sexual acts or lewd content |
+| `HARM_CATEGORY_DANGEROUS` | Content that promotes/facilitates/encourages harmful acts |
+
+(Note: CSAM/child-safety filtering is always-on and non-configurable regardless of `safety_settings`
+— not something you need to wire up.)
+
+### HarmBlockThreshold values
+
+`OFF` · `BLOCK_NONE` · `BLOCK_ONLY_HIGH` · `BLOCK_MEDIUM_AND_ABOVE` · `BLOCK_LOW_AND_ABOVE` ·
+`HARM_BLOCK_THRESHOLD_UNSPECIFIED` (falls back to the model default, i.e. `OFF` for 2.5/3 models —
+so `UNSPECIFIED` is functionally the same trap as omitting `safety_settings` entirely).
+
+### Recommended config for `analyze_image()`
+
+```python
+VISION_SAFETY_SETTINGS = [
+    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+]
+```
+
+`BLOCK_MEDIUM_AND_ABOVE` matches Gemini's pre-2.5-era default and is a reasonable single-community
+starting point — strict enough to close the "default is now OFF" gap, loose enough that a sarcastic
+roast bot doesn't choke on mildly edgy meme images. Tune down to `BLOCK_ONLY_HIGH` per-category if
+false-positive refusals turn out to be annoying in practice; that's a config-value change, not an
+architecture change.
+
+### Refusal detection (both prompt-level and response-level blocks exist)
+
+```python
+# 1. Prompt-level block (the image/prompt itself was rejected before generation)
+if response.prompt_feedback and response.prompt_feedback.block_reason:
+    ...  # personality-flavored refusal message, mirrors /imagine's existing refusal handling
+
+# 2. Response-level block (generation started but was blocked, or no candidates returned)
+if not response.candidates:
+    ...
+elif response.candidates[0].finish_reason == "SAFETY":
+    ...  # inspect response.candidates[0].safety_ratings for which category tripped, if logging detail is wanted
+```
+
+This mirrors the refusal-handling shape `generate_image()` already partially has (checking for
+empty `candidates`/`parts`) — extend it with the explicit `block_reason` / `finish_reason == "SAFETY"`
+checks, which the current image-gen path does not check today (it only handles the empty-response
+case, not an explicit safety block). Recommend raising the existing `GeminiRefusalError` in both
+cases so callers get one exception type to handle, same as `/imagine`'s refusal path.
+
+## Music Brain / Taste-Graph — No New Library
+
+Confirmed via review of `config.py` + `services/gemini.py` (v1.2 RAG shipped) that everything needed
+already exists:
+
+- **Storage:** `pgvector` (`vector(768)`) on the existing `user_memories` table, same as v1.2. Add a
+  new `kind` value (e.g. `"taste"` or reuse the memory-kind pattern) rather than a new table —
+  matches the "zero new infrastructure" precedent set in Phase 11.
+- **Embeddings:** `GeminiService.embed()` already exists, already rate-limited on the separate 60
+  RPM `_embed_limiter` — reuse directly for taste-episode embedding, no new quota concern.
+- **Taste-graph discovery (artist/genre affinity):** this is aggregation SQL over `user_artist_counts`
+  / `song_history`, not a graph-database problem at single-community scale (dozens of users, low
+  thousands of songs). `SELECT artist, COUNT(*) ... GROUP BY ... ORDER BY ...` plus simple
+  co-occurrence queries (songs queued in the same session/day) covers "discovery surfaced via a
+  command." A real graph library (`networkx`) would be over-engineering for this data volume and
+  adds a dependency with no corresponding infra reuse story.
+- **Generative jams / "continue this jam":** this is a `chat()`-shaped Gemini call (same pattern as
+  the existing AI auto-queue prompt in `cogs/ai.py` / `services/gemini.py`), fed a taste-graph
+  summary + recent session history as context. No new SDK surface — it's the same
+  `generate_content` call shape already used for auto-queue recommendations.
+- **`was_skipped`-aware learning:** already a column on `song_history` (used today for `/skips`
+  analytics in v1.2). Auto-queue can weight/filter recommendations by skip rate via SQL, no ML
+  library needed for a heuristic (not statistical-model) taste weighting at this scale.
+
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `text-embedding-004` | Deprecated 2026-01-14 (past). API calls will be rejected/sunset. | `gemini-embedding-001` |
-| `google-generativeai` (old SDK) for embeddings | Deprecated SDK; project already standardised on `google-genai` | Existing `genai.Client(...).aio.models.embed_content` |
-| Routing embeddings through the shared 15 RPM chat limiter | Embeddings have a separate 100 RPM quota; sharing starves `/ask` | Separate embedding limiter (~60 RPM) + batched writes |
-| 3072-d vectors with an ANN index | `vector` ANN indexes cap at 2000 dims → 3072 is unindexable without `halfvec` | 768-d `vector(768)` |
-| IVFFlat on a small/empty table | Centroid training needs representative data; poor recall on tiny corpora, needs rebuild | HNSW (works from row zero) or no index |
-| LangChain / vecs / a vector-DB client | Heavy dependency for one table + two SQL queries; nothing here needs an abstraction layer | Raw asyncpg + `pgvector` codec |
-| Forgetting `register_vector` in `init=` | Without it you must serialise vectors as strings and asyncpg returns text, not lists | `init=_init_connection` with `register_vector(conn)` |
-
-## Stack Patterns by Variant
-
-**If the fact corpus stays in the hundreds–low-thousands (expected):**
-- Skip the ANN index entirely; a seq scan with `ORDER BY embedding <=> $1 LIMIT k` is sub-ms.
-- Batch fact-storage embeddings (one `embed_content` call per extraction pass).
-
-**If retrieval quality at 768d feels weak:**
-- Bump `output_dimensionality` to 1536 (still indexable under the 2000-dim cap), re-embed existing rows.
-- Do NOT jump to 3072 unless you switch the column to `halfvec(3072)` for index support.
-
-**If the corpus unexpectedly grows past ~10k rows:**
-- Add the HNSW index (`vector_cosine_ops`). Still no IVFFlat — HNSW's no-training property keeps ops simple.
+|---|---|---|
+| `Pillow` / `opencv-python` | Discord already supplies `.content_type`, `.size`, `.width`, `.height` on `Attachment` — no server-side image decoding/resizing needed for basic mime/size/dimension validation. Gemini handles internal resizing/tiling itself. | `discord.Attachment` properties |
+| `networkx` (or any graph DB) | Single-community bot, low thousands of songs — "taste graph" is served by `GROUP BY`/aggregation SQL, not graph traversal algorithms | `asyncpg` SQL over `user_artist_counts` / `song_history` |
+| A dedicated vector DB (Chroma, FAISS, Pinecone, Weaviate, Qdrant) | `pgvector` on the existing Neon Postgres already does cosine similarity search and was explicitly chosen over exactly this class of tool in Phase 11 ("zero new infrastructure") — the same reasoning applies to taste embeddings, which are just another `kind` of memory in the same table | `pgvector` (already installed) |
+| `APScheduler` / `celery` / any task-queue library | Proactive callbacks are "check a cadence gate on an existing polling loop," identical in shape to the status-rotation / idle-check loops already running in `bot.py` | `asyncio` loop pattern (Phase 3/9 precedent) |
+| A second/separate Gemini rate limiter for vision | A multimodal image+text request counts as ONE request toward RPM/RPD — vision roasting is just another consumer of the existing shared 15 RPM `_rate_limiter`, same as `chat()`/`generate_image()` | `self._rate_limiter.acquire(priority)` (existing) |
+| `google-generativeai` (deprecated SDK) | Explicitly forbidden by CLAUDE.md/PROJECT.md constraints; also unmaintained — Google's migration guide points to `google-genai` | `google-genai` (already installed, already used everywhere) |
+| Bumping `google-genai` to pin a specific version in `requirements.txt` | Not required for functionality — `Part.from_bytes`, `SafetySetting`, `HarmCategory` are all present and stable at the currently-installed 2.8.0; unpinned dependency already tracks latest | No action — optionally pin `google-genai>=2.8.0` for reproducibility, but that's a hygiene choice, not a feature requirement |
 
 ## Version Compatibility
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| `pgvector` (py) 0.3.6–0.4.x | `asyncpg` 0.31.0 | `pgvector.asyncpg.register_vector` targets asyncpg's `set_type_codec`; stable across these versions. |
-| `pgvector` (py) | pgvector ext 0.5+ | `halfvec`/`sparsevec` codecs need ext ≥0.7; `vector` codec works on any modern ext. Neon ships 0.8.x. |
-| `register_vector` + `statement_cache_size=0` | Neon/PgBouncer tx mode | Verified compatible — codec registration is per-connection, not a prepared statement. |
-| `vector(d)` ANN index | `d <= 2000` | Embed at 768 (or ≤2000) to keep HNSW/IVFFlat usable; else use `halfvec` (≤4000). |
-| `gemini-embedding-001` `output_dimensionality` | newer models only | Not supported on legacy `models/embedding-001`; supported on `gemini-embedding-001` / `text-embedding-004`. |
+| Package | Installed | Compatible With | Notes |
+|---|---|---|---|
+| `google-genai` | 2.8.0 | `discord.py>=2.3.0`, Python 3.11+ | `Part.from_bytes`/`SafetySetting`/`HarmCategory` verified present via Context7 docs generated from this same repo; no version bump needed for v1.3 |
+| `discord.py` | `>=2.3.0` (per `requirements.txt`) | — | `Attachment.read()`, `.content_type`, `.size`, `.width`, `.height` are stable APIs, present well before 2.3.0 |
+| `pgvector` | `>=0.3.6,<0.5` (per `requirements.txt`) | Neon Postgres (v1.2 already validated) | No change needed; new memory `kind` reuses existing table/index |
+
+## Open Questions / Flags for Roadmap
+
+- **`safety_settings` on existing `chat()`/`generate_image()` calls**: this research surfaced that
+  Gemini 2.5 models default to safety filtering **OFF**. That's arguably a latent gap on the
+  *existing* `/ask` and `/imagine` paths too (both process free-text user input), not just the new
+  vision path. Recommend flagging this as a small hardening task alongside the vision work rather
+  than silently leaving `/ask`/`/imagine` unfiltered while only vision gets guardrails — but this is
+  a judgment call for the roadmap/requirements phase, not a stack decision.
+- **Image size cap (`MAX_VISION_IMAGE_BYTES`) and cooldown value** are new `config.py` knobs (no
+  new library), needed for VIS-01/02 — exact numeric values are a requirements/roadmap decision
+  (mirrors the `MAX_IMAGES_PER_USER_PER_DAY` / `IMAGINE_COOLDOWN_SECONDS` precedent), not something
+  this stack research resolves.
+- **Tiling token-cost formula for very large images** is LOW confidence (single WebFetch summary,
+  not cross-verified) — not load-bearing since RPM (not TPM) is the binding constraint at this
+  bot's scale, but flag if a future phase ever needs precise token budgeting.
+- **Exact free-tier RPD/TPM numbers** for `gemini-2.5-flash` are MEDIUM confidence (third-party
+  trackers, not the account-gated AI Studio dashboard) — the RPM=15 figure is HIGH confidence
+  because it's already the value hardcoded in `config.GEMINI_RPM_LIMIT`, presumably set from the
+  user's own dashboard.
 
 ## Sources
 
-- `/pgvector/pgvector-python` (Context7) — `register_vector(conn, schema)` signature, asyncpg pool `init=` pattern, `Vector` helper, HNSW `vector_cosine_ops`, `<=>`/`<->` operators, `OpClass` literals — HIGH
-- `/googleapis/python-genai` (Context7, v1.33.0) — `embed_content(*, model, contents, config)`, async `aio.models.embed_content`, `EmbedContentConfig(output_dimensionality=, task_type=)`, `gemini-embedding-001` usage — HIGH
-- [Gemini Embedding GA — Google Developers Blog](https://developers.googleblog.com/gemini-embedding-available-gemini-api/) — model GA status, MRL dimensions — HIGH
-- [Embeddings | Gemini API docs](https://ai.google.dev/gemini-api/docs/embeddings) — `gemini-embedding-001`, 3072 default, 768/1536/3072 recommended tiers, manual normalization for non-3072 dims — HIGH
-- [gemini-embedding-001 Dimensions & Pricing Guide 2026 — TokenMix](https://tokenmix.ai/blog/gemini-embedding-001-dimensions-pricing-guide-2026) — free-tier 100 RPM, dimension tiers — MEDIUM
-- text-embedding-004 deprecation date 2026-01-14 (Google deprecation notice, corroborated by [n8n community thread](https://community.n8n.io/t/google-deprecating-text-embedding-004-but-gemini-embedding-001-doesnt-work/262008)) — MEDIUM
-- Existing code: `services/gemini.py` (`genai.Client`, `_RateLimiter`), `database.py` (`SCHEMA_SQL`, asyncpg pool helpers), `config.py` (Neon pool tuning K-04) — HIGH
+- Context7 `/googleapis/python-genai` — `Part.from_bytes` signature, multimodal `generate_content`
+  examples, `SafetySetting`/`HarmCategory` usage (HIGH confidence, matches installed SDK version)
+- [ai.google.dev/gemini-api/docs/image-understanding](https://ai.google.dev/gemini-api/docs/image-understanding?lang=python) — supported MIME types, token/tiling cost, 20MB inline-data limit, 3,600 images/request cap (MEDIUM — WebFetch summary of official docs)
+- [ai.google.dev/gemini-api/docs/safety-settings](https://ai.google.dev/gemini-api/docs/safety-settings) — HarmCategory list, HarmBlockThreshold values, default-OFF-for-2.5/3 finding (MEDIUM — WebFetch summary of official docs; category list cross-checked against Context7 SDK docs = HIGH for the category/threshold names themselves)
+- [ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits) — confirms tiered rate limits exist per Google AI Studio dashboard; did not surface exact free-tier numbers directly (LOW for exact figures from this source alone)
+- WebSearch aggregation (multiple third-party trackers: tokenmix.ai, aifreeapi.com, laozhang.ai) — free tier RPM/TPM/RPD figures, multimodal-counts-as-one-request confirmation (MEDIUM — multiple independent sources agree, none is the primary source)
+- Context7 `/rapptz/discord.py` — `Attachment` API surface confirmed present (HIGH)
+- Local inspection: `pip show google-genai` → 2.8.0 installed (HIGH — ground truth from the actual environment)
+- `C:\Users\James\desktop\projects\dexter\services\gemini.py`, `config.py`, `requirements.txt`, `.planning/PROJECT.md` — existing patterns to match (HIGH — primary source)
 
 ---
-*Stack research for: pgvector-on-Neon + Gemini embeddings RAG memory (Dexter v1.2 / Phase 11)*
-*Researched: 2026-06-26*
+*Stack research for: Dexter v1.3 "Taste Brain" (vision roasting + music brain)*
+*Researched: 2026-07-02*
