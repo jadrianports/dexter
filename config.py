@@ -174,6 +174,7 @@ MEMORY_RERANK_SALIENCE_WEIGHT = 0.7             # tuned via 11-02 spike 2026-06-
 MEMORY_RERANK_NOVELTY_WEIGHT = 0.5              # tuned via 11-02 spike 2026-06-29
 MEMORY_CALLBACK_CHANCE = 0.35                   # D-04 occasional-payoff cadence; tuned via 11-02 spike 2026-06-29
 MEMORY_DISTILL_BATCH_HOUR = 3                   # daily distill-batch hour (UTC)
+MEMORY_VIEW_PAGE_SIZE = 10                      # facts per /memory view page (RAG-03, Phase 15)
 
 # Ordinal salience base weights for each memory event kind (D-07 hybrid salience).
 # These are intentionally ordinal — not finely tuned (RESEARCH.md Q3 / A5).
