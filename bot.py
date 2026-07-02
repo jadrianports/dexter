@@ -990,29 +990,34 @@ async def taste_distill_batch() -> None:
         ):
             continue
 
-        artist_rows = await database.get_user_artist_activity(
-            pool,
-            guild_id=guild_id,
-            user_id=user_id,
-            since=since,
-            baseline_since=baseline_since,
-        )
-
-        # D-02 pre-bucketing: number-free phrases only, before any Gemini call.
-        phrases = logic_taste.summarize_taste(
-            artist_rows,
-            obsession_min=config.TASTE_OBSESSION_MIN_PLAYS,
-            new_arrival_min=config.TASTE_NEW_ARRIVAL_MIN_PLAYS,
-            steady_min_baseline=config.TASTE_STEADY_MIN_BASELINE,
-        )
-        if not phrases:
-            continue
-
-        # raw_text is built ONLY from summarize_taste's digit-free phrases — never
-        # interpolate a raw count here (accuracy firewall, Critical Rule 12).
-        raw_text = "Listening activity this week: " + "; ".join(phrases)
-
+        # Per-user isolation (T-13-08 / restore_queues per-guild continue discipline):
+        # the raise-prone DB round-trip lives INSIDE the try so one user's transient
+        # Neon hiccup (scale-to-zero / pool exhaustion / dropped conn) does a `continue`
+        # instead of aborting the whole batch. distill_and_remember already swallows its
+        # own errors, but get_user_artist_activity does not (WR-13-01).
         try:
+            artist_rows = await database.get_user_artist_activity(
+                pool,
+                guild_id=guild_id,
+                user_id=user_id,
+                since=since,
+                baseline_since=baseline_since,
+            )
+
+            # D-02 pre-bucketing: number-free phrases only, before any Gemini call.
+            phrases = logic_taste.summarize_taste(
+                artist_rows,
+                obsession_min=config.TASTE_OBSESSION_MIN_PLAYS,
+                new_arrival_min=config.TASTE_NEW_ARRIVAL_MIN_PLAYS,
+                steady_min_baseline=config.TASTE_STEADY_MIN_BASELINE,
+            )
+            if not phrases:
+                continue
+
+            # raw_text is built ONLY from summarize_taste's digit-free phrases — never
+            # interpolate a raw count here (accuracy firewall, Critical Rule 12).
+            raw_text = "Listening activity this week: " + "; ".join(phrases)
+
             # Write exactly ONE kind, taste_episode (D-09 — taste_shift stays deferred).
             # guild_id is carried through (unlike daily_batch's None) since taste is
             # guild-scoped listening (13-PATTERNS.md).
@@ -1028,6 +1033,7 @@ async def taste_distill_batch() -> None:
                 "taste_distill_batch: error for guild=%s user=%s: %s",
                 guild_id, user_id, exc,
             )
+            continue
 
     log.info("taste_distill_batch: batch pass complete")
 
