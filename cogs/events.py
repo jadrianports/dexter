@@ -670,7 +670,16 @@ class EventsCog(commands.Cog):
         # Part.from_bytes(mime_type=...) receives the same canonical value the gate
         # validated — a parameterized/upper-cased type would otherwise 400 and
         # surface a visible transport fallback, defeating Pitfall 3 (WR-01).
-        image_bytes = await attachment.read()
+        # The source message can be deleted or the CDN can hiccup between the gate
+        # and the read, so guard the one bare I/O boundary — fail closed to a
+        # silent skip (WR-02 / VIS-02: never a visible error for a cosmetic feature).
+        try:
+            image_bytes = await attachment.read()
+        except discord.HTTPException as read_err:
+            log.debug(
+                "vision roast: attachment read failed (non-fatal): %s", read_err
+            )
+            return
         line = await self._generate_vision_roast(
             message.author, image_bytes, _normalize_image_mime(attachment)
         )
