@@ -63,6 +63,7 @@ class MemoryService:
         user_id: str,
         guild_id: str,
         query_text: str,
+        kind: str | None = None,
     ) -> list[str]:
         """Retrieve the top relevant memories for a user + query pair.
 
@@ -91,6 +92,12 @@ class MemoryService:
                         on multiple servers and their taste/history is personal).
             query_text: The raw text to embed as a retrieval query (e.g. the /ask
                         question, or the roast context string from events.py).
+            kind:       Phase 14 (OQ1) — optional exact-match filter forwarded
+                        straight to database.search_memories, e.g.
+                        "taste_episode" for D-03's positive-taste blend. Defaults
+                        to None, which is byte-identical to pre-Phase-14 recall()
+                        (no kind clause emitted at all — T-14-03: this can only
+                        narrow the existing user_id scope, never widen it).
 
         Returns:
             List of fact strings (at most MEMORY_INJECT_CAP), or [] when nothing
@@ -118,6 +125,7 @@ class MemoryService:
                 user_id=user_id,
                 query_embedding=query_vec,
                 k=config.MEMORY_TOP_K,
+                kind=kind,
             )
 
             # Step 3 — map rows to MemoryFact dataclass

@@ -902,6 +902,7 @@ async def search_memories(
     user_id: str,
     query_embedding: list[float],
     k: int,
+    kind: str | None = None,
 ) -> list[asyncpg.Record]:
     """Cosine ANN search scoped to user_id. Returns up to k rows.
 
@@ -917,11 +918,21 @@ async def search_memories(
     ``query_embedding`` is a plain list[float] passed via the pgvector codec
     registered at pool-creation time (register_vector) — no SQL injection path.
 
+    Phase 14 (OQ1): ``kind`` is an optional keyword-only filter. When omitted
+    (``None``, the default), the emitted SQL is byte-identical to pre-Phase-14
+    behaviour — the ``AND kind = $N`` clause is omitted ENTIRELY, never emitted
+    as ``kind IS NULL`` (Pitfall 1: a wrong default would silently degrade every
+    existing Phase 11/13 recall() call to []). When provided (e.g.
+    ``kind="taste_episode"``), narrows the WHERE clause within the existing
+    ``user_id = $1`` scope only — it can never widen scope (T-14-03).
+
     Args:
         pool:            asyncpg connection pool (with pgvector codec registered).
         user_id:         Caller's user_id — scope guard (never cross-user).
         query_embedding: 768d float vector from GeminiService.embed (RETRIEVAL_QUERY).
         k:               Max rows to return (config.MEMORY_TOP_K = 8).
+        kind:            Optional exact-match filter on the memory's kind column
+                          (e.g. "taste_episode" for D-03's positive-taste blend).
 
     Returns:
         List of asyncpg.Record rows with columns: id, fact, kind, salience, hit_count,
@@ -929,16 +940,18 @@ async def search_memories(
         ``kind`` lets callers (e.g. remember()'s dedup branch) gate behaviour on the
         MATCHED row's kind, not the incoming write's kind (CR-13-01 / D-05 firewall).
     """
+    kind_clause = " AND kind = $3" if kind is not None else ""
+    params: list = [user_id, query_embedding] + ([kind] if kind is not None else [])
     async with pool.acquire() as conn:
         return await conn.fetch(
             "SELECT id, fact, kind, salience, hit_count, created_at, last_seen_at,"
             "       last_surfaced_at, surface_count,"
             "       1 - (embedding <=> $2) AS similarity"
             " FROM user_memories"
-            " WHERE user_id = $1"
+            f" WHERE user_id = $1{kind_clause}"
             " ORDER BY embedding <=> $2"
-            " LIMIT $3",
-            user_id, query_embedding, k,
+            " LIMIT $" + str(len(params) + 1),
+            *params, k,
         )
 
 
