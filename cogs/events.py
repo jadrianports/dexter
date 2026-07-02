@@ -11,19 +11,48 @@ from discord.ext import commands
 import config
 import database
 from logic.proactive import should_fire_proactive_callback
-from logic.roasts import RoastScenario, decide_ambient_roast
+from logic.roasts import RoastScenario, cooldown_elapsed, decide_ambient_roast
+from logic.vision import should_fire_vision_roast
 from models.user_profile import get_user_summary
 from personality import roasts
-from personality.prompts import build_chat_prompt
+from personality.prompts import build_chat_prompt, build_vision_prompt
 from personality.roasts import pick_random
 from personality.seasonal import get_seasonal_context
-from services.gemini import GeminiRateLimitError
+from services.gemini import GeminiAPIError, GeminiRateLimitError
 from utils.logger import log
 
 
 # ---------------------------------------------------------------------------
 # Ambient roasts reuse the locked few-shot DEXTER voice (DEXTER_SYSTEM_PROMPT via
 # build_chat_prompt) per D-06 — examples beat descriptions. See _generate_ambient_roast.
+
+
+def _first_valid_image_attachment(
+    message: discord.Message,
+) -> discord.Attachment | None:
+    """Return the first attachment passing the vision structural gate, or None.
+
+    Phase 17 / VIS-01 / D-02 — a BEFORE-download metadata gate (T-17-01/T-17-02):
+    reject on metadata alone, ZERO bytes fetched for a rejected attachment. The
+    trigger is attachments-only (never a message-content URL — SSRF, T-17-02);
+    bytes come solely from attachment.read() (Discord CDN).
+
+    Each attachment's content_type is normalized with
+    ``(attachment.content_type or "").split(";")[0].strip().lower()`` to handle a
+    None content_type (-> reject) and a "; charset=" suffix (RESEARCH Pitfall 3).
+    An attachment is rejected if its normalized type is not in
+    ``config.VISION_MIME_ALLOWLIST`` (image/gif deliberately excluded) or if its
+    size exceeds ``config.MAX_VISION_IMAGE_BYTES``. The FIRST passing attachment
+    is returned (roast the first valid image, D-02).
+    """
+    for attachment in message.attachments:
+        mime = (attachment.content_type or "").split(";")[0].strip().lower()
+        if mime not in config.VISION_MIME_ALLOWLIST:
+            continue
+        if attachment.size > config.MAX_VISION_IMAGE_BYTES:
+            continue
+        return attachment
+    return None
 
 
 class EventsCog(commands.Cog):
@@ -40,6 +69,10 @@ class EventsCog(commands.Cog):
         # In-memory only — a restart resetting this is harmless (rarer-is-fine,
         # no durability requirement, D-02).
         self._proactive_daily_counts: dict[str, tuple[str, int]] = {}
+        # Phase 17 / VIS-01: per-user vision-roast cooldown (monotonic loop time
+        # of last fire). int-keyed, mirrors _ambient_roast_times above — a fourth
+        # independent unprompted cadence, separate from the ambient/proactive gates.
+        self._vision_roast_cooldowns: dict[int, float] = {}
 
     # ──────────────────────────── COOLDOWN HELPERS ────────────────────────────
 
@@ -401,6 +434,18 @@ class EventsCog(commands.Cog):
         ):
             await self._maybe_fire_proactive_callback(message)
 
+        # Phase 17 / VIS-01: vision-roast gate — a FOURTH independent cadence
+        # (do NOT merge with the proactive gate). Designated channel only, and
+        # only when the message actually carries attachments (the structural
+        # mime/size gate runs inside _maybe_fire_vision_roast).
+        if (
+            message.guild is not None
+            and config.DEXTER_CHANNEL_ID
+            and message.channel.id == config.DEXTER_CHANNEL_ID
+            and message.attachments
+        ):
+            await self._maybe_fire_vision_roast(message)
+
     # ──────────────────────────── PROACTIVE CALLBACK ────────────────────────────
 
     async def _maybe_fire_proactive_callback(self, message: discord.Message) -> None:
@@ -511,6 +556,123 @@ class EventsCog(commands.Cog):
         # Counter was already reserved (incremented) up front above (WR-01) —
         # the successful send simply confirms the reservation; nothing further
         # to write here.
+
+    # ──────────────────────────── VISION ROAST ────────────────────────────
+
+    async def _generate_vision_roast(
+        self, member: discord.Member, image_bytes: bytes, mime_type: str
+    ) -> str | None:
+        """Generate a vision-roast line: str on success/transport-fallback, None on skip.
+
+        Phase 17 / VIS-02 / D-04 — a DEDICATED generator (NOT a reuse of
+        _generate_ambient_roast, whose always-returns-str contract collapses a
+        safety block and a transport failure into the same visible template,
+        RESEARCH Pitfall 1). The three outcomes are kept distinct:
+
+          * safety-blocked OR genuinely-empty response -> None (silent skip,
+            VIS-02 — MUST NOT emit a fallback line; chat() returns None-on-block
+            without raising, the 17-01 hinge).
+          * transport failure (GeminiRateLimitError / GeminiAPIError) ->
+            pick_random(VISION_ROAST_FALLBACKS) (D-04 template fallback).
+          * success -> the stripped, lowercase-first, ≤500-char line.
+        """
+        gemini_service = getattr(self.bot, "gemini_service", None)
+        if gemini_service is None:
+            # No AI available -> silent skip (not a transport failure).
+            return None
+
+        try:
+            result = await gemini_service.chat(
+                build_vision_prompt(),
+                [{"role": "user", "content": "react to this image in one line."}],
+                priority=2,
+                image_bytes=image_bytes,
+                image_mime_type=mime_type,
+            )
+        except (GeminiRateLimitError, GeminiAPIError) as e:
+            # Transport failure only (rate-limit / API-down) -> template fallback.
+            log.debug(f"Vision roast: Gemini transport failure for {member.display_name}: {e}")
+            return pick_random(roasts.VISION_ROAST_FALLBACKS)
+
+        if not result:
+            # Safety-blocked or empty -> silent skip (VIS-02). Never a fallback here.
+            return None
+
+        # Enforce voice rules: strip, lowercase the first char, cap to <=500 chars.
+        result = result.strip()
+        if not result:
+            return None
+        if len(result) > 500:
+            result = result[:497] + "..."
+        if result[0].isupper():
+            result = result[0].lower() + result[1:]
+        return result
+
+    async def _maybe_fire_vision_roast(self, message: discord.Message) -> None:
+        """Evaluate and, rarely, fire a vision roast on a posted image (VIS-01/VIS-02).
+
+        Firing order (short-circuit, cheapest-first; structure copied from
+        _maybe_fire_proactive_callback):
+          1. Shared Phase 16 opt-out (database.get_proactive_opt_out — no new flag,
+             D-03 step 4); fail closed on a DB hiccup.
+          2. Structural gate (_first_valid_image_attachment) — reject on metadata
+             alone, ZERO bytes fetched for a rejected/absent image (D-02 / VIS-01).
+          3. Pure cadence gate (should_fire_vision_roast): opt-out -> cooldown ->
+             chance, no I/O and no cooldown mark when it fails.
+          4. Read bytes (the single network fetch), generate str|None, and — only
+             on a non-None line — reply-anchored with AllowedMentions.none(),
+             marking the cooldown ONLY on a successful send.
+        """
+        # 1. Shared opt-out (fail closed on error, matching the proactive path).
+        try:
+            opted_out = await database.get_proactive_opt_out(
+                self.bot.pool, str(message.author.id)
+            )
+        except Exception as _opt_out_err:
+            log.debug(
+                "vision roast: opt-out lookup failed (non-fatal): %s", _opt_out_err
+            )
+            return
+
+        # 2. Structural mime/size gate — before any I/O (D-02 / VIS-01).
+        attachment = _first_valid_image_attachment(message)
+        if attachment is None:
+            return
+
+        # 3. Pure cadence gate — opt-out / cooldown / chance. No I/O, no mark on fail.
+        seconds_since_last = asyncio.get_event_loop().time() - self._vision_roast_cooldowns.get(
+            message.author.id, 0.0
+        )
+        if not should_fire_vision_roast(
+            opted_out=opted_out,
+            cooldown_elapsed=cooldown_elapsed(
+                seconds_since_last, config.VISION_ROAST_COOLDOWN_SECONDS
+            ),
+            chance_roll=random.random(),
+        ):
+            return
+
+        # 4. Only now fetch the bytes (single network read) and generate.
+        image_bytes = await attachment.read()
+        line = await self._generate_vision_roast(
+            message.author, image_bytes, attachment.content_type
+        )
+        if line is None:
+            # VIS-02 silent skip (safety-blocked/empty) — no send, no cooldown mark.
+            return
+
+        try:
+            await message.reply(
+                line,
+                allowed_mentions=discord.AllowedMentions.none(),
+                mention_author=False,
+            )
+        except discord.HTTPException:
+            # Send failed — do not mark the cooldown (allow a future retry).
+            return
+
+        # Successful send — mark the per-user cooldown.
+        self._vision_roast_cooldowns[message.author.id] = asyncio.get_event_loop().time()
 
 
 async def setup(bot: commands.Bot) -> None:
