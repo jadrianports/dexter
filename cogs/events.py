@@ -626,17 +626,26 @@ class EventsCog(commands.Cog):
 
         Firing order (short-circuit, cheapest-first; structure copied from
         _maybe_fire_proactive_callback):
-          1. Shared Phase 16 opt-out (database.get_proactive_opt_out — no new flag,
-             D-03 step 4); fail closed on a DB hiccup.
-          2. Structural gate (_first_valid_image_attachment) — reject on metadata
-             alone, ZERO bytes fetched for a rejected/absent image (D-02 / VIS-01).
+          1. Structural gate (_first_valid_image_attachment) — free, zero-I/O:
+             reject on metadata alone, ZERO bytes fetched for a rejected/absent
+             image (D-02 / VIS-01). Runs FIRST so a non-image attachment (video,
+             PDF, zip) never triggers a wasted DB round-trip (WR-03).
+          2. Shared Phase 16 opt-out (database.get_proactive_opt_out — no new flag,
+             D-03 step 4); fail closed on a DB hiccup. Only reached once a valid
+             image is present, since the pure gate needs opted_out as input.
           3. Pure cadence gate (should_fire_vision_roast): opt-out -> cooldown ->
              chance, no I/O and no cooldown mark when it fails.
           4. Read bytes (the single network fetch), generate str|None, and — only
              on a non-None line — reply-anchored with AllowedMentions.none(),
              marking the cooldown ONLY on a successful send.
         """
-        # 1. Shared opt-out (fail closed on error, matching the proactive path).
+        # 1. Structural mime/size gate — free, before any I/O (D-02 / VIS-01).
+        # Short-circuit here so a non-image attachment never hits the DB (WR-03).
+        attachment = _first_valid_image_attachment(message)
+        if attachment is None:
+            return
+
+        # 2. Shared opt-out (fail closed on error, matching the proactive path).
         try:
             opted_out = await database.get_proactive_opt_out(
                 self.bot.pool, str(message.author.id)
@@ -645,11 +654,6 @@ class EventsCog(commands.Cog):
             log.debug(
                 "vision roast: opt-out lookup failed (non-fatal): %s", _opt_out_err
             )
-            return
-
-        # 2. Structural mime/size gate — before any I/O (D-02 / VIS-01).
-        attachment = _first_valid_image_attachment(message)
-        if attachment is None:
             return
 
         # 3. Pure cadence gate — opt-out / cooldown / chance. No I/O, no mark on fail.
