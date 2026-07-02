@@ -97,3 +97,11 @@ None - no external service configuration required.
 ---
 *Phase: 15-rag-reach*
 *Completed: 2026-07-03*
+
+## Self-Check: PASSED
+
+- FOUND: cogs/ai.py
+- FOUND: tests/test_ambient_recall_cadence.py
+- FOUND: .planning/phases/15-rag-reach/15-02-SUMMARY.md
+- FOUND: commit 72d46b3
+- FOUND: commit 772348f

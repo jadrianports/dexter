@@ -140,7 +140,7 @@ Plans:
 **Wave 1** *(parallel — no file overlap)*
 
 - [x] 15-01-PLAN.md — DB substrate: list_user_memories + delete_all_user_memories helpers + tests/test_database_phase15.py (static + live-DB remember→forget→recall==[] Success Criterion 4) (RAG-03, RAG-04)
-- [ ] 15-02-PLAN.md — D-01 cadence: remove MEMORY_CALLBACK_CHANCE gate from /ask & /roast only (ambient surfaces keep it) + tests/test_ambient_recall_cadence.py regression lock (RAG-01, RAG-02)
+- [x] 15-02-PLAN.md — D-01 cadence: remove MEMORY_CALLBACK_CHANCE gate from /ask & /roast only (ambient surfaces keep it) + tests/test_ambient_recall_cadence.py regression lock (RAG-01, RAG-02)
 
 **Wave 2** *(blocked on 15-01)*
 
@@ -194,7 +194,7 @@ Plans:
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
 | 14. Smarter Music Brain | v1.3 | 5/5 | Complete    | 2026-07-02 |
-| 15. RAG Reach | v1.3 | 1/3 | In Progress|  |
+| 15. RAG Reach | v1.3 | 2/3 | In Progress|  |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
 </content>

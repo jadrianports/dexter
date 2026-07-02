@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
 status: executing
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-07-02T17:51:09.053Z"
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-07-02T18:02:02.557Z"
 last_activity: 2026-07-02 -- Phase 15 execution started
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 40
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 ## Current Position
 
 Phase: 15 (rag-reach) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-02 -- Phase 15 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 14 P04 | 15min | 2 tasks | 3 files |
 | Phase 14 P05 | 15min | 2 tasks | 2 files |
 | Phase 15 P01 | 5min | 3 tasks | 2 files |
+| Phase 15 P02 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,8 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: [Phase 14]: jam_suggest collects lightweight title/artist/url candidates during search/validate, deferring full async_extract (duration/thumbnail) to the Confirm callback -- mirrors try_auto_queue's search-then-extract split
 - [Phase ?]: [Phase 14]: /jam suggest is the second and final Phase 14 surface to reuse the one-shot confirm-view pattern established by /discover (14-04) -- finite timeout, not setup_hook-registered
 - [Phase 15]: list_user_memories caller must pass config.MEMORY_MAX_PER_USER, never MEMORY_INJECT_CAP, so the /memory view never truncates below what forget erases — Pitfall 2 / T-15-04 guard
+- [Phase 15]: Removed import random from cogs/ai.py entirely rather than leaving an unused import -- its only two uses were the deleted MEMORY_CALLBACK_CHANCE gate conditionals
+- [Phase 15]: D-01: /ask and /roast now attempt memory recall on every invocation (gate removed); ambient surfaces (events.py, music.py) unchanged, still gated at MEMORY_CALLBACK_CHANCE
 
 ### Pending Todos
 
@@ -119,7 +122,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T17:51:09.040Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-07-02T18:02:02.522Z
+Stopped at: Completed 15-02-PLAN.md
 Next: Phase 14 complete (5/5 plans) — ready for `/gsd-verify-phase 14`
 </content>

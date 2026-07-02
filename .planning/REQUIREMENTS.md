@@ -25,8 +25,8 @@ Requirements for the v1.3 milestone. Each maps to a roadmap phase (13–17).
 
 ### RAG Reach *(Phase 15)*
 
-- [ ] **RAG-01**: `/roast @user` pulls the **target user's** recalled history (recall scoped to the target's `user_id`, never the invoker's) to ground the roast alongside the existing live SQL stat.
-- [ ] **RAG-02**: `/ask` incorporates the invoker's recalled memory via the existing `build_chat_prompt(memories=...)` seam, so long-term memory informs answers (byte-identical prompt when no memory clears the floor).
+- [x] **RAG-01**: `/roast @user` pulls the **target user's** recalled history (recall scoped to the target's `user_id`, never the invoker's) to ground the roast alongside the existing live SQL stat.
+- [x] **RAG-02**: `/ask` incorporates the invoker's recalled memory via the existing `build_chat_prompt(memories=...)` seam, so long-term memory informs answers (byte-identical prompt when no memory clears the floor).
 - [x] **RAG-03**: A `/memory` command lets a user view what Dexter remembers about them (in-character, read-only view).
 - [x] **RAG-04**: `/memory forget` lets a user delete their stored memories — the rows **and** their embeddings are actually removed (verified deletion, the escape hatch that must exist before proactive callbacks ship).
 
@@ -79,8 +79,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | BRAIN-01 | Phase 14 | Complete |
 | BRAIN-02 | Phase 14 | Complete |
 | BRAIN-03 | Phase 14 | Complete |
-| RAG-01 | Phase 15 | Pending |
-| RAG-02 | Phase 15 | Pending |
+| RAG-01 | Phase 15 | Complete |
+| RAG-02 | Phase 15 | Complete |
 | RAG-03 | Phase 15 | Complete |
 | RAG-04 | Phase 15 | Complete |
 | PROACT-01 | Phase 16 | Pending |
