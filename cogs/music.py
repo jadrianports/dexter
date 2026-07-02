@@ -532,6 +532,18 @@ class DiscoverQueueView(discord.ui.View):
             )
             return
 
+        # /discover is a cold-start entry point with no precondition that audio
+        # is already flowing — the presser must be in voice so the bot has a
+        # channel to join (mirrors _ensure_voice / the favorites+jam paths).
+        # Without this the track was appended but the bot never joined voice and
+        # the button falsely reported success (CR-01).
+        member = guild.get_member(interaction.user.id)
+        if member is None or not member.voice or not member.voice.channel:
+            await interaction.followup.send(
+                "join a voice channel first.", ephemeral=True
+            )
+            return
+
         try:
             results = await self.bot.youtube_service.async_search(self.artist_name, count=1)
             if not results:
@@ -557,19 +569,36 @@ class DiscoverQueueView(discord.ui.View):
                 thumbnail=data.get("thumbnail"),
             )
             queue = music_cog.get_queue(guild.id)
+
+            # Connect to the presser's voice channel if the bot isn't already in
+            # voice — mirror the connect-then-play pattern every other queue-add
+            # site uses (main /play, favorites, playlist/jam load) so the cold
+            # path actually plays instead of silently no-opping (CR-01).
+            voice_client = guild.voice_client
+            if voice_client is None:
+                try:
+                    voice_client = await member.voice.channel.connect()
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("discover: connect failed: %s", exc)
+                    await interaction.followup.send(
+                        "couldn't join your voice channel. try again.", ephemeral=True
+                    )
+                    return
+
             queue.add(track)
+            queue._text_channel_id = interaction.channel_id
 
             # Start playback only if audio isn't already flowing — gate on the
             # live voice-client state, never `queue.is_playing` (scar #2).
-            voice_client = guild.voice_client
             if should_start_playback(
                 connected=voice_client is not None,
-                voice_is_playing=voice_client.is_playing() if voice_client else False,
-                voice_is_paused=voice_client.is_paused() if voice_client else False,
+                voice_is_playing=voice_client.is_playing(),
+                voice_is_paused=voice_client.is_paused(),
                 has_track=len(queue.tracks) > 0,
             ):
                 queue.current_index = len(queue.tracks) - 1
                 await music_cog._play_track(guild, queue.get_current())
+                await music_cog._refresh_now_playing(guild, queue)
 
             await interaction.followup.send(f"queued **{track.title}**.")
         except Exception as e:
