@@ -184,6 +184,28 @@ MEMORY_SALIENCE_BASE_WEIGHTS: dict[str, float] = {
     "repeat_song":         0.5,   # same song queued 3+ times in a day — strong preference signal
     "auto_queue_ignored":  0.4,   # user skipped AI auto-queued track — negative taste signal
     "daily_batch":         0.2,   # background distill from message buffer — lower-confidence
+    "taste_episode":       0.4,   # D-04: MUST stay < MEMORY_DECAY_SALIENCE_FLOOR (0.5) — taste rows
+                                   # are genuinely sweep-eligible so fads age out (D-05 self-refresh design)
+}
+
+
+# --- Phase 13: Semantic Music Memory ---
+TASTE_DECAY_DAYS = 30                # D-03: shorter half-life than MEMORY_DECAY_DAYS=90 (Pitfall 5 — stale taste surfaced as current)
+TASTE_DISTILL_BATCH_HOUR = 5         # D-06: distinct UTC slot, clear of existing 02:30/03:00/04:00 loops (no Neon thundering-herd)
+TASTE_LOOKBACK_DAYS = 7              # D-07: rolling recent window for obsession/new-arrival detection
+TASTE_BASELINE_DAYS = 90             # bounded "before-window" span for steady/new-arrival baseline detection (index-friendly)
+TASTE_MIN_ACTIVITY_TRACKS = 5        # D-08: min tracks in window to bother distilling — skip inactive users
+TASTE_OBSESSION_MIN_PLAYS = 5        # plays_in_window at/above this → OBSESSION pattern
+TASTE_NEW_ARRIVAL_MIN_PLAYS = 3      # plays_in_window at/above this (with zero baseline plays) → NEW_ARRIVAL pattern
+TASTE_STEADY_MIN_BASELINE = 5        # plays_before_window at/above this → eligible for STEADY/DROPPED_OFF
+TASTE_BAND_HEAVY_PLAYS = 5           # qualitative band threshold: "played heavily" vs "a few times"
+TASTE_BAND_FEW_PLAYS = 2             # qualitative band threshold: floor for "a few times" phrasing
+
+# Per-kind decay-horizon override (D-03). Kinds absent from this map fall back to
+# MEMORY_DECAY_DAYS (90), preserving Phase 11 semantics unchanged. Consumed by
+# logic.taste.resolve_decay_days and the memory-service self-refresh (plan 13-03).
+MEMORY_DECAY_DAYS_BY_KIND: dict[str, int] = {
+    "taste_episode": TASTE_DECAY_DAYS,
 }
 
 
