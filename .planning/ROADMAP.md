@@ -63,7 +63,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Milestone Goal:** Turn Dexter's listening history into semantic long-term memory that powers a genuinely good DJ (smarter auto-queue, discovery, generative jams), memory-aware `/roast` + `/ask`, and proactive callbacks — plus vision/multimodal roasting — deepening the v1.2 RAG foundation on existing infra (`pgvector` + the separate 60 RPM embed limiter), at zero new cost.
 
-- [ ] **Phase 13: Semantic Music Memory** — new number-free `taste_episode` memory kind, its own salience/decay tier, background distillation task distinct from existing loops (foundation for everything below)
+- [x] **Phase 13: Semantic Music Memory** — new number-free `taste_episode` memory kind, its own salience/decay tier, background distillation task distinct from existing loops (foundation for everything below) (completed 2026-07-02)
 - [ ] **Phase 14: Smarter Music Brain** — taste-aware auto-queue (skip history as negative hint), artist/genre discovery command grounded in SQL co-occurrence, generative "continue this jam" suggestions
 - [ ] **Phase 15: RAG Reach** — `recall()` grounds `/roast @user` (target-scoped) and `/ask`; `/memory` view + `/memory forget` (verified hard-delete, the trust escape hatch)
 - [ ] **Phase 16: Proactive Memory Callbacks** — background surface volunteers a memory at an active moment, rarer than ambient roasts, with a per-user opt-out
@@ -96,7 +96,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 13-04-PLAN.md — taste_distill_batch @tasks.loop + 3-site boot registration
+- [x] 13-04-PLAN.md — taste_distill_batch @tasks.loop + 3-site boot registration
 
 ### Phase 14: Smarter Music Brain
 
@@ -172,7 +172,7 @@ Plans:
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete | 2026-06-27 |
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete (live-runtime UAT deferred) | 2026-06-29 |
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
-| 13. Semantic Music Memory | v1.3 | 3/4 | In Progress|  |
+| 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
 | 14. Smarter Music Brain | v1.3 | 0/TBD | Not started | - |
 | 15. RAG Reach | v1.3 | 0/TBD | Not started | - |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
