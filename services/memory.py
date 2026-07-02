@@ -349,16 +349,17 @@ class MemoryService:
     # distill — LLM-based episode extraction with stop-ship safety gates (MEM-05)
     # -------------------------------------------------------------------------
 
-    async def distill(self, raw_text: str) -> list[str]:
+    async def distill(self, raw_text: str, *, exempt_numbers: bool = False) -> list[str]:
         """Distill raw_text into 0-3 atomic, third-person, number-free episode facts.
 
         Full pipeline:
           1. Send raw_text to Gemini using DISTILL_PROMPT as the system instruction
              (priority=2 — background, never contends with user /ask at priority=1).
           2. Parse the JSON array response tolerantly (strip fences, find array in prose).
-          3. Apply stop-ship backstop: drop any fact where is_sensitive() or
-             contains_number() is True — the deterministic double-check after the
-             LLM primary gate (T-11-05a / T-11-05b / D-01..D-03).
+          3. Apply stop-ship backstop: drop any fact where is_sensitive() is True; also
+             drop contains_number() facts UNLESS exempt_numbers is set — the
+             deterministic double-check after the LLM primary gate (T-11-05a / T-11-05b
+             / D-01..D-03).
           4. Enforce 0-3 cap and return surviving facts.
 
         Returns [] when:
@@ -371,9 +372,16 @@ class MemoryService:
         Args:
             raw_text: The raw banter / notable-event context to distill. May
                       contain counts or PII — the distiller and backstop will drop them.
+            exempt_numbers: When True, skip the contains_number() backstop (is_sensitive
+                      still applies). Set only for kinds whose raw_text is number-free by
+                      construction and whose sole digit source is a legitimate artist name
+                      — e.g. taste_episode, where summarize_taste never interpolates a
+                      count so a digit can only come from an artist like "Blink-182" or
+                      "Twenty One Pilots" (WR-13-02). The taste accuracy firewall lives in
+                      summarize_taste's number-free templates, not here.
 
         Returns:
-            List of 0–3 atomic, safe, number-free fact strings.
+            List of 0–3 atomic, safe fact strings (number-free unless exempt_numbers).
         """
         try:
             raw = await self._gemini.chat(
@@ -433,8 +441,14 @@ class MemoryService:
                 log.debug(f"memory.distill: is_sensitive blocked: {f!r}")
                 continue
             if contains_number(f):
-                log.debug(f"memory.distill: contains_number blocked: {f!r}")
-                continue
+                if exempt_numbers:
+                    # taste_episode (WR-13-02): the digit is an artist name, not an
+                    # SQL-competing count — keep the fact but log the exemption so the
+                    # decision stays observable.
+                    log.debug(f"memory.distill: contains_number exempt (kept): {f!r}")
+                else:
+                    log.debug(f"memory.distill: contains_number blocked: {f!r}")
+                    continue
             safe.append(f)
             if len(safe) >= 3:   # enforce 0-3 cap before returning
                 break
@@ -476,7 +490,15 @@ class MemoryService:
             base_salience: Base salience weight from config.MEMORY_SALIENCE_BASE_WEIGHTS[kind].
         """
         try:
-            facts = await self.distill(raw_text)
+            # taste_episode facts derive from summarize_taste's number-free templates,
+            # so any digit in a produced fact is a legitimate artist name (e.g.
+            # "Blink-182", "Twenty One Pilots") rather than an SQL-known count. Exempt
+            # them from the contains_number backstop so those artists are not silently
+            # dropped (WR-13-02); is_sensitive still applies. Phase 11 kinds keep the
+            # full firewall unchanged.
+            facts = await self.distill(
+                raw_text, exempt_numbers=(kind == "taste_episode")
+            )
             salience = compute_salience(base_salience)
             for fact in facts:
                 await self.remember(
