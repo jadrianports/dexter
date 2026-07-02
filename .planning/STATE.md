@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
 status: executing
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-07-02T15:34:39.687Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-07-02T15:45:05.203Z"
 last_activity: 2026-07-02 -- Phase 14 execution started
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
   percent: 20
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 ## Current Position
 
 Phase: 14 (smarter-music-brain) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-02 -- Phase 14 execution started
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 13 P03 | 12min | 2 tasks | 2 files |
 | Phase 13 P04 | 11min | 2 tasks | 1 files |
 | Phase 14 P01 | 25min | 3 tasks | 6 files |
+| Phase 14 P02 | 18min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,7 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase 14]: OQ2 anchor discrepancy resolved as Option B - get_user_top_artist derives the /discover anchor from guild-scoped song_history, not the guild-less user_artist_counts table
 - [Phase 14]: OQ1 resolved - search_memories/recall kind param defaults to None and omits the SQL clause entirely when unset (never kind IS NULL), byte-identical to pre-Phase-14 behavior
 - [Phase 14]: get_artist_cooccurrence co-occurrence = same-guild-calendar-day bucket join over song_history, a guild-wide aggregate with no per-user attribution
+- [Phase 14]: select_positive_taste_context checks the cap BEFORE appending (not after, as in the RESEARCH.md reference snippet) so cap=0 returns [] instead of one item — Fixes an off-by-one bug found while writing the cap=0 test case (Rule 1)
 
 ### Pending Todos
 
@@ -106,7 +108,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T15:34:39.633Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-07-02T15:45:05.174Z
+Stopped at: Completed 14-02-PLAN.md
 Next: `/gsd-plan-phase 13`
 </content>

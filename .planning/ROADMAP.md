@@ -115,7 +115,7 @@ Plans:
 **Wave 1** *(shared substrate — parallel, no file overlap)*
 
 - [x] 14-01-PLAN.md — SQL substrate: get_recently_skipped / get_user_top_artist / get_artist_cooccurrence + kind-filtered recall (OQ1) + 6 config knobs
-- [ ] 14-02-PLAN.md — pure logic seams (is_recently_skipped_artist, select_positive_taste_context) + prompt builders (recommendation extension, discover-commentary, jam-suggestion)
+- [x] 14-02-PLAN.md — pure logic seams (is_recently_skipped_artist, select_positive_taste_context) + prompt builders (recommendation extension, discover-commentary, jam-suggestion)
 
 **Wave 2** *(consumer cogs — parallel, blocked on Wave 1)*
 
@@ -184,7 +184,7 @@ Plans:
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete (live-runtime UAT deferred) | 2026-06-29 |
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
-| 14. Smarter Music Brain | v1.3 | 1/5 | In Progress|  |
+| 14. Smarter Music Brain | v1.3 | 2/5 | In Progress|  |
 | 15. RAG Reach | v1.3 | 0/TBD | Not started | - |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |

@@ -21,7 +21,7 @@ Requirements for the v1.3 milestone. Each maps to a roadmap phase (13–17).
 
 - [x] **BRAIN-01**: Auto-queue is taste-aware — it incorporates the user's recent taste and `was_skipped` history as negative hints so it stops re-queueing tracks the user skips (Gemini-in-the-loop + SQL, not an ML model).
 - [x] **BRAIN-02**: A discovery command surfaces artist/genre adjacency from listening history via grounded co-occurrence SQL over `song_history`/`user_artist_counts` (multi-user-safe aggregate query; zero hallucination, zero cost).
-- [ ] **BRAIN-03**: Generative jam assist — Dexter can "continue this jam" / suggest additions to a server jam using taste context + Gemini, with hallucination validation (reuse `logic/autoqueue.py` token-set containment).
+- [x] **BRAIN-03**: Generative jam assist — Dexter can "continue this jam" / suggest additions to a server jam using taste context + Gemini, with hallucination validation (reuse `logic/autoqueue.py` token-set containment).
 
 ### RAG Reach *(Phase 15)*
 
@@ -78,7 +78,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | TASTE-03 | Phase 13 | Complete |
 | BRAIN-01 | Phase 14 | Complete |
 | BRAIN-02 | Phase 14 | Complete |
-| BRAIN-03 | Phase 14 | Pending |
+| BRAIN-03 | Phase 14 | Complete |
 | RAG-01 | Phase 15 | Pending |
 | RAG-02 | Phase 15 | Pending |
 | RAG-03 | Phase 15 | Pending |
