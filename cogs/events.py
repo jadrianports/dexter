@@ -9,6 +9,8 @@ import discord
 from discord.ext import commands
 
 import config
+import database
+from logic.proactive import should_fire_proactive_callback
 from logic.roasts import RoastScenario, decide_ambient_roast
 from models.user_profile import get_user_summary
 from personality import roasts
@@ -32,6 +34,12 @@ class EventsCog(commands.Cog):
         # Per-user ambient roast cooldown dict (join + leave + late-night combined)
         self._ambient_roast_times: dict[int, float] = {}
         self._idle_loneliness_posted: bool = False
+        # Phase 16 / PROACT-01: per-user daily fire counter for the proactive
+        # callback surface. str-keyed (matches recall()/database's str(user.id)
+        # convention, distinct from the int-keyed _ambient_roast_times above).
+        # In-memory only — a restart resetting this is harmless (rarer-is-fine,
+        # no durability requirement, D-02).
+        self._proactive_daily_counts: dict[str, tuple[str, int]] = {}
 
     # ──────────────────────────── COOLDOWN HELPERS ────────────────────────────
 
@@ -383,6 +391,85 @@ class EventsCog(commands.Cog):
 
         # Handle reactions / deflecting responses
         await self._handle_message_reactions(message)
+
+        # Phase 16 / PROACT-01: proactive callback gate — designated channel only,
+        # never a DM (Pitfall 2). message.author.bot already returned above.
+        if (
+            message.guild is not None
+            and config.DEXTER_CHANNEL_ID
+            and message.channel.id == config.DEXTER_CHANNEL_ID
+        ):
+            await self._maybe_fire_proactive_callback(message)
+
+    # ──────────────────────────── PROACTIVE CALLBACK ────────────────────────────
+
+    async def _maybe_fire_proactive_callback(self, message: discord.Message) -> None:
+        """Evaluate and, rarely, fire a proactive memory callback (PROACT-01/02).
+
+        D-02 firing order, short-circuit cheapest-first:
+          1. Opt-out check (database.get_proactive_opt_out).
+          2. Pure gate (should_fire_proactive_callback): chance roll + daily cap.
+          3. Recall floor: only fire if memory_service.recall() actually returns
+             a memory clearing MEMORY_SIMILARITY_FLOOR (Pitfall 8 — no memory
+             beats a wrong memory; silent skip on empty).
+          4. Generate via the reused _generate_ambient_roast pipeline
+             (pre_recalled_memories bypass — Pitfall 1) and reply, mentions
+             suppressed. The daily counter increments ONLY on an actual fire.
+        """
+        user_id = str(message.author.id)
+        opted_out = await database.get_proactive_opt_out(self.bot.pool, user_id)
+
+        # Community-time day key (STREAK_TIMEZONE convention — never naive
+        # datetime.now(), see on_voice_state_update above).
+        import datetime as _dt
+        from zoneinfo import ZoneInfo as _ZoneInfo
+        today = _dt.datetime.now(tz=_ZoneInfo(config.STREAK_TIMEZONE)).date().isoformat()
+
+        last_date, count = self._proactive_daily_counts.get(user_id, (today, 0))
+        daily_count = count if last_date == today else 0
+
+        if not should_fire_proactive_callback(
+            opted_out=opted_out,
+            chance_roll=random.random(),
+            daily_count=daily_count,
+        ):
+            return
+
+        memory_service = getattr(self.bot, "memory_service", None)
+        if memory_service is None:
+            return
+
+        try:
+            memories = await memory_service.recall(
+                user_id, str(message.guild.id), "a proactive callback moment"
+            )
+        except Exception as _mem_err:
+            log.debug("proactive callback: memory.recall failed (non-fatal): %s", _mem_err)
+            memories = []
+
+        if not memories:
+            # D-02 step 4 / Pitfall 8: no memory beats a wrong memory. Silent
+            # skip — no send, no counter increment.
+            return
+
+        line = await self._generate_ambient_roast(
+            message.author,
+            "{name} is here and dexter has a thought",
+            roasts.PROACTIVE_CALLBACK_FALLBACKS,
+            pre_recalled_memories=memories,
+        )
+
+        try:
+            await message.reply(
+                line,
+                allowed_mentions=discord.AllowedMentions.none(),
+                mention_author=False,
+            )
+        except discord.HTTPException:
+            return
+
+        # Counter increments only after a successful send (D-02: fire-only).
+        self._proactive_daily_counts[user_id] = (today, daily_count + 1)
 
 
 async def setup(bot: commands.Bot) -> None:
