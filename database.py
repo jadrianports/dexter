@@ -924,12 +924,14 @@ async def search_memories(
         k:               Max rows to return (config.MEMORY_TOP_K = 8).
 
     Returns:
-        List of asyncpg.Record rows with columns: id, fact, salience, hit_count,
+        List of asyncpg.Record rows with columns: id, fact, kind, salience, hit_count,
         created_at, last_seen_at, last_surfaced_at, surface_count, similarity.
+        ``kind`` lets callers (e.g. remember()'s dedup branch) gate behaviour on the
+        MATCHED row's kind, not the incoming write's kind (CR-13-01 / D-05 firewall).
     """
     async with pool.acquire() as conn:
         return await conn.fetch(
-            "SELECT id, fact, salience, hit_count, created_at, last_seen_at,"
+            "SELECT id, fact, kind, salience, hit_count, created_at, last_seen_at,"
             "       last_surfaced_at, surface_count,"
             "       1 - (embedding <=> $2) AS similarity"
             " FROM user_memories"

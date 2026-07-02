@@ -134,7 +134,9 @@ class TestRememberDedupRefreshWiring:
 
         now = datetime.now(timezone.utc)
         near_dup_row = {
-            "id": 42, "fact": "keeps coming back to Radiohead", "salience": 0.4,
+            "id": 42, "fact": "keeps coming back to Radiohead",
+            "kind": "taste_episode",  # matched row is itself a taste row → refresh fires
+            "salience": 0.4,
             "hit_count": 1, "created_at": now, "last_seen_at": now,
             "last_surfaced_at": None, "surface_count": 0,
             "similarity": 0.95,  # above MEMORY_DEDUP_THRESHOLD
@@ -179,7 +181,9 @@ class TestRememberDedupRefreshWiring:
 
         now = datetime.now(timezone.utc)
         near_dup_row = {
-            "id": 7, "fact": "hit a songs milestone", "salience": 1.0,
+            "id": 7, "fact": "hit a songs milestone",
+            "kind": "milestone",  # matched row is a Phase 11 kind → must NOT refresh
+            "salience": 1.0,
             "hit_count": 1, "created_at": now, "last_seen_at": now,
             "last_surfaced_at": None, "surface_count": 0,
             "similarity": 0.95,
@@ -219,6 +223,63 @@ class TestRememberDedupRefreshWiring:
         assert refresh_calls == [], (
             "milestone (a Phase 11 kind absent from MEMORY_DECAY_DAYS_BY_KIND) "
             "must NEVER call refresh_memory_expiry on dedup"
+        )
+
+    def test_taste_episode_near_duping_daily_batch_does_not_refresh(self) -> None:
+        """CR-13-01 leak path: a taste_episode WRITE whose nearest neighbour is an
+        existing Phase 11 daily_batch row must NOT refresh that row's expires_at.
+
+        The k=1 ANN is scoped by user_id only (no kind filter), so this cross-kind
+        dedup hit is fully reachable. The refresh gate keys off the MATCHED row's
+        kind (daily_batch → absent from MEMORY_DECAY_DAYS_BY_KIND), so the Phase 11
+        row's 90-day decay horizon is left untouched.
+        """
+        import database
+
+        now = datetime.now(timezone.utc)
+        near_dup_row = {
+            "id": 99, "fact": "they keep replaying radiohead",
+            "kind": "daily_batch",  # a Phase 11 row — the leak target
+            "salience": 0.2,
+            "hit_count": 1, "created_at": now, "last_seen_at": now,
+            "last_surfaced_at": None, "surface_count": 0,
+            "similarity": 0.95,  # above MEMORY_DEDUP_THRESHOLD
+        }
+
+        svc = _make_service()
+        bumped_ids: list = []
+        refresh_calls: list = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k):
+            return [_DictRecord(near_dup_row)]
+
+        async def fake_bump_hit(pool, memory_id):
+            bumped_ids.append(memory_id)
+
+        async def fake_refresh(pool, memory_id, expires_at):
+            refresh_calls.append((memory_id, expires_at))
+
+        orig_search = database.search_memories
+        orig_bump = database.bump_memory_hit
+        orig_refresh = database.refresh_memory_expiry
+        database.search_memories = fake_search
+        database.bump_memory_hit = fake_bump_hit
+        database.refresh_memory_expiry = fake_refresh
+        try:
+            asyncio.run(svc.remember(
+                user_id="u1", guild_id="g1",
+                fact_text="keeps coming back to radiohead",
+                kind="taste_episode", salience=0.4,  # INCOMING kind is short-decay...
+            ))
+        finally:
+            database.search_memories = orig_search
+            database.bump_memory_hit = orig_bump
+            database.refresh_memory_expiry = orig_refresh
+
+        assert bumped_ids == [99], "Dedup hit must still bump hit_count"
+        assert refresh_calls == [], (
+            "A taste_episode near-duping a Phase 11 daily_batch row must NOT refresh "
+            "that row's expires_at — the gate keys off the MATCHED row's kind (CR-13-01)"
         )
 
     def test_taste_episode_insert_uses_taste_decay_horizon(self) -> None:

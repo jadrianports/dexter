@@ -201,10 +201,12 @@ class MemoryService:
              priority-2 background never blocks a user interaction, T-11-04d).
           2. Search the user's nearest existing memory (k=1).
           3. If a row exists and dedup_decision(row_similarity, threshold) is True:
-             bump the existing row's hit_count (near-duplicate — do NOT insert). For
-             kinds present in config.MEMORY_DECAY_DAYS_BY_KIND (e.g. taste_episode)
-             also refresh the row's expires_at to a fresh short-decay horizon (D-05
-             self-refresh) — Phase 11 kinds are absent from that map and never refresh.
+             bump the existing row's hit_count (near-duplicate — do NOT insert). When
+             the MATCHED ROW's own kind is present in config.MEMORY_DECAY_DAYS_BY_KIND
+             (e.g. taste_episode) also refresh that row's expires_at to a fresh
+             short-decay horizon (D-05 self-refresh). Gating on the matched row's kind
+             — not the incoming write's kind — keeps Phase 11 rows (absent from that
+             map) untouched even when a taste_episode near-dups one (CR-13-01).
           4. Otherwise: insert a new row with a kind-aware expiry horizon — resolved
              via resolve_decay_days(kind, ...) so taste_episode inserts at the shorter
              TASTE_DECAY_DAYS while every Phase 11 kind keeps MEMORY_DECAY_DAYS (D-03).
@@ -251,6 +253,7 @@ class MemoryService:
             if rows:
                 nearest_sim = float(rows[0]["similarity"])
                 nearest_id = int(rows[0]["id"])
+                nearest_kind = rows[0]["kind"]
                 if dedup_decision(nearest_sim, config.MEMORY_DEDUP_THRESHOLD):
                     # Near-duplicate: bump existing row, skip insert (MEM-04)
                     await database.bump_memory_hit(self._pool, nearest_id)
@@ -258,11 +261,15 @@ class MemoryService:
                     # D-05 self-refresh: short-decay kinds (e.g. taste_episode) reset their
                     # expiry horizon on every re-distillation instead of aging out under a
                     # shorter TASTE_DECAY_DAYS while remaining true. Gated strictly on the
-                    # kind_overrides map so Phase 11 kinds (absent from the map) are never
-                    # touched — dedup stays byte-identical for them (13-PATTERNS.md D-05).
-                    if kind in config.MEMORY_DECAY_DAYS_BY_KIND:
+                    # MATCHED ROW's kind — not the incoming write's kind (CR-13-01). The
+                    # k=1 ANN search is scoped by user_id only, so a taste_episode write
+                    # can near-dup an existing Phase 11 row (e.g. daily_batch); refreshing
+                    # that row's expires_at would silently violate the "Phase 11 kinds are
+                    # never touched" invariant (defeat decay / shorten horizon). Gating on
+                    # nearest_kind guarantees only rows that ARE short-decay kinds refresh.
+                    if nearest_kind in config.MEMORY_DECAY_DAYS_BY_KIND:
                         new_expires = datetime.now(timezone.utc) + timedelta(
-                            days=config.MEMORY_DECAY_DAYS_BY_KIND[kind]
+                            days=config.MEMORY_DECAY_DAYS_BY_KIND[nearest_kind]
                         )
                         await database.refresh_memory_expiry(self._pool, nearest_id, new_expires)
                         refresh_note = ", refreshed expires_at (D-05 self-refresh)"
