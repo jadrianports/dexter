@@ -1347,3 +1347,100 @@ async def get_user_artist_activity(
             " GROUP BY artist",
             guild_id, user_id, since, baseline_since,
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 14: Smarter Music Brain — guild/invoker-scoped aggregate helpers
+# (BRAIN-01/BRAIN-02)
+# ---------------------------------------------------------------------------
+
+
+async def get_recently_skipped(
+    pool: asyncpg.Pool, *, guild_id: str, since: datetime, limit: int
+) -> list[asyncpg.Record]:
+    """Return recently-skipped (title, artist) rows for a guild's auto-queue negative hint.
+
+    Phase 14: Smarter Music Brain (D-01). Guild-scoped only (WHERE guild_id = $1) —
+    this is a collective "the server keeps skipping this" signal, NOT per-user. The
+    result deliberately carries NO user_id column, so no per-user attribution is
+    possible (Criterion 4 / T-14-02). `since` bounds the lookback window and is a
+    Python datetime bound as $2 (never string-interpolated); `queued_at > $2` keeps
+    the scan index-friendly against idx_history_guild. All values bound as $1/$2/$3
+    positional params — no string interpolation (T-14-01).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT title, artist"
+            " FROM song_history"
+            " WHERE guild_id = $1 AND was_skipped = true AND queued_at > $2"
+            " ORDER BY queued_at DESC"
+            " LIMIT $3",
+            guild_id, since, limit,
+        )
+
+
+async def get_user_top_artist(
+    pool: asyncpg.Pool, *, guild_id: str, user_id: str, limit: int
+) -> list[asyncpg.Record]:
+    """Return the invoker's top artists (by play count) in this guild, for /discover's anchor.
+
+    Phase 14: Smarter Music Brain (D-04, OQ2 anchor decision = Option B). Scoped to
+    BOTH guild_id ($1) and user_id ($2) — the invoker's own data (Criterion 4 safe).
+
+    Option B over user_artist_counts: user_artist_counts has NO guild_id column
+    (it tracks lifetime cross-server counts), so anchoring /discover on it would
+    surface a cross-guild-flavored "top artist" even on a server the invoker never
+    played it on (Pitfall 2 UX surprise). This helper instead derives a guild-scoped
+    equivalent directly from song_history, matching get_user_artist_activity's
+    guild+user scoping discipline (D-08 template) so the anchor stays guild-authentic.
+
+    All values bound as $1/$2/$3 positional params — no string interpolation.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT artist, COUNT(*) AS play_count"
+            " FROM song_history"
+            " WHERE guild_id = $1 AND user_id = $2 AND artist IS NOT NULL"
+            " GROUP BY artist"
+            " ORDER BY play_count DESC"
+            " LIMIT $3",
+            guild_id, user_id, limit,
+        )
+
+
+async def get_artist_cooccurrence(
+    pool: asyncpg.Pool, *, guild_id: str, anchor_artist: str, since: datetime, limit: int
+) -> list[asyncpg.Record]:
+    """Return artists that co-occur with anchor_artist on the same guild-day, for /discover.
+
+    Phase 14: Smarter Music Brain (D-04, OQ2 definition). Co-occurrence is defined
+    as a same-guild-calendar-day bucket join over song_history: first find every
+    calendar day (date_trunc('day', queued_at)) on which anchor_artist was played
+    in this guild since the cutoff, then find all OTHER artists played in this
+    guild on those same days, ranked by frequency.
+
+    Guild-WIDE aggregate — the entity is the artist, NOT the user (mirrors
+    get_leaderboard_skips's no-attribution discipline). The result exposes NO
+    user_id column; rows may span multiple users' plays, but Criterion 4 still
+    holds because the result only ever names artists, never users (T-14-02).
+
+    All values bound as $1/$2/$3/$4 positional params — no string interpolation
+    (T-14-01).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "WITH anchor_days AS ("
+            "  SELECT DISTINCT date_trunc('day', queued_at) AS play_day"
+            "  FROM song_history"
+            "  WHERE guild_id = $1 AND artist = $2 AND queued_at > $3"
+            ")"
+            " SELECT sh.artist, COUNT(*) AS co_occurrence"
+            " FROM song_history sh"
+            " JOIN anchor_days ad ON date_trunc('day', sh.queued_at) = ad.play_day"
+            " WHERE sh.guild_id = $1 AND sh.artist IS NOT NULL"
+            "   AND sh.artist <> $2 AND sh.queued_at > $3"
+            " GROUP BY sh.artist"
+            " ORDER BY co_occurrence DESC"
+            " LIMIT $4",
+            guild_id, anchor_artist, since, limit,
+        )
