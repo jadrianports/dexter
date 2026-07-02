@@ -248,6 +248,7 @@ class MemoryCog(commands.Cog):
             embed=view._build_embed(),
             view=view,
             ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
         )
         view.message = await interaction.original_response()
 
