@@ -87,3 +87,27 @@ def validate_youtube_match(
     title_ok = (not title_tokens) or title_tokens.issubset(yt_tokens)
     artist_ok = (not artist_tokens) or artist_tokens.issubset(yt_tokens)
     return title_ok and artist_ok
+
+
+def is_recently_skipped_artist(candidate_artist: str, skipped_artists: list[str]) -> bool:
+    """Return True if candidate_artist's normalized tokens match any recently-skipped artist.
+
+    Belt-and-suspenders hard filter (D-02) alongside the soft prompt instruction that
+    tells Gemini to avoid recently-skipped artists — this function runs independently
+    of validate_youtube_match (the hallucination guard, unchanged) as a second,
+    unrelated gate over the same candidate.
+
+    Pure and side-effect-free: no Discord imports, no asyncio, no database calls, no
+    random, no datetime.now(). Reuses the module's existing _normalize_for_match —
+    does NOT duplicate the tokenizer and does NOT use difflib (D-12 anti-pattern).
+
+    Empty candidate_artist or empty skipped_artists -> False (vacuous, never blocks).
+    """
+    candidate_tokens = _normalize_for_match(candidate_artist)
+    if not candidate_tokens:
+        return False
+    for skipped in skipped_artists:
+        skipped_tokens = _normalize_for_match(skipped)
+        if skipped_tokens and skipped_tokens.issubset(candidate_tokens):
+            return True
+    return False

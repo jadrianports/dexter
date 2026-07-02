@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import pytest
 
-from logic.autoqueue import _normalize_for_match, validate_youtube_match
+from logic.autoqueue import (
+    _normalize_for_match,
+    is_recently_skipped_artist,
+    validate_youtube_match,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +150,38 @@ def test_validate_youtube_match_rejects_mismatch():
         "Bohemian Rhapsody",
         "Queen",
     ) is False
+
+
+# ---------------------------------------------------------------------------
+# TestIsRecentlySkippedArtist — D-02 hard post-filter (Phase 14 / BRAIN-01)
+# ---------------------------------------------------------------------------
+
+
+class TestIsRecentlySkippedArtist:
+    def test_subset_match_returns_true(self):
+        """Normalized token subset match is a positive hit."""
+        assert is_recently_skipped_artist(
+            "Phoebe Bridgers", ["phoebe bridgers"]
+        ) is True
+
+    def test_no_overlap_returns_false(self):
+        """No token overlap between candidate and skip list."""
+        assert is_recently_skipped_artist("Drake", ["Phoebe Bridgers"]) is False
+
+    def test_empty_candidate_never_blocks(self):
+        """Empty candidate artist -> False, vacuous (never blocks)."""
+        assert is_recently_skipped_artist("", ["Phoebe Bridgers"]) is False
+
+    def test_empty_skip_list_never_blocks(self):
+        """Empty skipped_artists list -> False, vacuous (never blocks)."""
+        assert is_recently_skipped_artist("Drake", []) is False
+
+    def test_noise_and_stop_word_tokens_ignored(self):
+        """Noise/stop-word tokens (official, video, the) are ignored via
+        _normalize_for_match, same as validate_youtube_match."""
+        assert is_recently_skipped_artist(
+            "The Official Drake Video", ["drake"]
+        ) is True
 
 
 # ---------------------------------------------------------------------------
