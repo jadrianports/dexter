@@ -439,7 +439,7 @@ async def _initialize_once() -> None:
     bot.queue_persistence = QueuePersistenceService(bot.pool)
 
     # Load cogs (idempotent — a retry after a partial init must not double-load)
-    for _ext in ("cogs.music", "cogs.help", "cogs.events", "cogs.library", "cogs.ops"):
+    for _ext in ("cogs.music", "cogs.help", "cogs.events", "cogs.library", "cogs.ops", "cogs.memory"):
         if _ext not in bot.extensions:
             await bot.load_extension(_ext)
     if hasattr(bot, "gemini_service"):
@@ -1123,6 +1123,7 @@ async def first_run(guild_id: str | None = None):
     await bot.load_extension("cogs.events")
     await bot.load_extension("cogs.library")
     await bot.load_extension("cogs.ops")
+    await bot.load_extension("cogs.memory")
     if os.getenv("GEMINI_API_KEY"):
         await bot.load_extension("cogs.ai")
         await bot.load_extension("cogs.imagine")
