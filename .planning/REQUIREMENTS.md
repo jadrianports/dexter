@@ -38,7 +38,7 @@ Requirements for the v1.3 milestone. Each maps to a roadmap phase (13–17).
 ### Vision / Multimodal Roasting *(Phase 17 — last, isolated blast radius)*
 
 - [x] **VIS-01**: Dexter reacts to / roasts images posted in the designated chat via `gemini-2.5-flash` vision input (`types.Part.from_bytes`), cadence-gated (chance + per-user cooldown + priority-2), with a `MAX_VISION_IMAGE_BYTES` size guard and mime-type check before download.
-- [ ] **VIS-02**: Content-safety guardrails — explicit `safety_settings` on the vision call **plus** an app-level hard-rule layer; a safety block on an unprompted reaction **silently skips** (no visible refusal, never routed through the generic template fallback used for rate-limit/API-down cases).
+- [x] **VIS-02**: Content-safety guardrails — explicit `safety_settings` on the vision call **plus** an app-level hard-rule layer; a safety block on an unprompted reaction **silently skips** (no visible refusal, never routed through the generic template fallback used for rate-limit/API-down cases).
 - [x] **VIS-03**: `safety_settings` are applied consistently to Gemini calls that can receive user-influenced content; decide during the phase whether to retrofit `/ask` + `/imagine` (Gemini 2.5 defaults safety OFF) or scope strictly to vision.
 
 ## v2 Requirements
@@ -86,7 +86,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PROACT-01 | Phase 16 | Complete |
 | PROACT-02 | Phase 16 | Complete |
 | VIS-01 | Phase 17 | Complete |
-| VIS-02 | Phase 17 | Pending |
+| VIS-02 | Phase 17 | Complete |
 | VIS-03 | Phase 17 | Complete |
 
 **Coverage:**

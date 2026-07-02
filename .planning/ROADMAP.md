@@ -67,7 +67,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 14: Smarter Music Brain** — taste-aware auto-queue (skip history as negative hint), artist/genre discovery command grounded in SQL co-occurrence, generative "continue this jam" suggestions (completed 2026-07-02)
 - [x] **Phase 15: RAG Reach** — `recall()` grounds `/roast @user` (target-scoped) and `/ask`; `/memory` view + `/memory forget` (verified hard-delete, the trust escape hatch) (completed 2026-07-02)
 - [x] **Phase 16: Proactive Memory Callbacks** — background surface volunteers a memory at an active moment, rarer than ambient roasts, with a per-user opt-out (completed 2026-07-02)
-- [ ] **Phase 17: Vision / Multimodal Roasting** — cadence-gated, safety-guarded image reactions via `gemini-2.5-flash` vision, sequenced last for blast-radius reasons
+- [x] **Phase 17: Vision / Multimodal Roasting** — cadence-gated, safety-guarded image reactions via `gemini-2.5-flash` vision, sequenced last for blast-radius reasons (completed 2026-07-02)
 
 ## Phase Details
 
@@ -189,7 +189,7 @@ Plans:
 
 **Wave 2** *(events glue — blocked on 17-01)*
 
-- [ ] 17-02-PLAN.md — `build_vision_prompt` conduct clause + `VISION_ROAST_FALLBACKS` (transport-only) + `cogs/events.py` glue (before-download mime/size gate, dedicated str|None generator, `_maybe_fire_vision_roast`, on_message dispatch, opt-out reuse) + behavioral tests (VIS-01, VIS-02)
+- [x] 17-02-PLAN.md — `build_vision_prompt` conduct clause + `VISION_ROAST_FALLBACKS` (transport-only) + `cogs/events.py` glue (before-download mime/size gate, dedicated str|None generator, `_maybe_fire_vision_roast`, on_message dispatch, opt-out reuse) + behavioral tests (VIS-01, VIS-02)
 
 ## Progress
 
@@ -214,4 +214,4 @@ Plans:
 | 14. Smarter Music Brain | v1.3 | 5/5 | Complete    | 2026-07-02 |
 | 15. RAG Reach | v1.3 | 3/3 | Complete    | 2026-07-02 |
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete    | 2026-07-02 |
-| 17. Vision / Multimodal Roasting | v1.3 | 1/2 | In Progress|  |
+| 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete   | 2026-07-02 |
