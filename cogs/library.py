@@ -43,6 +43,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
+from cogs.ai import parse_suggestions
 from database import (
     add_favorite,
     count_favorites,
@@ -59,7 +60,9 @@ from database import (
     delete_jam,
     count_jams,
 )
+from logic.autoqueue import validate_youtube_match
 from models.queue import Track, QueueFullError
+from personality.prompts import build_jam_suggestion_prompt
 from personality.responses import (
     pick_random,
     FAVORITE_SAVED,
@@ -1036,6 +1039,139 @@ class LibraryCog(commands.Cog):
         log.info("Guild %s: jam '%s' deleted by user %s", guild_id, name, interaction.user.id)
         await interaction.response.send_message(
             f"deleted jam \"{name}\".", ephemeral=True
+        )
+
+    @jam.command(
+        name="suggest",
+        description="Get validation-gated AI suggestions for a jam",
+    )
+    @app_commands.describe(name="Name of the jam to riff on")
+    async def jam_suggest(
+        self, interaction: discord.Interaction, name: str
+    ) -> None:
+        """/jam suggest <name> — seed Gemini with the named jam's EXISTING tracks and
+        request additions (D-06). EVERY suggestion is validated against real YouTube
+        search results via validate_youtube_match (reused verbatim from the auto-queue
+        hallucination guard — NOT reimplemented, NOT difflib) before it is ever offered
+        (BRAIN-03 hard requirement). Propose-and-confirm (D-07): the validated
+        candidates are shown and the shared jam snapshot is written ONLY inside the
+        confirm view's Confirm callback — never here, never before the user presses it.
+        A non-existent jam name returns an in-character message and never crashes,
+        since D-06 seeds from tracks that must already exist.
+        """
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "this only works in a server.", ephemeral=True
+            )
+            return
+
+        name = name.strip()
+        if not name:
+            await interaction.response.send_message(
+                "jam name can't be empty.", ephemeral=True
+            )
+            return
+
+        if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
+            await interaction.response.send_message(
+                f"that name is too long. keep it under {config.PLAYLIST_NAME_MAX_LENGTH} chars.",
+                ephemeral=True,
+            )
+            return
+
+        music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
+        if music_cog is None:
+            await interaction.response.send_message(
+                "music isn't loaded right now.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        guild_id = str(guild.id)
+
+        # D-06: seed from the jam's EXISTING tracks. Unlike jam_add's create-on-miss
+        # semantics, a jam that doesn't exist yet has nothing to riff on — in-character
+        # message, never a crash.
+        existing = await get_jam(self.bot.pool, guild_id=guild_id, name=name)
+        if existing is None:
+            await interaction.followup.send(
+                f"i don't have a jam called \"{name}\" to riff on. check /jam list.",
+                ephemeral=True,
+            )
+            return
+
+        gemini_service = getattr(self.bot, "gemini_service", None)
+        if gemini_service is None:
+            await interaction.followup.send(
+                "the brain's offline right now. try again later.", ephemeral=True
+            )
+            return
+
+        prompt = build_jam_suggestion_prompt(existing, count=config.JAM_SUGGEST_CANDIDATE_COUNT)
+        try:
+            response = await gemini_service.chat(prompt, [], priority=2)
+        except Exception as exc:
+            log.debug("jam suggest: gemini call failed for jam '%s' (%s)", name, exc)
+            response = None
+
+        suggestions = parse_suggestions(response) if response else None
+        validated_candidates: list[dict] = []
+        if suggestions:
+            # BRAIN-03 hard requirement: EVERY suggestion is re-validated against real
+            # YouTube search results before it is ever offered — reused verbatim from
+            # the auto-queue validation loop (cogs/ai.py::try_auto_queue).
+            for suggestion in suggestions:
+                search_query = f"{suggestion['title']} {suggestion['artist']}"
+                try:
+                    results = await self.bot.youtube_service.async_search(
+                        search_query, count=config.AUTO_QUEUE_SEARCH_CANDIDATES
+                    )
+                except Exception as exc:
+                    log.debug(
+                        "jam suggest: async_search failed for '%s' (%s)", search_query, exc
+                    )
+                    continue
+                if not results:
+                    continue
+
+                validated = None
+                for result in results:
+                    if validate_youtube_match(
+                        result.get("title", ""), suggestion["title"], suggestion["artist"]
+                    ):
+                        validated = result
+                        break
+
+                if validated is None:
+                    # No candidate passed validation for this suggestion — drop it,
+                    # don't error (D-07).
+                    continue
+
+                validated_candidates.append({
+                    "title": validated.get("title") or suggestion["title"],
+                    "artist": suggestion["artist"],
+                    "url": validated.get("url"),
+                })
+
+        # D-07: if none survive validation, say so in character and leave the jam
+        # snapshot completely untouched — no save_jam call is reachable on this path.
+        if not validated_candidates:
+            await interaction.followup.send(
+                f"nothing landed for \"{name}\" — every suggestion failed the youtube check.",
+                ephemeral=True,
+            )
+            return
+
+        lines = "\n".join(
+            f"- {c['title']} by {c['artist']}" for c in validated_candidates
+        )
+        # Task 2 wires the propose-and-confirm view here (D-07) — placeholder
+        # send only, no save_jam call is reachable from this function.
+        await interaction.followup.send(
+            f"here's what i'd add to \"{name}\":\n{lines}",
+            ephemeral=True,
         )
 
 
