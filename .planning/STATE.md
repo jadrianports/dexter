@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
 status: executing
-stopped_at: Phase 14 context gathered
-last_updated: "2026-07-02T15:15:34.032Z"
-last_activity: 2026-07-02 -- Phase 13 marked complete
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-07-02T15:34:39.687Z"
+last_activity: 2026-07-02 -- Phase 14 execution started
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 9
+  completed_plans: 5
   percent: 20
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-02)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 13 — semantic-music-memory
+**Current focus:** Phase 14 — smarter-music-brain
 
 ## Current Position
 
-Phase: 13 — COMPLETE
-Plan: 4 of 4
+Phase: 14 (smarter-music-brain) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-07-02 -- Phase 13 marked complete
+Last activity: 2026-07-02 -- Phase 14 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 13 P02 | 10min | 2 tasks | 2 files |
 | Phase 13 P03 | 12min | 2 tasks | 2 files |
 | Phase 13 P04 | 11min | 2 tasks | 1 files |
+| Phase 14 P01 | 25min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,9 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase 13]: remember() dedup/insert branches gate strictly on kind in MEMORY_DECAY_DAYS_BY_KIND (D-05 fix) so taste_episode self-refreshes expires_at on dedup while all Phase 11 kinds stay byte-identical
 - [Phase ?]: [Phase 13]: taste_distill_batch scheduled at TASTE_DISTILL_BATCH_HOUR (05:00 UTC), the only free slot distinct from cache_cleanup/memory_sweep/memory_distill_batch/ytdlp_update, per D-06/D-07
 - [Phase ?]: [Phase 13]: taste_distill_batch carries guild_id through to distill_and_remember (unlike daily_batch's None) since taste is guild-scoped listening
+- [Phase 14]: OQ2 anchor discrepancy resolved as Option B - get_user_top_artist derives the /discover anchor from guild-scoped song_history, not the guild-less user_artist_counts table
+- [Phase 14]: OQ1 resolved - search_memories/recall kind param defaults to None and omits the SQL clause entirely when unset (never kind IS NULL), byte-identical to pre-Phase-14 behavior
+- [Phase 14]: get_artist_cooccurrence co-occurrence = same-guild-calendar-day bucket join over song_history, a guild-wide aggregate with no per-user attribution
 
 ### Pending Todos
 
@@ -102,7 +106,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T14:38:38.911Z
-Stopped at: Phase 14 context gathered
+Last session: 2026-07-02T15:34:39.633Z
+Stopped at: Completed 14-01-PLAN.md
 Next: `/gsd-plan-phase 13`
 </content>
