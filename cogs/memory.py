@@ -41,18 +41,31 @@ import database
 from utils.logger import log
 
 
-def _chunk_facts_into_pages(facts: list[str], per_page: int) -> list[str]:
+def _chunk_facts_into_pages(facts: list[str], char_budget: int) -> list[str]:
     """Group a flat list of fact strings into pre-rendered page strings.
 
-    Each page is a newline-joined, bulleted block of up to `per_page` facts.
-    Facts are rendered VERBATIM (D-02) — no truncation, no rewrite.
+    Each page is a newline-joined, bulleted block of facts bounded by
+    `char_budget` total characters — mirrors services/lyrics.py::chunk_lyrics,
+    which bounds on config.LYRICS_PAGE_SIZE for the same reason: staying under
+    Discord's 4096-char embed description limit regardless of how many facts
+    (or how long any single fact) land on a page (WR-03). Facts are rendered
+    VERBATIM (D-02) — no truncation, no rewrite.
     """
     if not facts:
         return [""]
     pages: list[str] = []
-    for start in range(0, len(facts), per_page):
-        chunk = facts[start : start + per_page]
-        pages.append("\n".join(f"- {fact}" for fact in chunk))
+    current: list[str] = []
+    current_len = 0
+    for fact in facts:
+        line = f"- {fact}"
+        # +1 for the newline separator that will be added between lines
+        if current and current_len + len(line) + 1 > char_budget:
+            pages.append("\n".join(current))
+            current, current_len = [], 0
+        current.append(line)
+        current_len += len(line) + 1
+    if current:
+        pages.append("\n".join(current))
     return pages
 
 
