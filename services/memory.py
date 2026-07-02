@@ -23,6 +23,7 @@ import database
 import json
 import re as _re
 
+from logic.taste import resolve_decay_days
 from models.memory import (
     MemoryFact,
     apply_floor,
@@ -200,8 +201,13 @@ class MemoryService:
              priority-2 background never blocks a user interaction, T-11-04d).
           2. Search the user's nearest existing memory (k=1).
           3. If a row exists and dedup_decision(row_similarity, threshold) is True:
-             bump the existing row's hit_count (near-duplicate — do NOT insert).
-          4. Otherwise: insert a new row with a MEMORY_DECAY_DAYS expiry horizon.
+             bump the existing row's hit_count (near-duplicate — do NOT insert). For
+             kinds present in config.MEMORY_DECAY_DAYS_BY_KIND (e.g. taste_episode)
+             also refresh the row's expires_at to a fresh short-decay horizon (D-05
+             self-refresh) — Phase 11 kinds are absent from that map and never refresh.
+          4. Otherwise: insert a new row with a kind-aware expiry horizon — resolved
+             via resolve_decay_days(kind, ...) so taste_episode inserts at the shorter
+             TASTE_DECAY_DAYS while every Phase 11 kind keeps MEMORY_DECAY_DAYS (D-03).
           5. After insert: count_user_memories. If count > MEMORY_MAX_PER_USER:
              - Fetch all user facts via get_user_memories_for_eviction.
              - choose_eviction(facts, cap) → ids of lowest-value memories.
@@ -248,15 +254,35 @@ class MemoryService:
                 if dedup_decision(nearest_sim, config.MEMORY_DEDUP_THRESHOLD):
                     # Near-duplicate: bump existing row, skip insert (MEM-04)
                     await database.bump_memory_hit(self._pool, nearest_id)
+                    refresh_note = ""
+                    # D-05 self-refresh: short-decay kinds (e.g. taste_episode) reset their
+                    # expiry horizon on every re-distillation instead of aging out under a
+                    # shorter TASTE_DECAY_DAYS while remaining true. Gated strictly on the
+                    # kind_overrides map so Phase 11 kinds (absent from the map) are never
+                    # touched — dedup stays byte-identical for them (13-PATTERNS.md D-05).
+                    if kind in config.MEMORY_DECAY_DAYS_BY_KIND:
+                        new_expires = datetime.now(timezone.utc) + timedelta(
+                            days=config.MEMORY_DECAY_DAYS_BY_KIND[kind]
+                        )
+                        await database.refresh_memory_expiry(self._pool, nearest_id, new_expires)
+                        refresh_note = ", refreshed expires_at (D-05 self-refresh)"
                     log.debug(
                         f"memory.remember: near-dup detected (sim={nearest_sim:.3f} >= "
                         f"{config.MEMORY_DEDUP_THRESHOLD}), bumped id={nearest_id} "
-                        f"user={user_id} kind={kind}"
+                        f"user={user_id} kind={kind}{refresh_note}"
                     )
                     return
 
-            # Step 4 — insert new row with decay horizon
-            expires_at = datetime.now(timezone.utc) + timedelta(days=config.MEMORY_DECAY_DAYS)
+            # Step 4 — insert new row with decay horizon (D-03: kind-aware, e.g. taste_episode
+            # gets the shorter TASTE_DECAY_DAYS horizon via config.MEMORY_DECAY_DAYS_BY_KIND;
+            # every other kind falls back to config.MEMORY_DECAY_DAYS, byte-identical to Phase 11)
+            expires_at = datetime.now(timezone.utc) + timedelta(
+                days=resolve_decay_days(
+                    kind,
+                    default_days=config.MEMORY_DECAY_DAYS,
+                    kind_overrides=config.MEMORY_DECAY_DAYS_BY_KIND,
+                )
+            )
             new_id = await database.insert_memory(
                 self._pool,
                 user_id=user_id,
