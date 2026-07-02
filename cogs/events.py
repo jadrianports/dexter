@@ -435,8 +435,27 @@ class EventsCog(commands.Cog):
         ):
             return
 
+        # WR-01: reserve the slot immediately once the gate passes, before any
+        # further awaits. A concurrent on_message for the same user then reads
+        # the incremented count and is capped by should_fire_proactive_callback
+        # above -- this closes the TOCTOU window across the recall/generate/reply
+        # awaits below (two interleaved messages could otherwise both observe
+        # daily_count == 0 and both fire). Rolled back to the exact
+        # pre-reservation state (present-or-absent) on every path below that
+        # does not end in an actual fire.
+        _had_entry = user_id in self._proactive_daily_counts
+        _prior_value = self._proactive_daily_counts.get(user_id)
+        self._proactive_daily_counts[user_id] = (today, daily_count + 1)
+
+        def _release_reserved_slot() -> None:
+            if _had_entry:
+                self._proactive_daily_counts[user_id] = _prior_value
+            else:
+                self._proactive_daily_counts.pop(user_id, None)
+
         memory_service = getattr(self.bot, "memory_service", None)
         if memory_service is None:
+            _release_reserved_slot()
             return
 
         # WR-03: anchor recall on the actual triggering message text so it can
@@ -457,6 +476,7 @@ class EventsCog(commands.Cog):
         if not memories:
             # D-02 step 4 / Pitfall 8: no memory beats a wrong memory. Silent
             # skip — no send, no counter increment.
+            _release_reserved_slot()
             return
 
         line = await self._generate_ambient_roast(
@@ -473,10 +493,12 @@ class EventsCog(commands.Cog):
                 mention_author=False,
             )
         except discord.HTTPException:
+            _release_reserved_slot()
             return
 
-        # Counter increments only after a successful send (D-02: fire-only).
-        self._proactive_daily_counts[user_id] = (today, daily_count + 1)
+        # Counter was already reserved (incremented) up front above (WR-01) —
+        # the successful send simply confirms the reservation; nothing further
+        # to write here.
 
 
 async def setup(bot: commands.Bot) -> None:
