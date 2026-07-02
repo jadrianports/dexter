@@ -105,3 +105,55 @@ class TestPhase15HelpersExist:
             f"delete_all_user_memories must accept exactly ['pool', 'user_id'] "
             f"— no second identity parameter, ever; got {params}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Live-DB integration test — Success Criterion 4 (15-01 Task 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(_SKIP_LIVE, reason=_skip_reason)
+@pytest.mark.asyncio
+async def test_remember_forget_recall_empty(pool) -> None:
+    """remember -> forget -> recall == [] against a real pgvector column (RAG-04).
+
+    This is the load-bearing trust-escape-hatch proof Phase 16 hard-depends
+    on: it re-queries through the REAL search_memories ANN path (not a row
+    count) both before and after delete_all_user_memories, proving the row
+    AND its embedding are genuinely gone — not merely filtered.
+    """
+    from datetime import datetime, timezone, timedelta
+    import config
+
+    user_id = "test-phase15-forget"
+    embedding = [0.3] * config.EMBED_DIM
+    expires_at = datetime.now(timezone.utc) + timedelta(days=90)
+
+    await database.insert_memory(
+        pool,
+        user_id=user_id,
+        guild_id=None,
+        kind="daily_batch",
+        fact="user only listens to sad indie at 2am",
+        embedding=embedding,
+        salience=0.3,
+        expires_at=expires_at,
+    )
+
+    # Sanity: the row is really there BEFORE forget.
+    before = await database.search_memories(
+        pool, user_id=user_id, query_embedding=embedding, k=5
+    )
+    assert len(before) == 1
+
+    deleted = await database.delete_all_user_memories(pool, user_id)
+    assert deleted == 1
+
+    # Re-query through the REAL ANN search path — must be empty.
+    after = await database.search_memories(
+        pool, user_id=user_id, query_embedding=embedding, k=5
+    )
+    assert after == [], (
+        "search_memories must return [] after delete_all_user_memories — "
+        "rows AND embeddings must be verifiably gone (RAG-04 Success Criterion 4)"
+    )
