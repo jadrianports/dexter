@@ -12,13 +12,24 @@ from __future__ import annotations
 import inspect
 
 import personality.responses as responses_module
-from cogs.music import MusicCog
+from cogs.music import DiscoverQueueView, MusicCog
 
 
 def _discover_source() -> str:
     # app_commands.command wraps the method in a discord.app_commands.Command;
     # the original coroutine is reachable via .callback.
     return inspect.getsource(MusicCog.discover.callback)
+
+
+def _discover_view_class_source() -> str:
+    return inspect.getsource(DiscoverQueueView)
+
+
+def _discover_view_button_source() -> str:
+    # Unlike app_commands.command, discord.ui.button decorates the function
+    # in place (setting __discord_ui_model_type__) rather than wrapping it in
+    # a separate Command object, so the plain function is directly inspectable.
+    return inspect.getsource(DiscoverQueueView.queue_button)
 
 
 # ---------------------------------------------------------------------------
@@ -71,3 +82,74 @@ class TestDiscoverColdStart:
     def test_empty_adjacency_guard_present(self):
         src = _discover_source()
         assert "if not adjacent_rows:" in src
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — confirm-to-queue view (D-05 confirm-first)
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoverQueueViewIsOneShot:
+    def test_view_class_exists(self):
+        assert DiscoverQueueView is not None
+
+    def test_view_uses_finite_timeout_not_none(self):
+        """This view is a one-shot confirm — it must NOT use timeout=None
+        (that's reserved for NowPlayingView's persistent, setup_hook-registered
+        controller)."""
+        src = _discover_view_class_source()
+        assert "timeout=None" not in src
+        assert "def __init__" in src
+        assert "timeout: float" in src or "timeout=60" in src or "timeout: float = 60.0" in src
+
+    def test_view_not_registered_in_setup_hook(self):
+        """DiscoverQueueView must never appear in bot.py's setup_hook —
+        unlike NowPlayingView, it is not a persistent view."""
+        import bot as bot_module
+
+        setup_hook_src = inspect.getsource(bot_module.DexterBot.setup_hook)
+        assert "DiscoverQueueView" not in setup_hook_src
+
+
+class TestDiscoverQueueViewButtonCallback:
+    def test_button_calls_async_search(self):
+        assert "async_search(" in _discover_view_button_source()
+
+    def test_button_calls_async_extract(self):
+        assert "async_extract(" in _discover_view_button_source()
+
+    def test_button_calls_queue_add(self):
+        assert "queue.add(" in _discover_view_button_source()
+
+    def test_button_checks_duration_cap(self):
+        assert "MAX_SONG_DURATION_SECONDS" in _discover_view_button_source()
+
+    def test_button_never_uses_stale_queue_is_playing_gate(self):
+        """Scar #2: the playback-start gate must key on the live voice-client
+        state via should_start_playback, never the stale `queue.is_playing`
+        flag."""
+        src = _discover_view_button_source()
+        assert "should_start_playback(" in src
+        assert "not queue.is_playing" not in src
+
+
+class TestDiscoverAttachesViewOnlyWhenAdjacencyNonEmpty:
+    def test_view_attached_after_adjacency_check(self):
+        """DiscoverQueueView is constructed textually after the empty-adjacency
+        cold-start guard, i.e. only reachable once adjacent_rows is non-empty."""
+        src = _discover_source()
+        adjacency_guard_idx = src.index("if not adjacent_rows:")
+        view_construction_idx = src.index("DiscoverQueueView(")
+        assert view_construction_idx > adjacency_guard_idx
+
+    def test_view_seeded_with_top_adjacent_artist(self):
+        src = _discover_source()
+        assert "adjacent_artists[0]" in src
+
+    def test_cold_start_paths_do_not_construct_view(self):
+        """Both cold-start `return` statements occur before any DiscoverQueueView
+        construction — the view must never appear on those early-return paths."""
+        src = _discover_source()
+        first_cold_start_idx = src.index("if not anchor_rows:")
+        view_construction_idx = src.index("DiscoverQueueView(")
+        assert view_construction_idx > first_cold_start_idx

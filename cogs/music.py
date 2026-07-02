@@ -485,6 +485,119 @@ class NowPlayingView(discord.ui.View):
         await interaction.followup.send("stopped and cleared the queue.", ephemeral=True)
 
 
+class DiscoverQueueView(discord.ui.View):
+    """One-shot confirm-to-queue view for /discover (D-05 confirm-first).
+
+    Uses a finite timeout and is never registered in setup_hook — unlike
+    NowPlayingView's always-on controller (which never expires), this view
+    only needs to survive one interaction round-trip. Queueing an artist
+    NEVER happens without the button press — there is no silent auto-queue
+    path here.
+    """
+
+    def __init__(
+        self,
+        bot: commands.Bot,
+        guild_id: int,
+        artist_name: str,
+        requested_by: int,
+        timeout: float = 60.0,
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.artist_name = artist_name
+        self.requested_by = requested_by
+        self.message: discord.Message | None = None  # set after send
+        self._used = False
+
+    @discord.ui.button(label="queue it", style=discord.ButtonStyle.primary)
+    async def queue_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        if self._used:
+            await interaction.response.send_message("already handled that.", ephemeral=True)
+            return
+        self._used = True
+        for child in self.children:
+            child.disabled = True
+
+        await interaction.response.defer()
+
+        music_cog: "MusicCog | None" = self.bot.get_cog("MusicCog")  # type: ignore[assignment]
+        guild = self.bot.get_guild(self.guild_id)
+        if music_cog is None or guild is None:
+            await interaction.followup.send(
+                "can't queue that right now — music isn't ready.", ephemeral=True
+            )
+            return
+
+        try:
+            results = await self.bot.youtube_service.async_search(self.artist_name, count=1)
+            if not results:
+                await interaction.followup.send(
+                    f"couldn't find anything for {self.artist_name}.", ephemeral=True
+                )
+                return
+
+            data = await self.bot.youtube_service.async_extract(results[0]["url"])
+            if data["duration"] > config.MAX_SONG_DURATION_SECONDS:
+                await interaction.followup.send(
+                    f"{self.artist_name}'s top result is too long to queue.", ephemeral=True
+                )
+                return
+
+            track = Track(
+                video_id=data["video_id"],
+                title=data["title"],
+                artist=data.get("artist"),
+                url=data["url"],
+                duration_seconds=data["duration"],
+                requested_by=self.requested_by,
+                thumbnail=data.get("thumbnail"),
+            )
+            queue = music_cog.get_queue(guild.id)
+            queue.add(track)
+
+            # Start playback only if audio isn't already flowing — gate on the
+            # live voice-client state, never `queue.is_playing` (scar #2).
+            voice_client = guild.voice_client
+            if should_start_playback(
+                connected=voice_client is not None,
+                voice_is_playing=voice_client.is_playing() if voice_client else False,
+                voice_is_paused=voice_client.is_paused() if voice_client else False,
+                has_track=len(queue.tracks) > 0,
+            ):
+                queue.current_index = len(queue.tracks) - 1
+                await music_cog._play_track(guild, queue.get_current())
+
+            await interaction.followup.send(f"queued **{track.title}**.")
+        except Exception as e:
+            log.error(
+                "discover: confirm-to-queue failed for guild %s (%s): %s",
+                self.guild_id, self.artist_name, e, exc_info=True,
+            )
+            await interaction.followup.send(
+                embed=embeds.error("something broke queueing that. try /play instead."),
+                ephemeral=True,
+            )
+
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+
 class MusicCog(commands.Cog):
     """All music slash commands and the playback engine."""
 
@@ -2057,7 +2170,11 @@ class MusicCog(commands.Cog):
                     f"{', '.join(adjacent_artists)}."
                 )
 
-            await interaction.followup.send(commentary)
+            view = DiscoverQueueView(
+                self.bot, guild.id, adjacent_artists[0], interaction.user.id
+            )
+            msg = await interaction.followup.send(commentary, view=view)
+            view.message = msg
         except Exception as e:
             log.error(
                 "discover: unexpected error for guild %s user %s: %s",
