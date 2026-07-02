@@ -28,9 +28,18 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 
 The Phase 09/11 live-runtime UAT/verification tail (4 items) is deferred behind the same parked host — see STATE.md Deferred Items.
 
-## Next Milestone: v1.3 (planning)
+## Current Milestone: v1.3 "Taste Brain" (planning)
 
-Not yet scoped. Run `/gsd-new-milestone` to define it. The standing v1.3 candidate is **Vision / multimodal roasting** (VIS-01/02 — Dex reacts to images posted in chat via Gemini vision, with content-safety guardrails), deferred from v1.2 because it leans hardest on the 15 RPM budget and pays off most with the parked 24/7 host. The parked 24/7 live deploy (DEPLOY-02/03/05/08 + the live-UAT tail) also resumes whenever an always-on residential host (Pi) is acquired.
+**Goal:** Turn Dexter's listening history into semantic long-term memory that powers a genuinely good DJ (smarter auto-queue, discovery, generative jams), memory-aware `/roast` + `/ask`, and proactive callbacks — plus vision/multimodal roasting — deepening the v1.2 RAG foundation on existing infra (`pgvector` + the separate 60 RPM embed limiter), at zero new cost. Continues phase numbering at Phase 13.
+
+**Target features:**
+- **Semantic music memory** *(foundation)* — a new taste/listening memory kind; the retrievable substrate the music brain and callbacks feed off.
+- **Smarter music brain** — taste-aware auto-queue that learns from `was_skipped`, artist/genre taste-graph discovery surfaced via a command, and generative "continue this jam" / suggest-additions.
+- **RAG reach** — wire `recall()` into `/roast` and `/ask` (dormant there today; ambient roasts already use it), plus a `/memory` inspect/forget command (trust + recall-quality observability).
+- **Proactive callbacks** — a background surface that volunteers a memory (roast or music) at a well-chosen moment, beyond the existing cadence-gated ambient roasts.
+- **Vision / multimodal roasting** — Dex reacts to images posted in chat via `gemini-2.5-flash` (free-tier vision confirmed via Context7; native model capability, draws on the shared 15 RPM budget), cadence-gated + content-safety guardrails (VIS-01/02).
+
+**Explicitly out of v1.3:** salience reinforcement (→ v1.4), `/setavatar` (avatar set manually via the Developer Portal), and the parked 24/7 deploy (host-gated).
 
 <details>
 <summary>Previous: v1.2 "Sharper & Smarter" milestone framing (archived — shipped 2026-06-30)</summary>
@@ -81,11 +90,15 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 
 ### Active
 
-<!-- No active milestone scope. v1.2 shipped 2026-06-30; next scope is defined by /gsd-new-milestone. -->
+<!-- Current scope: v1.3 "Taste Brain". See .planning/REQUIREMENTS.md for REQ-IDs + traceability. -->
 
-- [ ] (v1.3 candidate) Vision / multimodal roasting — Dexter reacts to/roasts images posted in chat via Gemini vision, with content-safety guardrails (VIS-01/02)
+- [ ] Semantic music memory — listening/taste episodes become a retrievable memory kind (foundation)
+- [ ] Smarter music brain — taste-aware auto-queue (learns from `was_skipped`), taste-graph discovery command, generative jams
+- [ ] RAG into `/roast` + `/ask`, plus a `/memory` inspect/forget command
+- [ ] Proactive memory callbacks — background surface that volunteers a memory unprompted
+- [ ] Vision / multimodal roasting via `gemini-2.5-flash` — cadence-gated + content-safety guardrails (VIS-01/02)
 
-Carried forward (host-gated / deferred, not yet scoped to a milestone):
+Carried forward (host-gated / deferred, not scoped to v1.3):
 - [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the live-UAT tail (incl. the Phase 09/11 v1.2 live-runtime checks)
 
 ### Out of Scope
@@ -166,4 +179,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-01 after v1.2 "Sharper & Smarter" milestone*
+*Last updated: 2026-07-02 after v1.3 "Taste Brain" milestone start*
