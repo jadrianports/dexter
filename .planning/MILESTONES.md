@@ -4,6 +4,39 @@ A historical record of shipped versions. Newest first.
 
 ---
 
+## v1.3 — Taste Brain
+
+**Shipped (code):** 2026-07-03
+**Phases:** 5 (13, 14, 15, 16, 17) · **Plans:** 18 · **Tasks:** 42
+
+**Delivered:** The "Taste Brain" pass — turned listening history into semantic long-term memory and built a genuinely smarter DJ on top of it, then extended memory to direct user-facing surfaces with a real trust escape hatch, added a proactive unprompted cadence, and closed with vision/multimodal roasting. All on the existing v1.2 RAG infrastructure (`pgvector` + the separate 60 RPM embed limiter) at **zero new dependencies, tables, limiters, or monthly cost** — every new signal is additive and byte-identical to prior behavior when empty. All code-complete and locally/statically verified; the live-Discord UAT tail (Phases 14–17, plus carried v1.1/v1.2 items) is deferred behind the parked residential host.
+
+### Stats
+
+- **Timeline:** 2026-07-02 → 2026-07-03 (~2 days)
+- **Commits:** 146 since `v1.2` (includes the milestone-close CLAUDE.md/PROJECT.md doc-sync)
+- **Diff:** 118 files changed, +23,683 / −1,399 (includes `.planning/` docs)
+- **Git range:** `4cec94a` (v1.2 tag) → `668f480` (docs: sync CLAUDE.md + PROJECT.md to v1.3 reality)
+- **Tests:** suite green at **848 pass / 108 skip / 0 fail** (Phase 17 close)
+
+### Key Accomplishments
+
+1. **Semantic Music Memory (Phase 13)** — a number-free `taste_episode` memory kind distilled from `song_history` onto the *existing* `user_memories` vector store (no schema fork), with its own below-floor salience (0.4) and 30-day decay tier via a new `MEMORY_DECAY_DAYS_BY_KIND` mapping. `remember()` became kind-aware — taste episodes self-refresh `expires_at` on dedup so still-true favorites survive while fads age out (the D-05 correctness fix), and all five Phase 11 kinds stay byte-identical. A dedicated daily `taste_distill_batch` `@tasks.loop` at 05:00 UTC (its own slot, no Neon thundering-herd) writes the facts. **Zero new tables.**
+2. **Smarter Music Brain (Phase 14)** — auto-queue became taste-aware: recently-skipped artists act as a negative hint *and* an independent hard post-filter (rejected even if they pass the hallucination guard), blended with an unattributed "the room tends to like" positive signal — all read-only over the taste substrate + live SQL, byte-identical when the signals are empty. `/discover` surfaces 100%-SQL invoker-anchored artist adjacency (guild-wide same-calendar-day co-occurrence, multi-user-safe) with Gemini restricted to commentary + a one-shot confirm-to-queue. `/jam suggest` seeds Gemini with a shared jam and validates every candidate against real YouTube results before offering it.
+3. **RAG Reach (Phase 15)** — `recall()` now grounds `/roast @user` (scoped to the **target's** history) and `/ask` (D-01 removed the callback-chance gate from these two only; ambient surfaces keep it, locked by a four-site regression test). New `cogs/memory.py`: `/memory view` (verbatim, ephemeral, char-budget paginated) and `/memory forget` — a verified hard-delete of rows **and** embeddings, proven by a live-DB `remember → forget → recall == []` test through the real pgvector ANN path. This is the trust escape hatch Phase 16 hard-depends on.
+4. **Proactive Memory Callbacks (Phase 16)** — a third, rarest ambient cadence: a pure `should_fire_proactive_callback` gate (`PROACTIVE_CALLBACK_CHANCE=0.10` + additive daily cap of 1, strictly below both ambient roast cadences) volunteers a chat-anchored memory unprompted in the designated channel, reply-anchored with mentions suppressed. Per-user `/memory callbacks on|off` opt-out via an additive `user_profiles.proactive_opt_out` column (provably independent of the memory store). A `pre_recalled_memories` bypass stops the reused ambient-roast generator from triple-gating, keeping the 0.30/0.35 ambient cadence byte-identical.
+5. **Vision / Multimodal Roasting (Phase 17)** — a fourth independent unprompted cadence: cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image roasts via `gemini-2.5-flash` native vision, with a before-download mime/size gate (`MAX_VISION_IMAGE_BYTES=8MB`, gif excluded). A dedicated `str|None` generator makes a safety block a **silent skip** (never a visible refusal or fallback template), while transport failures still fall back — plus an explicit `safety_settings` retrofit across all three user-influenced `generate_content` sites (vision = real block, `/ask`/`/imagine` = permissive-but-explicit so edgy output doesn't regress).
+
+### Quality
+
+- All 15 v1.3 requirements (TASTE-01/02/03, BRAIN-01/02/03, RAG-01/02/03/04, PROACT-01/02, VIS-01/02/03) satisfied at the code level, each code-verified 4/4 or 10/10 by the phase verifier.
+- TDD on all pure logic (`logic/taste|proactive|vision`, memory kind-awareness, DB aggregate helpers); Discord/process code verified structurally + by clean boot per convention.
+- Every phase passed code review; all review findings (incl. the goal-blocking Phase 16 WR-03 content-free recall anchor and the Phase 17 WR-01/02/03 vision-input guards) fixed before phase close.
+
+**Known deferred items at close: 24** (see STATE.md Deferred Items) — all `human_needed` live-Discord/host-gated UAT + verification checks (Phases 14–17 new + carried v1.1/v1.2), plus 3 stale CONTEXT open-question markers resolved during planning. Zero code gaps.
+
+---
+
 ## v1.2 — Sharper & Smarter
 
 **Shipped (code):** 2026-06-30

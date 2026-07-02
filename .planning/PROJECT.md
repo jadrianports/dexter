@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Dexter is a sarcastic, personality-driven Discord bot. It plays music from YouTube (yt-dlp + FFmpeg), chats via Google Gemini (gemini-2.5-flash), and generates images, while tracking user behavior to roast them. The persona is lowercase, dry, accurate-first-sarcastic-second, and uses at most one emoji per message. It is built for a single Discord community as a solo-developer project, with Claude as the implementer. As of v1.0 it is a complete, code-finished bot — music + AI + an "alive" unprompted-behavior layer — hardened and scaled to run 24/7 on PostgreSQL behind an `AutoShardedBot`.
+Dexter is a sarcastic, personality-driven Discord bot. It plays music from YouTube (yt-dlp + FFmpeg), chats via Google Gemini (gemini-2.5-flash), and generates images, while tracking user behavior to roast them. The persona is lowercase, dry, accurate-first-sarcastic-second, and uses at most one emoji per message. It is built for a single Discord community as a solo-developer project, with Claude as the implementer. As of v1.3 it is a complete, code-finished bot — music + AI + an "alive" unprompted-behavior layer — hardened and scaled to run 24/7 on PostgreSQL behind an `AutoShardedBot`, with a durable RAG long-term memory (pgvector) that now includes a semantic "taste brain": listening history distilled into memory that powers a smarter DJ (taste-aware auto-queue, `/discover`, `/jam suggest`), grounds `/roast` + `/ask`, is inspectable/erasable via `/memory`, and surfaces through proactive callbacks and `gemini-2.5-flash` vision roasts.
 
 ## Core Value
 
@@ -28,21 +28,34 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 
 The Phase 09/11 live-runtime UAT/verification tail (4 items) is deferred behind the same parked host — see STATE.md Deferred Items.
 
-**In progress (code): v1.3 "Taste Brain"** — Phases 13–16 executed & code-verified. Phase 15 (RAG Reach) complete 2026-07-03: `/roast` and `/ask` grounded in real recalled history (D-01 cadence gate removed from both, ambient surfaces keep it), plus a new `/memory view` (verbatim, ephemeral, paginated) and irreversible `/memory forget` (RAG-01..04, all code-verified; suite 781 green). Its live-runtime tail (live-DB `remember→forget→recall==[]` proof + 3 Discord UX checks) is parked behind the same residential host — see `15-HUMAN-UAT.md`.
-- **Phase 16 (Proactive Memory Callbacks) complete 2026-07-03:** a third, rarest ambient cadence — Dexter now *volunteers* a remembered detail unprompted at an active moment (`on_message` in the designated channel → pure `should_fire_proactive_callback` gate at `PROACTIVE_CALLBACK_CHANCE=0.10` + `DAILY_CAP=1`, rarer than ambient roasts), reply-anchored with `AllowedMentions.none()` and recall anchored on the triggering message so it reads as relevant, not surveillance. Per-user opt-out via `/memory callbacks on|off` (self-scoped, ephemeral, `proactive_opt_out` boolean on `user_profiles`, zero `user_memories` touched). Pitfall-1 `pre_recalled_memories` bypass keeps the ambient 0.30/0.35 cadence byte-identical. PROACT-01/02 code-verified 10/10; suite 814 green. All 3 code-review warnings fixed pre-close (WR-03 content-free recall anchor → `message.content`, WR-01 daily-cap TOCTOU, WR-02 unguarded opt-out DB read). Live-runtime tail (proactive "feel" + `/memory callbacks off` UX) parked behind the residential host — see `16-HUMAN-UAT.md`.
+**Shipped (code): v1.3 "Taste Brain" (2026-07-03)** — Phases 13–17, 18 plans, 42 tasks. All 15 v1.3 requirements met at the code level. Delivered:
+- **Phase 13 (Semantic Music Memory):** a number-free `taste_episode` memory kind distilled from `song_history` onto the existing `user_memories` pgvector store (no schema fork), with its own below-floor salience (0.4) + 30-day decay tier (`MEMORY_DECAY_DAYS_BY_KIND`) and self-refresh-on-dedup (D-05); a dedicated daily `taste_distill_batch` @ 05:00 UTC. **Zero new tables.**
+- **Phase 14 (Smarter Music Brain):** taste-aware auto-queue (recently-skipped artists as a negative hint + an independent hard post-filter, blended with an unattributed room-taste positive signal), `/discover` (100%-SQL invoker-anchored co-occurrence adjacency, multi-user-safe), `/jam suggest` (validated generative additions) — all read-only over taste + live SQL, byte-identical when signals are empty.
+- **Phase 15 (RAG Reach):** `recall()` grounds `/roast @user` (target-scoped) and `/ask` (D-01 removed the callback gate from these two only; ambient surfaces keep it); new `cogs/memory.py` `/memory view` (verbatim, ephemeral, paginated) + `/memory forget` (verified hard-delete of rows **and** embeddings — the trust escape hatch).
+- **Phase 16 (Proactive Memory Callbacks):** a third, rarest ambient cadence volunteering a chat-anchored memory unprompted (`PROACTIVE_CALLBACK_CHANCE=0.10` + daily cap 1), reply-anchored with mentions suppressed; per-user opt-out via `/memory callbacks on|off` (`proactive_opt_out` column, zero `user_memories` touched); `pre_recalled_memories` bypass keeps ambient cadence byte-identical.
+- **Phase 17 (Vision / Multimodal Roasting):** a fourth independent cadence — cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image roasts via `gemini-2.5-flash` vision, before-download mime/size gate, safety-block = silent skip (never a fallback template), plus an explicit `safety_settings` retrofit across all three user-content `generate_content` sites.
 
-## Current Milestone: v1.3 "Taste Brain" (planning)
+Every phase passed verification (4/4 or 10/10 code-level) and code review; the goal-blocking Phase 16 WR-03 (content-free recall anchor) and the Phase 17 vision-input guards were fixed before close. Suite green at 848 pass / 108 skip / 0 fail. The Phase 14–17 live-Discord UAT tail (plus the carried v1.1/v1.2 checks) is deferred behind the same parked residential host — 24 items acknowledged at close, all `human_needed`, zero code gaps (see STATE.md Deferred Items).
 
-**Goal:** Turn Dexter's listening history into semantic long-term memory that powers a genuinely good DJ (smarter auto-queue, discovery, generative jams), memory-aware `/roast` + `/ask`, and proactive callbacks — plus vision/multimodal roasting — deepening the v1.2 RAG foundation on existing infra (`pgvector` + the separate 60 RPM embed limiter), at zero new cost. Continues phase numbering at Phase 13.
+## Current Milestone: none active — v1.3 shipped, v1.4 unplanned
 
-**Target features:**
-- **Semantic music memory** *(foundation)* — a new taste/listening memory kind; the retrievable substrate the music brain and callbacks feed off.
-- **Smarter music brain** — taste-aware auto-queue that learns from `was_skipped`, artist/genre taste-graph discovery surfaced via a command, and generative "continue this jam" / suggest-additions.
-- **RAG reach** — wire `recall()` into `/roast` and `/ask` (dormant there today; ambient roasts already use it), plus a `/memory` inspect/forget command (trust + recall-quality observability).
-- **Proactive callbacks** — a background surface that volunteers a memory (roast or music) at a well-chosen moment, beyond the existing cadence-gated ambient roasts.
-- **Vision / multimodal roasting** — Dex reacts to images posted in chat via `gemini-2.5-flash` (free-tier vision confirmed via Context7; native model capability, draws on the shared 15 RPM budget), cadence-gated + content-safety guardrails (VIS-01/02).
+v1.3 "Taste Brain" (Phases 13–17) is code-complete, archived, and tagged. Run `/gsd-new-milestone` to scope v1.4 (phase numbering continues at Phase 18).
+
+**Candidate v1.4 directions (carried from v1.3 scoping, not yet committed):**
+- **Salience reinforcement** — memories that get surfaced/hit gain durability (deferred out of v1.3).
+- **Vision → RAG memory (MEM-R2)** — persist a distilled fact from a vision roast (explicitly out of v1.3 scope).
+- **Resume the parked 24/7 deploy** — host-gated; closes DEPLOY-02/03/05/08 + the entire live-UAT tail once an always-on residential host exists.
+
+<details>
+<summary>Previous: v1.3 "Taste Brain" milestone framing (archived — shipped 2026-07-03)</summary>
+
+**Goal:** Turn Dexter's listening history into semantic long-term memory that powers a genuinely good DJ (smarter auto-queue, discovery, generative jams), memory-aware `/roast` + `/ask`, and proactive callbacks — plus vision/multimodal roasting — deepening the v1.2 RAG foundation on existing infra (`pgvector` + the separate 60 RPM embed limiter), at zero new cost. Continued phase numbering at Phase 13.
+
+**Target features:** semantic music memory (foundation `taste_episode` kind), smarter music brain (taste-aware auto-queue + `/discover` + `/jam suggest`), RAG reach (`/roast`+`/ask` grounding + `/memory` view/forget), proactive callbacks, vision/multimodal roasting.
 
 **Explicitly out of v1.3:** salience reinforcement (→ v1.4), `/setavatar` (avatar set manually via the Developer Portal), and the parked 24/7 deploy (host-gated).
+
+</details>
 
 <details>
 <summary>Previous: v1.2 "Sharper & Smarter" milestone framing (archived — shipped 2026-06-30)</summary>
@@ -88,21 +101,24 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 - ✓ Critical-path test coverage: playback/health/roast/auto-queue decision logic extracted to pure `logic/` modules with ~83 mock-free unit tests + three named scar regressions; full-suite-green + clean-boot regression gate — v1.2 (Phase 10)
 - ✓ RAG long-term memory: `pgvector` on Neon + `gemini-embedding-001` @ 768d, scoped cosine recall with rerank/dedup, constrained distillation with sensitivity/number safety gates, prompt injection at four roast surfaces, per-user cap + daily decay sweep — v1.2 (Phase 11; 3 live-runtime UAT items tracked in 11-HUMAN-UAT.md)
 - ✓ Richer music/UX: per-server `/jam` shared playlists (distinct from global favorites), `/skips` analytics, LRCLIB third lyrics fallback, token-set auto-queue hallucination validation — v1.2 (Phase 12)
+- ✓ Semantic music memory: number-free `taste_episode` kind on the existing pgvector store, own salience/decay tier + self-refresh-on-dedup, dedicated `taste_distill_batch` @ 05:00 UTC — zero new tables — v1.3 (Phase 13; TASTE-01/02/03)
+- ✓ Smarter music brain: taste-aware auto-queue (recently-skipped negative hint + hard post-filter + room-taste blend), `/discover` SQL co-occurrence adjacency, `/jam suggest` validated generative additions — v1.3 (Phase 14; BRAIN-01/02/03; live-runtime UAT in 14-HUMAN-UAT.md)
+- ✓ RAG reach: `recall()` grounds `/roast @user` (target-scoped) + `/ask`, `/memory view` (verbatim, ephemeral) + `/memory forget` (verified hard-delete of rows + embeddings) — v1.3 (Phase 15; RAG-01/02/03/04; live-runtime UAT in 15-HUMAN-UAT.md)
+- ✓ Proactive memory callbacks: rarest ambient cadence volunteering a chat-anchored memory unprompted (chance 0.10 + daily cap 1), per-user `proactive_opt_out` via `/memory callbacks` — v1.3 (Phase 16; PROACT-01/02; live-runtime UAT in 16-HUMAN-UAT.md)
+- ✓ Vision / multimodal roasting: cadence-gated image roasts via `gemini-2.5-flash` (before-download mime/size gate, silent-skip on safety block), `safety_settings` retrofit across all 3 generate_content sites — v1.3 (Phase 17; VIS-01/02/03; live-runtime UAT in 17-HUMAN-UAT.md)
 
 > Phase 3 & 4 items (v1.0) and Phase 5–6 live checks (v1.1), plus the Phase 09/11 live-runtime checks (v1.2), are code-complete and statically/locally verified; their live-deploy/live-Discord UAT is carried forward as the deployment checklist (STATE.md Deferred Items), not as open scope. Phases 6/7/8 were live-verified on the user's PC + Neon.
 
 ### Active
 
-<!-- Current scope: v1.3 "Taste Brain". See .planning/REQUIREMENTS.md for REQ-IDs + traceability. -->
+<!-- No milestone active. v1.3 shipped; fresh REQUIREMENTS.md is created by `/gsd-new-milestone` for v1.4. -->
 
-- [ ] Semantic music memory — listening/taste episodes become a retrievable memory kind (foundation)
-- [ ] Smarter music brain — taste-aware auto-queue (learns from `was_skipped`), taste-graph discovery command, generative jams
-- [ ] RAG into `/roast` + `/ask`, plus a `/memory` inspect/forget command
-- [ ] Proactive memory callbacks — background surface that volunteers a memory unprompted
-- [ ] Vision / multimodal roasting via `gemini-2.5-flash` — cadence-gated + content-safety guardrails (VIS-01/02)
+Candidate v1.4 scope (carried, not yet committed — `/gsd-new-milestone` will scope + assign REQ-IDs):
+- [ ] Salience reinforcement — surfaced/hit memories gain durability (deferred out of v1.3)
+- [ ] Vision → RAG memory (MEM-R2) — persist a distilled fact from a vision roast (out of v1.3 scope)
 
-Carried forward (host-gated / deferred, not scoped to v1.3):
-- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the live-UAT tail (incl. the Phase 09/11 v1.2 live-runtime checks)
+Carried forward (host-gated / deferred, not milestone-scoped):
+- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the entire live-UAT tail (Phases 03–06 v1.1, Phase 09/11 v1.2, Phases 14–17 v1.3)
 
 ### Out of Scope
 
@@ -163,6 +179,13 @@ Carried forward (host-gated / deferred, not scoped to v1.3):
 | Accuracy firewall: never embed SQL-known numbers; hard numbers in output come from live SQL (Phase 11) | Stale embedded counts/streaks would violate Critical Rule 5 (accuracy-first); memory is roast *ammo*, not a number source | ✓ Good |
 | Numeric retrieval defaults validated by a live-Neon spike before retrieval landed (Phase 11) | MEDIUM-confidence priors (floor/dedup/dims) tuned empirically (dedup 0.90→0.92, floor 0.70, keep-768) rather than shipped on assumption | ✓ Good |
 | Token-set-containment over difflib for auto-queue validation (Phase 12) | YouTube titles are longer than clean names; subset check is the semantically correct rejection test for hallucinated tracks | ✓ Good |
+| `taste_episode` is a new memory `kind`, not a new table (Phase 13) | `MemoryService.recall/remember/distill` is kind-agnostic by design → zero schema fork, reuses the whole Phase 11 pgvector pipeline | ✓ Good |
+| `MEMORY_DECAY_DAYS_BY_KIND` new mapping + below-floor salience (0.4) + self-refresh-on-dedup (Phase 13, D-05) | Fads must age out while still-true favorites survive; a new mapping (not a mutation of `MEMORY_DECAY_DAYS`) keeps every Phase 11 kind byte-identical | ✓ Good |
+| `/discover` anchor from guild-scoped `song_history`, not guild-less `user_artist_counts` (Phase 14, OQ2 Option B) | Discovery must be per-guild and multi-user-safe — co-occurrence is a same-guild-calendar-day aggregate with no per-user attribution | ✓ Good |
+| D-01: drop the `MEMORY_CALLBACK_CHANCE` gate from `/ask` + `/roast` only; ambient surfaces keep it (Phase 15) | Explicit commands should always attempt recall; ambient roasts stay rare. Locked by a four-site regression test so the split can't silently drift | ✓ Good |
+| `/memory forget` must ship + be verified as a real hard-delete BEFORE proactive callbacks (Phase 15→16) | Trust ordering: an autonomous memory-surfacing feature can't ship before the user has a proven escape hatch. Hard dependency, do not reorder | ✓ Good |
+| Proactive callback is an additive 3rd cadence (chance 0.10 < ambient) with a `pre_recalled_memories` bypass (Phase 16) | Rarer than ambient roasts by construction; the bypass stops the reused ambient generator from triple-gating, keeping ambient cadence byte-identical | ✓ Good |
+| Vision safety = real block; `/ask`/`/imagine` permissive-but-explicit; safety-block = silent skip (Phase 17, VIS-02/03) | Gemini 2.5 defaults safety OFF, so set it explicitly everywhere; a blocked image roast must leave no trace (dedicated `str\|None` generator), while edgy text output must not regress | ✓ Good |
 
 ## Evolution
 
@@ -182,4 +205,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 after Phase 16 (Proactive Memory Callbacks) execution*
+*Last updated: 2026-07-03 after v1.3 "Taste Brain" milestone completion*

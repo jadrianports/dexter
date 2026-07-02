@@ -125,6 +125,49 @@
 
 ---
 
+## Milestone: v1.3 — Taste Brain
+
+**Shipped (code):** 2026-07-03
+**Phases:** 5 (13, 14, 15, 16, 17) | **Plans:** 18 | **Tasks:** 42 | **Commits:** 146 since v1.2
+
+### What Was Built
+- Semantic music memory: a number-free `taste_episode` kind distilled from `song_history` onto the existing pgvector store, with its own salience/decay tier + self-refresh-on-dedup and a dedicated 05:00 UTC distill batch — zero new tables (Phase 13).
+- A smarter music brain: taste-aware auto-queue (recently-skipped negative hint + hard post-filter + room-taste positive blend), `/discover` (SQL co-occurrence adjacency), `/jam suggest` (validated generative additions) (Phase 14).
+- RAG reach: `recall()` grounding `/roast @user` (target-scoped) + `/ask`, and a `/memory` cog with a verbatim view and an irreversible hard-delete `forget` (Phase 15).
+- A third proactive ambient cadence (chance 0.10 + daily cap) volunteering a chat-anchored memory, with a per-user opt-out column distinct from forget (Phase 16).
+- A fourth vision cadence: cadence-gated `gemini-2.5-flash` image roasts with a before-download mime/size gate, silent-skip on safety block, and a `safety_settings` retrofit across all three user-content generate_content sites (Phase 17).
+
+### What Worked
+- **Kind-agnostic memory paid off enormously.** Phase 13 added `taste_episode` as pure config + a new `kind` with zero change to `services/memory.py`/`models/memory.py` — and Phases 14/15/16 then read it without touching the store. The Phase 11 design decision compounded across four downstream phases.
+- **Additive + byte-identical-when-empty + regression-lock.** Every new signal (taste blend, proactive callback, vision cadence) defaults to a no-op when its input is empty and is pinned by a test proving prior behavior unchanged (the four-site cadence test, the `pre_recalled_memories` bypass). This is what made a five-phase expansion of a shared hot path (the auto-queue prompt, the ambient cadence) safe.
+- **Trust ordering enforced as a hard dependency.** `/memory forget` (Phase 15) shipped and was verified as a real rows+embeddings hard-delete *before* the autonomous proactive surface (Phase 16) — the roadmap refused to reorder past that gate.
+- **The pure-logic seam scaled to three more modules.** `logic/taste`, `logic/proactive`, `logic/vision` kept the milestone's riskiest content — cadence rarity and safety gating — testable mock-free before any Discord wiring.
+- **Adversarial review caught a goal-blocker unit tests couldn't.** Phase 16 WR-03 (the proactive recall anchored on a content-free string → the feature was effectively a no-op) was caught independently by both reviewer and verifier; every P16 test mocked `recall()`, so nothing in the suite would have surfaced it.
+
+### What Was Inefficient
+- **The `human_needed` tail grew by 13 more items (now 24 at close).** Phases 14–17 each added live-Discord UAT that can't run without a standing host — a third straight milestone where "code-complete" outran "validated," and RAG/proactive/vision are precisely the features whose real payoff needs a live community.
+- **Decision-log provenance drifted again.** Many STATE.md decisions landed double-prefixed (`[Phase ?]: [Phase 1X]`) — the same attribution decay flagged at v1.2 recurred over another long, fast milestone.
+- **Test-mocking masked a real gap.** Because all Phase 16 tests mocked `recall()`, the WR-03 no-op anchor passed the entire suite green; only adversarial review caught it. A single test exercising the real anchor string would have caught it at execution time.
+
+### Patterns Established
+- **Additive-signal + byte-identical-when-empty + regression-lock** — the safe way to extend a shared decision path (auto-queue prompt, ambient cadence) without risking prior behavior.
+- **Kind-tiered memory** — per-kind decay/salience via a *new* mapping (`MEMORY_DECAY_DAYS_BY_KIND`), never a mutation of the base default, so existing kinds stay provably unchanged.
+- **Trust-ordered sequencing** — ship the user's control/escape-hatch before the autonomous surface that depends on it.
+- **Silent-skip vs fallback split** — a safety-blocked *unprompted* output leaves no trace (dedicated `str|None` generator), distinct from a transport-failure fallback that still speaks.
+
+### Key Lessons
+1. When extending a shared decision path, make the new signal additive + byte-identical-when-empty and lock the old behavior with a regression test — it converts a risky hot-path change into a safe one.
+2. Sequence the user's escape hatch before the autonomous feature that depends on it — trust ordering is a real dependency, not a nicety.
+3. Don't mock the exact thing whose output you're validating — Phase 16's all-mocked `recall()` hid a no-op anchor that only adversarial review caught.
+4. Add per-kind tiers via a new mapping, not a mutation of the base — it keeps every prior kind's behavior provably unchanged.
+
+### Cost Observations
+- Model mix: executor/verifier/reviewer/fixer = sonnet; orchestration + planning = opus (per session memory). Not otherwise instrumented.
+- Sessions: not tracked.
+- Notable: the flagship *risk* this milestone was cadence/safety tuning, not an ML prior — de-risked by pure-logic gates + adversarial review rather than a data spike (contrast v1.2's Phase 11 numeric-defaults spike). Phase 14 was the heaviest by plan count (5) and file spread.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -134,6 +177,7 @@
 | v1.0 | n/a | 5 | Adopted GSD wave-based planning mid-project (Phases 3–4); earlier phases ingested retroactively |
 | v1.1 | n/a | 4 | Full GSD per-phase chain throughout; executor=sonnet; deploy substrate re-targeted twice (Oracle → Koyeb → on-demand PC) |
 | v1.2 | n/a | 4 | First milestone with a dedicated test-coverage phase (10) and a research-backed flagship phase (11) gated by a validation spike; pure-logic seam graduated to a `logic/` package |
+| v1.3 | n/a | 5 | Longest milestone by phase count; every phase built additively on the Phase 11 memory store (zero schema forks); trust-ordered sequencing (forget before proactive); adversarial review caught a goal-blocking no-op unit tests missed |
 
 ### Cumulative Quality
 
@@ -142,6 +186,7 @@
 | v1.0 | 20 files (251+ passing at Phase 3 close) | Not measured (pure-logic TDD + structural review convention) | lyricsgenius, beautifulsoup4, aiohttp, tzdata, asyncpg |
 | v1.1 | + Phase 6/7/8 suites (resolution-cache, audio, filters, favorites/playlists, leaderboard — incl. live-DB integration) | Not measured (same convention) | SponsorBlock via yt-dlp postprocessors; aiohttp `/health` server |
 | v1.2 | + ~83 mock-free `logic/` unit tests (playback/health/roasts) with named scar regressions + Phase 11 memory rerank/dedup/decay suites | Not measured (same convention; first explicit regression-gate phase) | `pgvector` (Neon extension) + `pgvector` Python codec; `gemini-embedding-001` embeddings |
+| v1.3 | + `logic/taste|proactive|vision` suites, kind-aware memory + DB aggregate helper tests, cadence rarity-invariants, live-DB forget-proof — suite green at 848 pass / 108 skip | Not measured (same convention) | **None** — zero new deps/tables/limiters; all built on the existing pgvector + Gemini stack |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -150,4 +195,6 @@
 3. *(New at v1.1)* Keep hosting behind a Dockerfile + `DATABASE_URL` seam — it absorbed two deploy pivots as config-only changes.
 4. *(New at v1.1)* Validate that the target host can reach the core external dependency before sequencing a milestone around it — the YouTube datacenter-IP block parked the entire deploy premise.
 5. *(New at v1.2)* Spike MEDIUM-confidence numeric/ML priors against real data before building on them — cheap validation beats shipped assumptions in a flagship feature.
-6. *(New at v1.2)* Give each workload class its own rate budget — separate 60 RPM embeddings from the 15 RPM chat budget so background work never starves user commands.
+6. *(New at v1.2, compounded at v1.3)* Give each workload class its own rate budget — separate 60 RPM embeddings from the 15 RPM chat budget so background work never starves user commands. A kind-agnostic memory store designed in v1.2 then absorbed all of v1.3's new features with zero schema forks.
+7. *(New at v1.3)* Extend a shared hot path additively — new signal is byte-identical-when-empty and pinned by a regression test — to make multi-phase expansion safe.
+8. *(New at v1.3)* Don't mock the exact output you're validating, and lean on adversarial review for goal-level no-ops — Phase 16's all-mocked `recall()` hid a feature-killing anchor bug the green suite never flagged.
