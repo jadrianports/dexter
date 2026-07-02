@@ -734,7 +734,9 @@ class TestRememberService:
 
         now = datetime.now(timezone.utc)
         near_dup_row = {
-            "id": 42, "fact": "likes lofi hip hop", "salience": 0.5,
+            "id": 42, "fact": "likes lofi hip hop",
+            "kind": "daily_batch",  # search_memories now returns kind (CR-13-01)
+            "salience": 0.5,
             "hit_count": 1, "created_at": now, "last_seen_at": now,
             "last_surfaced_at": None, "surface_count": 0,
             "similarity": 0.95,   # above MEMORY_DEDUP_THRESHOLD=0.92
@@ -782,7 +784,9 @@ class TestRememberService:
 
         now = datetime.now(timezone.utc)
         distinct_row = {
-            "id": 99, "fact": "different fact entirely", "salience": 0.5,
+            "id": 99, "fact": "different fact entirely",
+            "kind": "daily_batch",  # search_memories now returns kind (CR-13-01)
+            "salience": 0.5,
             "hit_count": 1, "created_at": now, "last_seen_at": now,
             "last_surfaced_at": None, "surface_count": 0,
             "similarity": 0.55,   # below MEMORY_DEDUP_THRESHOLD=0.92
