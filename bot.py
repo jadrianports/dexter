@@ -18,7 +18,9 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 import config
+import database
 from database import init_db
+from logic import taste as logic_taste
 from logic.health import determine_health_status
 from models.message_buffer import MessageBuffer
 from models.server_state import ServerState
@@ -930,6 +932,110 @@ async def before_memory_sweep() -> None:
 async def on_memory_sweep_error(error: Exception) -> None:
     log.error("memory_sweep task error: %s", error, exc_info=error)
     await _post_loop_error("memory_sweep", error)
+
+
+@tasks.loop(time=datetime.time(hour=config.TASTE_DISTILL_BATCH_HOUR, minute=0))
+async def taste_distill_batch() -> None:
+    """Daily batch: turn structured song_history into number-free taste_episode facts (TASTE-01/03).
+
+    Fires once daily at config.TASTE_DISTILL_BATCH_HOUR UTC (default 05:00) — distinct
+    from cache_cleanup (hourly), memory_sweep (02:30), memory_distill_batch (03:00), and
+    ytdlp_update (04:00) so this extra daily pass never thundering-herds the Neon pool
+    (D-06/D-07/T-13-05).
+
+    Reads ONLY structured song_history via the plan 13-02 aggregate helpers — never the
+    message buffer (that is memory_distill_batch's job, a separate kind). For every
+    (guild_id, user_id) pair active in the rolling TASTE_LOOKBACK_DAYS window: skip users
+    below TASTE_MIN_ACTIVITY_TRACKS (D-08 gate), pull per-artist window/baseline counts,
+    and pre-bucket them to number-free phrases via logic.taste.summarize_taste (D-02) —
+    numbers never reach the Gemini distiller. Writes exactly ONE kind, "taste_episode"
+    (D-09 — no taste_shift this phase), carrying guild_id through (taste is guild-scoped
+    listening, unlike daily_batch's None).
+
+    Guards: no-op when memory_service or pool are absent (GEMINI_API_KEY unset or partial
+    init). A single user's distill failure is swallowed (log.debug) and never aborts the
+    rest of the batch (T-13-08 / restore_queues per-guild continue discipline).
+    """
+    memory_service = getattr(bot, "memory_service", None)
+    pool = getattr(bot, "pool", None)
+    if memory_service is None or pool is None:
+        return
+
+    since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        days=config.TASTE_LOOKBACK_DAYS
+    )
+    baseline_since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        days=config.TASTE_BASELINE_DAYS
+    )
+
+    candidates = await database.get_active_taste_users(pool, since=since)
+    if not candidates:
+        return
+
+    log.info("taste_distill_batch: processing %d candidate user(s)", len(candidates))
+
+    for row in candidates:
+        guild_id = row["guild_id"]
+        user_id = row["user_id"]
+        tracks_in_window = row["tracks_in_window"]
+
+        # D-08 gate: skip users below the min-activity floor for this window.
+        if not logic_taste.has_min_activity(
+            tracks_in_window, min_tracks=config.TASTE_MIN_ACTIVITY_TRACKS
+        ):
+            continue
+
+        artist_rows = await database.get_user_artist_activity(
+            pool,
+            guild_id=guild_id,
+            user_id=user_id,
+            since=since,
+            baseline_since=baseline_since,
+        )
+
+        # D-02 pre-bucketing: number-free phrases only, before any Gemini call.
+        phrases = logic_taste.summarize_taste(
+            artist_rows,
+            obsession_min=config.TASTE_OBSESSION_MIN_PLAYS,
+            new_arrival_min=config.TASTE_NEW_ARRIVAL_MIN_PLAYS,
+            steady_min_baseline=config.TASTE_STEADY_MIN_BASELINE,
+        )
+        if not phrases:
+            continue
+
+        # raw_text is built ONLY from summarize_taste's digit-free phrases — never
+        # interpolate a raw count here (accuracy firewall, Critical Rule 12).
+        raw_text = "Listening activity this week: " + "; ".join(phrases)
+
+        try:
+            # Write exactly ONE kind, taste_episode (D-09 — taste_shift stays deferred).
+            # guild_id is carried through (unlike daily_batch's None) since taste is
+            # guild-scoped listening (13-PATTERNS.md).
+            await memory_service.distill_and_remember(
+                user_id=user_id,
+                guild_id=guild_id,
+                raw_text=raw_text,
+                kind="taste_episode",
+                base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["taste_episode"],
+            )
+        except Exception as exc:
+            log.debug(
+                "taste_distill_batch: error for guild=%s user=%s: %s",
+                guild_id, user_id, exc,
+            )
+
+    log.info("taste_distill_batch: batch pass complete")
+
+
+@taste_distill_batch.before_loop
+async def before_taste_distill_batch() -> None:
+    await bot.wait_until_ready()
+
+
+@taste_distill_batch.error
+async def on_taste_distill_batch_error(error: Exception) -> None:
+    log.error("taste_distill_batch task error: %s", error, exc_info=error)
+    await _post_loop_error("taste_distill_batch", error)
 
 
 @tasks.loop(seconds=config.STATUS_ROTATION_INTERVAL_SECONDS)
