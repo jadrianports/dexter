@@ -5,15 +5,17 @@ from __future__ import annotations
 import json
 import random
 import re
+from datetime import datetime, timedelta, timezone
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 import config
-from database import get_recent_songs, increment_daily_stat
-from logic.autoqueue import validate_youtube_match
+from database import get_recent_songs, get_recently_skipped, increment_daily_stat
+from logic.autoqueue import is_recently_skipped_artist, validate_youtube_match
 from logic.playback import should_start_playback
+from logic.taste import select_positive_taste_context
 from models.queue import Track
 from models.server_state import get_server_state, get_mood
 from models.user_profile import get_user_summary
@@ -38,6 +40,11 @@ from services.gemini import GeminiRateLimitError, GeminiAPIError
 from services.lyrics import build_genius_search_query
 from utils.logger import log
 from utils.tasks import make_task
+
+# Phase 14 / D-03: fixed recall anchor for the positive-taste blend. Any stable
+# anchor works since recall() is already scoped to user_id + kind="taste_episode"
+# (RESEARCH.md OQ#3) — this just needs to consistently retrieve taste-flavored facts.
+_AUTO_QUEUE_TASTE_ANCHOR = "music taste and listening preferences"
 
 
 def parse_suggestions(response: str) -> list[dict] | None:
@@ -285,7 +292,64 @@ class AICog(commands.Cog):
                     "artist": c_artist or song.get("artist"),
                 })
 
-            prompt = build_recommendation_prompt(cleaned)
+            # Phase 14 / D-01: guild-scoped "recently skipped" negative hint.
+            # Degrades to [] on any failure — never blocks the recommendation call.
+            skipped_artists: list[str] = []
+            recently_skipped: list[dict] = []
+            try:
+                since = datetime.now(timezone.utc) - timedelta(
+                    days=config.AUTO_QUEUE_SKIP_LOOKBACK_DAYS
+                )
+                skip_rows = await get_recently_skipped(
+                    self.bot.pool,
+                    guild_id=str(guild.id),
+                    since=since,
+                    limit=config.AUTO_QUEUE_SKIP_HINT_CAP,
+                )
+                recently_skipped = [
+                    {"title": r["title"], "artist": r["artist"]} for r in skip_rows
+                ]
+                skipped_artists = [r["artist"] for r in skip_rows if r["artist"]]
+            except Exception as e:
+                log.debug("auto-queue: get_recently_skipped failed, degrading to [] (%s)", e)
+
+            # Phase 14 / D-03: unattributed collective "the room tends to like"
+            # positive hint, blended from in-voice non-bot members' taste_episode
+            # memory. This enumeration is REUSED below for the auto_queue_ignored
+            # write (D-03 — do not compute a second, different member set).
+            vc = guild.voice_client
+            voice_members = (
+                [m for m in vc.channel.members if not m.bot]
+                if vc and vc.channel else []
+            )
+            positive_taste: list[str] = []
+            _memory_svc = getattr(self.bot, "memory_service", None)
+            if _memory_svc is not None and voice_members:
+                member_facts: list[list[str]] = []
+                for _member in voice_members:
+                    try:
+                        facts = await _memory_svc.recall(
+                            str(_member.id),
+                            str(guild.id),
+                            _AUTO_QUEUE_TASTE_ANCHOR,
+                            kind="taste_episode",
+                        )
+                    except Exception as e:
+                        log.debug(
+                            "auto-queue: recall failed for member %s, degrading to [] (%s)",
+                            _member.id, e,
+                        )
+                        facts = []
+                    member_facts.append(facts)
+                positive_taste = select_positive_taste_context(
+                    member_facts, cap=config.AUTO_QUEUE_POSITIVE_TASTE_CAP
+                )
+
+            prompt = build_recommendation_prompt(
+                cleaned,
+                recently_skipped=recently_skipped or None,
+                positive_taste=positive_taste or None,
+            )
             response = await self.gemini.chat(prompt, [], priority=2)
 
             if not response:
@@ -406,11 +470,9 @@ class AICog(commands.Cog):
                 if ignored_signal:
                     _memory_svc = getattr(self.bot, "memory_service", None)
                     if _memory_svc is not None:
-                        vc = guild.voice_client
-                        voice_members = (
-                            [m for m in vc.channel.members if not m.bot]
-                            if vc and vc.channel else []
-                        )
+                        # D-03: reuse the exact voice_members enumeration computed
+                        # earlier for the positive-taste recall fan-out — do not
+                        # recompute a second, potentially different member set.
                         scenario = (
                             "dexter auto-queued songs were all skipped — "
                             "the recommendations were not to the server's taste"
