@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
 status: executing
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-07-02T15:57:17.185Z"
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-07-02T16:14:31.712Z"
 last_activity: 2026-07-02 -- Phase 14 execution started
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 20
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 ## Current Position
 
 Phase: 14 (smarter-music-brain) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-07-02 -- Phase 14 execution started
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 14 P01 | 25min | 3 tasks | 6 files |
 | Phase 14 P02 | 18min | 3 tasks | 6 files |
 | Phase 14 P03 | 20min | 2 tasks | 2 files |
+| Phase 14 P04 | 15min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase 14]: get_artist_cooccurrence co-occurrence = same-guild-calendar-day bucket join over song_history, a guild-wide aggregate with no per-user attribution
 - [Phase 14]: select_positive_taste_context checks the cap BEFORE appending (not after, as in the RESEARCH.md reference snippet) so cap=0 returns [] instead of one item — Fixes an off-by-one bug found while writing the cap=0 test case (Rule 1)
 - [Phase 14]: Auto-queue positive-taste recall anchor fixed to a stable string (music taste and listening preferences) per OQ#3 discretion
+- [Phase 14]: /discover cold-start guards call the bare pick_random (re-exported from personality.roasts -> personality.responses) rather than the file's pick_random_r alias, since both resolve to the identical function object
+- [Phase 14]: DiscoverQueueView confirm-to-queue button seeds only the top adjacent artist (adjacent_artists[0]), a single unambiguous one-shot action rather than a multi-select
 
 ### Pending Todos
 
@@ -110,7 +113,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T15:56:14.116Z
-Stopped at: Completed 14-02-PLAN.md
+Last session: 2026-07-02T16:14:31.682Z
+Stopped at: Completed 14-04-PLAN.md
 Next: `/gsd-plan-phase 13`
 </content>

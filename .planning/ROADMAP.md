@@ -120,7 +120,7 @@ Plans:
 **Wave 2** *(consumer cogs — parallel, blocked on Wave 1)*
 
 - [x] 14-03-PLAN.md — taste-aware auto-queue: negative skip hint + positive room-taste blend + D-02 hard post-filter (BRAIN-01)
-- [ ] 14-04-PLAN.md — /discover command: invoker-anchored SQL co-occurrence adjacency + confirm-to-queue (BRAIN-02)
+- [x] 14-04-PLAN.md — /discover command: invoker-anchored SQL co-occurrence adjacency + confirm-to-queue (BRAIN-02)
 - [ ] 14-05-PLAN.md — /jam suggest subcommand: validated generative jam assist, propose-and-confirm (BRAIN-03)
 
 ### Phase 15: RAG Reach
@@ -184,7 +184,7 @@ Plans:
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete (live-runtime UAT deferred) | 2026-06-29 |
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
-| 14. Smarter Music Brain | v1.3 | 3/5 | In Progress|  |
+| 14. Smarter Music Brain | v1.3 | 4/5 | In Progress|  |
 | 15. RAG Reach | v1.3 | 0/TBD | Not started | - |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
