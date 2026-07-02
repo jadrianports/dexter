@@ -96,6 +96,11 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     last_streak_date    TEXT
 );
 
+-- Phase 16: per-user proactive-callback opt-out (PROACT-02). Additive column,
+-- mirrors the Phase 8 bot_daily_stats.total_errors precedent. Default false
+-- (opted-in) — a user must explicitly turn callbacks off via /memory callbacks.
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS proactive_opt_out BOOLEAN DEFAULT false;
+
 CREATE TABLE IF NOT EXISTS song_history (
     id               BIGSERIAL PRIMARY KEY,
     guild_id         TEXT NOT NULL,
@@ -308,6 +313,67 @@ async def update_user_profile(
             "   last_active_at = now()",
             user_id, username,
         )
+
+
+async def set_proactive_opt_out(
+    pool: asyncpg.Pool, *, user_id: str, opted_out: bool
+) -> None:
+    """Set (or clear) a user's proactive-callback opt-out flag (PROACT-02).
+
+    Touches ONLY the user_profiles table — never the RAG memory-facts store.
+    This is the structural guarantee that pausing proactive callbacks is
+    distinct from `/memory forget`: the flag flips, stored memories are
+    untouched.
+
+    Must be an upsert (INSERT ... ON CONFLICT DO UPDATE), never a bare
+    UPDATE (Pitfall 3 / T-16-06): a user can run `/memory callbacks` before
+    ever queuing a song, when no user_profiles row exists yet, and
+    username is NOT NULL — a bare UPDATE would silently no-op for that
+    user. The insert branch uses user_id itself as a placeholder username
+    (NOT NULL satisfied); the ON CONFLICT branch updates ONLY
+    proactive_opt_out, so an existing real username is never overwritten,
+    and any subsequent update_user_profile() call replaces the placeholder
+    with the real display name on the user's next song queue.
+
+    Signature is locked to exactly (pool, user_id, opted_out) — no second
+    identity parameter, ever (V4 guard).
+
+    Args:
+        pool:      asyncpg connection pool.
+        user_id:   Discord user ID — sole scope, always interaction.user.id.
+        opted_out: True to pause proactive callbacks, False to resume.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO user_profiles (user_id, username, proactive_opt_out)"
+            " VALUES ($1, $1, $2)"
+            " ON CONFLICT (user_id) DO UPDATE SET"
+            "   proactive_opt_out = EXCLUDED.proactive_opt_out",
+            user_id, opted_out,
+        )
+
+
+async def get_proactive_opt_out(pool: asyncpg.Pool, user_id: str) -> bool:
+    """Return whether user_id has paused proactive callbacks (PROACT-02).
+
+    Touches ONLY the user_profiles table — never the RAG memory-facts store.
+
+    Args:
+        pool:    asyncpg connection pool.
+        user_id: Discord user ID — sole scope, always interaction.user.id.
+
+    Returns:
+        True if the user has opted out. False (opted-in, the default) when
+        the user has no profile row yet or has never opted out.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT proactive_opt_out FROM user_profiles WHERE user_id = $1",
+            user_id,
+        )
+    if row is None:
+        return False
+    return bool(row["proactive_opt_out"])
 
 
 async def increment_daily_stat(pool: asyncpg.Pool, field: str) -> None:
