@@ -28,7 +28,8 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 
 The Phase 09/11 live-runtime UAT/verification tail (4 items) is deferred behind the same parked host — see STATE.md Deferred Items.
 
-**In progress (code): v1.3 "Taste Brain"** — Phases 13–15 executed & code-verified. Phase 15 (RAG Reach) complete 2026-07-03: `/roast` and `/ask` grounded in real recalled history (D-01 cadence gate removed from both, ambient surfaces keep it), plus a new `/memory view` (verbatim, ephemeral, paginated) and irreversible `/memory forget` (RAG-01..04, all code-verified; suite 781 green). Its live-runtime tail (live-DB `remember→forget→recall==[]` proof + 3 Discord UX checks) is parked behind the same residential host — see `15-HUMAN-UAT.md`.
+**In progress (code): v1.3 "Taste Brain"** — Phases 13–16 executed & code-verified. Phase 15 (RAG Reach) complete 2026-07-03: `/roast` and `/ask` grounded in real recalled history (D-01 cadence gate removed from both, ambient surfaces keep it), plus a new `/memory view` (verbatim, ephemeral, paginated) and irreversible `/memory forget` (RAG-01..04, all code-verified; suite 781 green). Its live-runtime tail (live-DB `remember→forget→recall==[]` proof + 3 Discord UX checks) is parked behind the same residential host — see `15-HUMAN-UAT.md`.
+- **Phase 16 (Proactive Memory Callbacks) complete 2026-07-03:** a third, rarest ambient cadence — Dexter now *volunteers* a remembered detail unprompted at an active moment (`on_message` in the designated channel → pure `should_fire_proactive_callback` gate at `PROACTIVE_CALLBACK_CHANCE=0.10` + `DAILY_CAP=1`, rarer than ambient roasts), reply-anchored with `AllowedMentions.none()` and recall anchored on the triggering message so it reads as relevant, not surveillance. Per-user opt-out via `/memory callbacks on|off` (self-scoped, ephemeral, `proactive_opt_out` boolean on `user_profiles`, zero `user_memories` touched). Pitfall-1 `pre_recalled_memories` bypass keeps the ambient 0.30/0.35 cadence byte-identical. PROACT-01/02 code-verified 10/10; suite 814 green. All 3 code-review warnings fixed pre-close (WR-03 content-free recall anchor → `message.content`, WR-01 daily-cap TOCTOU, WR-02 unguarded opt-out DB read). Live-runtime tail (proactive "feel" + `/memory callbacks off` UX) parked behind the residential host — see `16-HUMAN-UAT.md`.
 
 ## Current Milestone: v1.3 "Taste Brain" (planning)
 
@@ -181,4 +182,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 after Phase 15 (RAG Reach) execution*
+*Last updated: 2026-07-03 after Phase 16 (Proactive Memory Callbacks) execution*
