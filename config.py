@@ -232,6 +232,18 @@ PROACTIVE_CALLBACK_CHANCE = 0.10         # D-02: strictly < UNPROMPTED_ROAST_CHA
 PROACTIVE_CALLBACK_DAILY_CAP = 1         # D-02: additive per-user, per-calendar-day ceiling
 
 
+# --- Phase 17: Vision / Multimodal Roasting (VIS-01/02/03) ---
+# D-04: VISION_ROAST_CHANCE MUST stay strictly below both ambient cadences
+# (UNPROMPTED_ROAST_CHANCE = 0.30, MEMORY_CALLBACK_CHANCE = 0.35) — the rarest
+# unprompted cadence (locked by tests/test_vision_logic.py::test_vision_chance_is_rarer_than_ambient).
+VISION_ROAST_CHANCE = 0.12               # D-04: strictly < UNPROMPTED_ROAST_CHANCE (0.30) and < MEMORY_CALLBACK_CHANCE (0.35)
+VISION_ROAST_COOLDOWN_SECONDS = 600      # per-user cooldown ceiling (passed to logic.roasts.cooldown_elapsed by the Wave-2 glue)
+MAX_VISION_IMAGE_BYTES = 8 * 1024 * 1024  # 8MB raw — headroom below Gemini's 20MB combined inline-request cap after ~33% base64 inflation (RESEARCH Pitfall 4)
+VISION_MIME_ALLOWLIST = frozenset({"image/png", "image/jpeg", "image/webp"})  # image/gif DELIBERATELY excluded — Gemini image-understanding 400s on GIF (RESEARCH Pitfall 2)
+VISION_SAFETY_THRESHOLD = "BLOCK_MEDIUM_AND_ABOVE"  # D-01: real block — vision only
+TEXT_SAFETY_THRESHOLD = "BLOCK_ONLY_HIGH"           # D-01: permissive-but-explicit — /ask + /imagine + every non-image chat() call (must NOT regress edgy output)
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
