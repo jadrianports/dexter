@@ -2180,6 +2180,7 @@ class MusicCog(commands.Cog):
                 anchor_artist=anchor_artist,
                 since=since,
                 limit=config.DISCOVER_ADJACENT_COUNT,
+                tz_name=config.STREAK_TIMEZONE,
             )
             if not adjacent_rows:
                 await interaction.followup.send(pick_random(DISCOVER_NO_HISTORY))

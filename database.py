@@ -1422,7 +1422,13 @@ async def get_user_top_artist(
 
 
 async def get_artist_cooccurrence(
-    pool: asyncpg.Pool, *, guild_id: str, anchor_artist: str, since: datetime, limit: int
+    pool: asyncpg.Pool,
+    *,
+    guild_id: str,
+    anchor_artist: str,
+    since: datetime,
+    limit: int,
+    tz_name: str = config.STREAK_TIMEZONE,
 ) -> list[asyncpg.Record]:
     """Return artists that co-occur with anchor_artist on the same guild-day, for /discover.
 
@@ -1437,23 +1443,30 @@ async def get_artist_cooccurrence(
     user_id column; rows may span multiple users' plays, but Criterion 4 still
     holds because the result only ever names artists, never users (T-14-02).
 
-    All values bound as $1/$2/$3/$4 positional params — no string interpolation
-    (T-14-01).
+    The calendar-day bucket is resolved in the configured community timezone
+    ($4, tz_name) via `queued_at AT TIME ZONE $4`, NOT the Postgres session tz
+    (UTC on Neon). Without this, two songs played the same evening but straddling
+    UTC midnight (e.g. 8pm and 1am ET) fall into different "days" and the
+    co-occurrence signal fragments — the same D-06/D-17 calendar-day discipline
+    the rest of the bot follows (WR-01).
+
+    All values bound as $1/$2/$3/$4/$5 positional params — no string
+    interpolation (T-14-01).
     """
     async with pool.acquire() as conn:
         return await conn.fetch(
             "WITH anchor_days AS ("
-            "  SELECT DISTINCT date_trunc('day', queued_at) AS play_day"
+            "  SELECT DISTINCT date_trunc('day', queued_at AT TIME ZONE $4) AS play_day"
             "  FROM song_history"
             "  WHERE guild_id = $1 AND artist = $2 AND queued_at > $3"
             ")"
             " SELECT sh.artist, COUNT(*) AS co_occurrence"
             " FROM song_history sh"
-            " JOIN anchor_days ad ON date_trunc('day', sh.queued_at) = ad.play_day"
+            " JOIN anchor_days ad ON date_trunc('day', sh.queued_at AT TIME ZONE $4) = ad.play_day"
             " WHERE sh.guild_id = $1 AND sh.artist IS NOT NULL"
             "   AND sh.artist <> $2 AND sh.queued_at > $3"
             " GROUP BY sh.artist"
             " ORDER BY co_occurrence DESC"
-            " LIMIT $4",
-            guild_id, anchor_artist, since, limit,
+            " LIMIT $5",
+            guild_id, anchor_artist, since, tz_name, limit,
         )
