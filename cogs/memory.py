@@ -153,15 +153,25 @@ class ForgetConfirmView(discord.ui.View):
 
         await interaction.response.defer(ephemeral=True)
 
-        # This wipes stored memories, including taste episodes picked up from
-        # listening history (Pitfall 4) — it does NOT stop Dexter from
-        # mentioning you going forward; that is a separate Phase 16 control.
-        deleted = await database.delete_all_user_memories(self.bot.pool, self.user_id)
-        log.info("Memory forget: user %s wiped %d memories", self.user_id, deleted)
-        await interaction.followup.send(
-            f"gone. all {deleted} of them. i've got nothing on you now.",
-            ephemeral=True,
-        )
+        try:
+            # This wipes stored memories, including taste episodes picked up
+            # from listening history (Pitfall 4) — it does NOT stop Dexter
+            # from mentioning you going forward; that is a separate Phase 16
+            # control.
+            deleted = await database.delete_all_user_memories(self.bot.pool, self.user_id)
+            log.info("Memory forget: user %s wiped %d memories", self.user_id, deleted)
+            await interaction.followup.send(
+                f"gone. all {deleted} of them. i've got nothing on you now.",
+                ephemeral=True,
+            )
+        except Exception as exc:
+            log.error(
+                "Memory forget failed for user %s: %s", self.user_id, exc, exc_info=True
+            )
+            await interaction.followup.send(
+                "something broke wiping that. try again in a bit — nothing was confirmed deleted.",
+                ephemeral=True,
+            )
 
         if self.message is not None:
             try:
