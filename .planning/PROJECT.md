@@ -28,6 +28,8 @@ A sarcastic, personality-driven music + AI Discord bot that runs reliably 24/7 �
 
 The Phase 09/11 live-runtime UAT/verification tail (4 items) is deferred behind the same parked host — see STATE.md Deferred Items.
 
+**In progress (code): v1.3 "Taste Brain"** — Phases 13–15 executed & code-verified. Phase 15 (RAG Reach) complete 2026-07-03: `/roast` and `/ask` grounded in real recalled history (D-01 cadence gate removed from both, ambient surfaces keep it), plus a new `/memory view` (verbatim, ephemeral, paginated) and irreversible `/memory forget` (RAG-01..04, all code-verified; suite 781 green). Its live-runtime tail (live-DB `remember→forget→recall==[]` proof + 3 Discord UX checks) is parked behind the same residential host — see `15-HUMAN-UAT.md`.
+
 ## Current Milestone: v1.3 "Taste Brain" (planning)
 
 **Goal:** Turn Dexter's listening history into semantic long-term memory that powers a genuinely good DJ (smarter auto-queue, discovery, generative jams), memory-aware `/roast` + `/ask`, and proactive callbacks — plus vision/multimodal roasting — deepening the v1.2 RAG foundation on existing infra (`pgvector` + the separate 60 RPM embed limiter), at zero new cost. Continues phase numbering at Phase 13.
@@ -179,4 +181,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 after v1.3 "Taste Brain" milestone start*
+*Last updated: 2026-07-03 after Phase 15 (RAG Reach) execution*
