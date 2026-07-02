@@ -1,16 +1,25 @@
-"""MemoryCog — the RAG trust escape hatch (Phase 15, RAG-03 / RAG-04).
+"""MemoryCog — the RAG trust escape hatch (Phase 15, RAG-03 / RAG-04) plus the
+proactive-callback opt-out control (Phase 16, PROACT-02).
 
 Commands:
-    /memory view   — show the invoking user's stored memory facts, VERBATIM,
-                     in an ephemeral paginated embed (D-02: transparency, no
-                     paraphrase, no Gemini call).
-    /memory forget — preview a live-SQL count of the invoking user's stored
-                     facts, then hard-delete all of them after a red Confirm
-                     press (D-03: nuke-all, one-shot, irreversible).
+    /memory view      — show the invoking user's stored memory facts,
+                        VERBATIM, in an ephemeral paginated embed (D-02:
+                        transparency, no paraphrase, no Gemini call).
+    /memory forget     — preview a live-SQL count of the invoking user's
+                        stored facts, then hard-delete all of them after a
+                        red Confirm press (D-03: nuke-all, one-shot,
+                        irreversible).
+    /memory callbacks — pause or resume Dexter's unprompted proactive
+                        callbacks (Phase 16 D-03). Indefinite toggle, stored
+                        as a single boolean flag on user_profiles. Touches
+                        ZERO memory rows — distinct from `/memory forget`,
+                        which is the total-erasure escape hatch. This is
+                        the "pause callbacks for me, keep my memories"
+                        promise.
 
-Both subcommands are strictly self-scoped: neither accepts a `target`/`user`
-parameter. The only identity ever used is `str(interaction.user.id)` (V4
-access control). This cog reads only `self.bot.pool` — it has no Gemini
+All three subcommands are strictly self-scoped: none accepts a `target`/
+`user` parameter. The only identity ever used is `str(interaction.user.id)`
+(V4 access control). This cog reads only `self.bot.pool` — it has no Gemini
 dependency.
 
 Security:
@@ -28,6 +37,15 @@ Security:
     T-15-12 — `memory_view` always calls `list_user_memories` with
               `config.MEMORY_MAX_PER_USER` (never `MEMORY_INJECT_CAP`) so the
               view can never show fewer facts than `/memory forget` erases.
+    T-16-02 — no `target` param on `memory_callbacks`; a structural guard
+              test asserts the callback signature is exactly
+              `["self", "interaction", "setting"]`.
+    T-16-03 — `setting` is `app_commands.Choice`-constrained to on/off; no
+              free-text parsing surface.
+    T-16-08 — `memory_callbacks` flips only the `user_profiles` opt-out
+              flag via `database.set_proactive_opt_out`; it never calls
+              `delete_all_user_memories` or any RAG memory-facts helper —
+              provably distinct from `/memory forget`.
 """
 
 from __future__ import annotations
@@ -222,7 +240,7 @@ class ForgetConfirmView(discord.ui.View):
 
 
 class MemoryCog(commands.Cog):
-    """The /memory group: view (RAG-03) and forget (RAG-04)."""
+    """The /memory group: view (RAG-03), forget (RAG-04), callbacks (PROACT-02)."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -287,6 +305,38 @@ class MemoryCog(commands.Cog):
             ephemeral=True,
         )
         view.message = await interaction.original_response()
+
+    @memory.command(
+        name="callbacks",
+        description="Pause or resume Dexter's occasional unprompted callbacks",
+    )
+    @app_commands.describe(setting="on to resume, off to pause")
+    @app_commands.choices(
+        setting=[
+            app_commands.Choice(name="on", value="on"),
+            app_commands.Choice(name="off", value="off"),
+        ]
+    )
+    async def memory_callbacks(
+        self, interaction: discord.Interaction, setting: app_commands.Choice[str]
+    ) -> None:
+        """/memory callbacks on|off — pause/resume proactive callbacks (PROACT-02).
+
+        Self-scoped only (str(interaction.user.id)); no target param (V4,
+        T-16-02). Flips only the user_profiles.proactive_opt_out flag via
+        database.set_proactive_opt_out — touches ZERO memory rows (T-16-08),
+        distinct from /memory forget.
+        """
+        user_id = str(interaction.user.id)
+        opted_out = setting.value == "off"
+        await database.set_proactive_opt_out(
+            self.bot.pool, user_id=user_id, opted_out=opted_out
+        )
+        if opted_out:
+            msg = "fine, i'll keep my mouth shut. your memories are still here though."
+        else:
+            msg = "back on. don't say i didn't warn you."
+        await interaction.response.send_message(msg, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:
