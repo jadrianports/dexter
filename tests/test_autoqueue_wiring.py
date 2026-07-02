@@ -13,6 +13,7 @@ import inspect
 
 import cogs.ai as ai_module
 from cogs.ai import AICog
+from logic.autoqueue import is_recently_skipped_artist
 
 
 def _try_auto_queue_source() -> str:
@@ -68,6 +69,38 @@ class TestNegativeAndPositiveHintWiring:
         assert occurrences == 1, (
             f"expected exactly one voice-member comprehension (reused), found {occurrences}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — D-02 hard post-filter in the per-suggestion validation loop
+# ---------------------------------------------------------------------------
+
+
+class TestHardPostFilterWiring:
+    def test_both_validate_and_hard_filter_present_and_distinct(self):
+        src = _try_auto_queue_source()
+        assert "validate_youtube_match(" in src
+        assert "is_recently_skipped_artist(" in src
+        # Distinct statements — the hard filter call is not merely a substring
+        # of the validate_youtube_match call.
+        assert "is_recently_skipped_artist(suggestion" in src
+
+    def test_hard_filter_runs_after_validated_is_not_none_branch(self):
+        """The is_recently_skipped_artist gate appears textually after the
+        `validated is None` fall-through continue, i.e. only reachable once a
+        candidate has already passed validate_youtube_match."""
+        src = _try_auto_queue_source()
+        validated_none_idx = src.index("if validated is None:")
+        hard_filter_idx = src.index("is_recently_skipped_artist(suggestion")
+        assert hard_filter_idx > validated_none_idx
+
+    def test_hard_filter_behavior_rejects_skipped_artist(self):
+        """Direct behavioral assertion (reinforces the gate semantics without a
+        live Discord/Gemini path)."""
+        assert is_recently_skipped_artist("Phoebe Bridgers", ["phoebe bridgers"]) is True
+
+    def test_hard_filter_behavior_allows_non_skipped_artist(self):
+        assert is_recently_skipped_artist("Drake", ["Phoebe Bridgers"]) is False
 
 
 # ---------------------------------------------------------------------------

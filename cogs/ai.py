@@ -404,6 +404,16 @@ class AICog(commands.Cog):
                     )
                     continue
 
+                # D-02: independent second gate, after validate_youtube_match (the
+                # hallucination guard, unchanged) — belt-and-suspenders reject of a
+                # candidate whose artist matches a recently-skipped artist.
+                if is_recently_skipped_artist(suggestion["artist"], skipped_artists):
+                    log.info(
+                        "auto-queue: dropping '%s' by '%s' — recently-skipped artist",
+                        suggestion["title"], suggestion["artist"],
+                    )
+                    continue
+
                 result = validated
                 try:
                     data = await self.bot.youtube_service.async_extract(result["url"])
