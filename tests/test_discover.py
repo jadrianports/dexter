@@ -10,9 +10,13 @@ convention in tests/test_autoqueue_wiring.py.
 from __future__ import annotations
 
 import inspect
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 import personality.responses as responses_module
 from cogs.music import DiscoverQueueView, MusicCog
+from models.queue import MusicQueue
 
 
 def _discover_source() -> str:
@@ -131,6 +135,142 @@ class TestDiscoverQueueViewButtonCallback:
         src = _discover_view_button_source()
         assert "should_start_playback(" in src
         assert "not queue.is_playing" not in src
+
+    def test_button_connects_to_voice_on_cold_path(self):
+        """CR-01: the button must join voice when the bot is idle — the source
+        must contain a `.connect()` call so the cold path can actually play."""
+        assert ".connect()" in _discover_view_button_source()
+
+    def test_button_persists_queue(self):
+        """WR-02: the queued track must be persisted so it survives restart —
+        the button must call queue_persistence.persist."""
+        assert "queue_persistence.persist(" in _discover_view_button_source()
+
+
+# ---------------------------------------------------------------------------
+# Task 2 (WR-03) — behavioral test: drive the button on the "bot idle" path
+# and assert it actually connects, plays, and persists (source-string tests
+# alone shipped CR-01/WR-02).
+# ---------------------------------------------------------------------------
+
+
+def _make_extract_data() -> dict:
+    return {
+        "video_id": "vid123",
+        "title": "Some Track",
+        "artist": "Some Artist",
+        "url": "https://youtube.com/watch?v=vid123",
+        "duration": 200,
+        "thumbnail": "https://img/thumb.jpg",
+    }
+
+
+def _build_idle_discover_view() -> tuple[DiscoverQueueView, dict]:
+    """Wire a DiscoverQueueView whose guild is NOT connected to voice, with the
+    presser sitting in a voice channel. Returns (view, fakes) so tests can drive
+    `queue_button` and assert on the collaborators."""
+    guild_id = 1
+
+    voice_client = Mock()
+    voice_client.is_playing.return_value = False
+    voice_client.is_paused.return_value = False
+    voice_client.channel.id = 999
+
+    voice_channel = Mock()
+    voice_channel.connect = AsyncMock(return_value=voice_client)
+
+    member = Mock()
+    member.voice.channel = voice_channel
+
+    guild = Mock()
+    guild.id = guild_id
+    guild.voice_client = None  # bot is idle — the cold path
+    guild.get_member.return_value = member
+
+    queue = MusicQueue(guild_id)
+
+    music_cog = Mock()
+    music_cog.get_queue.return_value = queue
+    music_cog._play_track = AsyncMock()
+    music_cog._refresh_now_playing = AsyncMock()
+
+    bot = Mock()
+    bot.get_cog.return_value = music_cog
+    bot.get_guild.return_value = guild
+    bot.youtube_service.async_search = AsyncMock(
+        return_value=[{"url": "https://youtube.com/watch?v=vid123"}]
+    )
+    bot.youtube_service.async_extract = AsyncMock(return_value=_make_extract_data())
+    bot.queue_persistence.persist = AsyncMock()
+
+    view = DiscoverQueueView(
+        bot=bot, guild_id=guild_id, artist_name="Some Artist", requested_by=42
+    )
+    view.message = None  # skip the trailing message.edit path
+
+    interaction = Mock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup.send = AsyncMock()
+    interaction.user.id = 42
+    interaction.channel_id = 77
+
+    fakes = {
+        "bot": bot,
+        "guild": guild,
+        "member": member,
+        "voice_channel": voice_channel,
+        "voice_client": voice_client,
+        "music_cog": music_cog,
+        "queue": queue,
+        "interaction": interaction,
+    }
+    return view, fakes
+
+
+class TestDiscoverQueueButtonBehavioralColdPath:
+    @pytest.mark.asyncio
+    async def test_idle_press_connects_to_voice(self):
+        """CR-01 regression: pressing "queue it" while the bot is idle must join
+        the presser's voice channel — the exact defect source assertions missed."""
+        view, fakes = _build_idle_discover_view()
+        await DiscoverQueueView.queue_button(view, fakes["interaction"], Mock())
+        fakes["voice_channel"].connect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_idle_press_starts_playback(self):
+        """CR-01 regression: after connecting, playback must actually start —
+        _play_track is invoked for the freshly queued track."""
+        view, fakes = _build_idle_discover_view()
+        await DiscoverQueueView.queue_button(view, fakes["interaction"], Mock())
+        fakes["music_cog"]._play_track.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_idle_press_persists_queue(self):
+        """WR-02 regression: the queued track must be persisted with the
+        connected voice channel id so it survives a restart."""
+        view, fakes = _build_idle_discover_view()
+        await DiscoverQueueView.queue_button(view, fakes["interaction"], Mock())
+        fakes["bot"].queue_persistence.persist.assert_awaited_once()
+        # persisted against the channel the bot actually joined
+        args = fakes["bot"].queue_persistence.persist.await_args.args
+        assert args[2] == fakes["voice_client"].channel.id
+
+    @pytest.mark.asyncio
+    async def test_idle_press_queues_the_track(self):
+        """End-to-end: the track lands in the live queue (not dropped)."""
+        view, fakes = _build_idle_discover_view()
+        await DiscoverQueueView.queue_button(view, fakes["interaction"], Mock())
+        assert len(fakes["queue"].tracks) == 1
+
+    @pytest.mark.asyncio
+    async def test_presser_not_in_voice_does_not_connect_or_play(self):
+        """No voice channel to join -> the button must bail with a prompt, never
+        report false success by queueing + claiming to play."""
+        view, fakes = _build_idle_discover_view()
+        fakes["member"].voice = None  # presser left / never joined voice
+        await DiscoverQueueView.queue_button(view, fakes["interaction"], Mock())
+        fakes["music_cog"]._play_track.assert_not_awaited()
+        assert len(fakes["queue"].tracks) == 0
 
 
 class TestDiscoverAttachesViewOnlyWhenAdjacencyNonEmpty:
