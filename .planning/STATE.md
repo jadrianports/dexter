@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
 status: executing
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-07-02T20:01:35.992Z"
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-07-02T20:09:50.859Z"
 last_activity: 2026-07-02 -- Phase 16 execution started
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 16
-  completed_plans: 13
+  completed_plans: 14
   percent: 60
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 ## Current Position
 
 Phase: 16 (proactive-memory-callbacks) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-07-02 -- Phase 16 execution started
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 15 P02 | 12min | 2 tasks | 2 files |
 | Phase 15 P03 | 15min | 3 tasks | 4 files |
 | Phase 16 P01 | 3min | 2 tasks | 3 files |
+| Phase 16 P02 | 8min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,7 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase ?]: [Phase 15]: ForgetConfirmView wording never promises Dexter will stop mentioning you -- it only describes the actual deletion; the ambient-behavior control is a separate Phase 16 concern (Pitfall 4)
 - [Phase 16]: PROACTIVE_CALLBACK_CHANCE set to 0.10 (D-02 0.08-0.12 band), strictly below UNPROMPTED_ROAST_CHANCE (0.30) and MEMORY_CALLBACK_CHANCE (0.35); enforced by a dedicated rarity-invariant test
 - [Phase 16]: Gate implements only D-02 steps 1-3 (opt-out, chance, daily-cap); the async recall-floor step 4 deliberately stays out of logic/proactive.py and lives in cog glue (plan 16-03)
+- [Phase 16]: 16-02: set_proactive_opt_out locked to exactly (pool, user_id, opted_out) per the plan verify one-liner and Task 2 test; insert-branch username placeholder is user_id itself (never overwrites real username since DO UPDATE only touches proactive_opt_out)
 
 ### Pending Todos
 
@@ -129,7 +131,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T20:01:35.968Z
-Stopped at: Completed 16-01-PLAN.md
+Last session: 2026-07-02T20:09:50.846Z
+Stopped at: Completed 16-02-PLAN.md
 Next: Phase 14 complete (5/5 plans) — ready for `/gsd-verify-phase 14`
 </content>

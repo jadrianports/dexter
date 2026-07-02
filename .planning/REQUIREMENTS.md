@@ -33,7 +33,7 @@ Requirements for the v1.3 milestone. Each maps to a roadmap phase (13–17).
 ### Proactive Memory Callbacks *(Phase 16)*
 
 - [x] **PROACT-01**: A background surface occasionally volunteers a recalled memory at an **active moment** (anchored, never a poll, never a DM), gated behind `/memory forget` existing, firing **rarer** than the 0.30–0.35 ambient-roast rates, with an additive daily cap — the sarcastic voice is the anti-creepy mechanism.
-- [ ] **PROACT-02**: A user can opt out of proactive callbacks (a "pause callbacks for me" control), distinct from full memory deletion.
+- [x] **PROACT-02**: A user can opt out of proactive callbacks (a "pause callbacks for me" control), distinct from full memory deletion.
 
 ### Vision / Multimodal Roasting *(Phase 17 — last, isolated blast radius)*
 
@@ -84,7 +84,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | RAG-03 | Phase 15 | Complete |
 | RAG-04 | Phase 15 | Complete |
 | PROACT-01 | Phase 16 | Complete |
-| PROACT-02 | Phase 16 | Pending |
+| PROACT-02 | Phase 16 | Complete |
 | VIS-01 | Phase 17 | Pending |
 | VIS-02 | Phase 17 | Pending |
 | VIS-03 | Phase 17 | Pending |

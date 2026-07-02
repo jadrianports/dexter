@@ -162,7 +162,7 @@ Plans:
 **Wave 1** *(parallel — no file overlap)*
 
 - [x] 16-01-PLAN.md — Pure logic/proactive.py gate (should_fire_proactive_callback) + PROACTIVE_CALLBACK_CHANCE/DAILY_CAP config knobs + mock-free boundary/rarity tests (PROACT-01)
-- [ ] 16-02-PLAN.md — DB opt-out substrate: user_profiles.proactive_opt_out column + get/set_proactive_opt_out helpers + tests/test_database_phase16.py (signature guards + live-DB round-trip + independence-from-forget) (PROACT-02)
+- [x] 16-02-PLAN.md — DB opt-out substrate: user_profiles.proactive_opt_out column + get/set_proactive_opt_out helpers + tests/test_database_phase16.py (signature guards + live-DB round-trip + independence-from-forget) (PROACT-02)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -205,6 +205,6 @@ Plans:
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
 | 14. Smarter Music Brain | v1.3 | 5/5 | Complete    | 2026-07-02 |
 | 15. RAG Reach | v1.3 | 3/3 | Complete    | 2026-07-02 |
-| 16. Proactive Memory Callbacks | v1.3 | 1/4 | In Progress|  |
+| 16. Proactive Memory Callbacks | v1.3 | 2/4 | In Progress|  |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
 </content>
