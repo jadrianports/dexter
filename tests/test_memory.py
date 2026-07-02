@@ -445,7 +445,7 @@ class TestRecallService:
             }
         ]
 
-        async def fake_search(pool, *, user_id, query_embedding, k):
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None):
             return [_DictRecord(row) for row in below_floor_rows]
 
         async def fake_bump(pool, ids):
@@ -486,7 +486,7 @@ class TestRecallService:
 
         bumped_ids = []
 
-        async def fake_search(pool, *, user_id, query_embedding, k):
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None):
             return [_DictRecord(row) for row in above_floor_rows]
 
         async def fake_bump(pool, ids):
@@ -505,6 +505,148 @@ class TestRecallService:
         assert len(result) <= cap
         assert len(bumped_ids) == len(result)   # bump called for each returned fact
         assert all(isinstance(s, str) for s in result)   # returns strings
+
+
+# ---------------------------------------------------------------------------
+# TestSearchMemoriesKindFilter (Phase 14: OQ1 — optional kind param)
+# ---------------------------------------------------------------------------
+
+
+class _FakeConn:
+    """Records the SQL string + positional params passed to fetch(), returns []."""
+
+    def __init__(self):
+        self.last_sql: str | None = None
+        self.last_params: tuple | None = None
+
+    async def fetch(self, sql, *params):
+        self.last_sql = sql
+        self.last_params = params
+        return []
+
+
+class _FakePoolCM:
+    def __init__(self, conn: "_FakeConn"):
+        self._conn = conn
+
+    async def __aenter__(self):
+        return self._conn
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakePool:
+    """Poolless stand-in for asyncpg.Pool — captures the emitted SQL/params."""
+
+    def __init__(self):
+        self.conn = _FakeConn()
+
+    def acquire(self):
+        return _FakePoolCM(self.conn)
+
+
+class TestSearchMemoriesKindFilter:
+    """database.search_memories: kind=None is byte-identical; kind=X appends AND kind = $3."""
+
+    def test_kind_none_omits_clause_and_keeps_original_params(self) -> None:
+        """Byte-identical regression: omitting kind must not emit any kind clause (Pitfall 1)."""
+        import asyncio
+        import database
+
+        pool = _FakePool()
+        embedding = [0.1] * 768
+
+        asyncio.run(
+            database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5)
+        )
+
+        assert "kind =" not in pool.conn.last_sql
+        assert "kind IS NULL" not in pool.conn.last_sql
+        assert pool.conn.last_params == ("u1", embedding, 5)
+
+    def test_kind_taste_episode_appends_clause_and_binds_positionally(self) -> None:
+        """kind='taste_episode' appends 'AND kind = $3' and binds kind before k."""
+        import asyncio
+        import database
+
+        pool = _FakePool()
+        embedding = [0.1] * 768
+
+        asyncio.run(
+            database.search_memories(
+                pool, user_id="u1", query_embedding=embedding, k=5, kind="taste_episode"
+            )
+        )
+
+        assert "AND kind = $3" in pool.conn.last_sql
+        assert pool.conn.last_params == ("u1", embedding, "taste_episode", 5)
+
+
+class TestRecallKindParam:
+    """services.memory.MemoryService.recall: kind threads through to search_memories."""
+
+    def _make_service(self):
+        from services.memory import MemoryService
+
+        mock_gemini = MagicMock()
+        mock_gemini.embed = AsyncMock(return_value=[[0.1] * 768])
+        mock_pool = MagicMock()
+        return MemoryService(mock_pool, mock_gemini)
+
+    def test_recall_omits_kind_by_default(self) -> None:
+        """recall() without a kind arg forwards kind=None (byte-identical regression)."""
+        import asyncio
+        import database
+
+        svc = self._make_service()
+        captured_kind = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None):
+            captured_kind.append(kind)
+            return []
+
+        orig_search = database.search_memories
+        database.search_memories = fake_search
+        try:
+            result = asyncio.run(svc.recall("user1", "guild1", "test query"))
+        finally:
+            database.search_memories = orig_search
+
+        assert captured_kind == [None]
+        assert result == []
+
+    def test_recall_forwards_kind_to_search_memories(self) -> None:
+        """recall(..., kind='taste_episode') forwards kind straight through."""
+        import asyncio
+        import database
+
+        svc = self._make_service()
+        captured_kind = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None):
+            captured_kind.append(kind)
+            return []
+
+        orig_search = database.search_memories
+        database.search_memories = fake_search
+        try:
+            asyncio.run(
+                svc.recall("user1", "guild1", "test query", kind="taste_episode")
+            )
+        finally:
+            database.search_memories = orig_search
+
+        assert captured_kind == ["taste_episode"]
+
+    def test_recall_signature_accepts_kind_defaulting_to_none(self) -> None:
+        """recall's signature must accept kind as keyword, defaulting to None."""
+        import inspect
+        from services.memory import MemoryService
+
+        sig = inspect.signature(MemoryService.recall)
+        assert "kind" in sig.parameters
+        assert sig.parameters["kind"].default is None
 
 
 # ---------------------------------------------------------------------------
