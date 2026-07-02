@@ -166,7 +166,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 16-03-PLAN.md — Events glue: pre_recalled_memories bypass (Pitfall 1) + PROACTIVE_CALLBACK_FALLBACKS pool + _maybe_fire_proactive_callback + on_message designated-channel gate + behavioral tests (PROACT-01, PROACT-02)
+- [x] 16-03-PLAN.md — Events glue: pre_recalled_memories bypass (Pitfall 1) + PROACTIVE_CALLBACK_FALLBACKS pool + _maybe_fire_proactive_callback + on_message designated-channel gate + behavioral tests (PROACT-01, PROACT-02)
 - [ ] 16-04-PLAN.md — /memory callbacks on|off opt-out subcommand (self-scoped, Choice-constrained, distinct from forget) + tests/test_memory_command.py additions (PROACT-02)
 
 ### Phase 17: Vision / Multimodal Roasting
@@ -205,6 +205,6 @@ Plans:
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
 | 14. Smarter Music Brain | v1.3 | 5/5 | Complete    | 2026-07-02 |
 | 15. RAG Reach | v1.3 | 3/3 | Complete    | 2026-07-02 |
-| 16. Proactive Memory Callbacks | v1.3 | 2/4 | In Progress|  |
+| 16. Proactive Memory Callbacks | v1.3 | 3/4 | In Progress|  |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
 </content>

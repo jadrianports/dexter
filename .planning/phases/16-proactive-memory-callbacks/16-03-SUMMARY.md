@@ -109,3 +109,15 @@ None - no external service configuration required.
 ---
 *Phase: 16-proactive-memory-callbacks*
 *Completed: 2026-07-03*
+
+## Self-Check: PASSED
+
+- FOUND: personality/roasts.py
+- FOUND: cogs/events.py
+- FOUND: tests/test_proactive_events.py
+- FOUND: tests/test_ambient_recall_cadence.py
+- FOUND: .planning/phases/16-proactive-memory-callbacks/16-03-SUMMARY.md
+- FOUND: 33cddc8 (Task 1 commit)
+- FOUND: 10583d1 (Task 2 commit)
+- FOUND: 06a6d99 (Task 3 commit)
+- FOUND: a522700 (SUMMARY commit)
