@@ -1167,12 +1167,147 @@ class LibraryCog(commands.Cog):
         lines = "\n".join(
             f"- {c['title']} by {c['artist']}" for c in validated_candidates
         )
-        # Task 2 wires the propose-and-confirm view here (D-07) — placeholder
-        # send only, no save_jam call is reachable from this function.
-        await interaction.followup.send(
-            f"here's what i'd add to \"{name}\":\n{lines}",
+        view = JamSuggestConfirmView(self.bot, guild_id, name, validated_candidates)
+        message = await interaction.followup.send(
+            f"here's what i'd add to \"{name}\":\n{lines}\n\nconfirm to lock them in, or cancel.",
+            view=view,
             ephemeral=True,
         )
+        view.message = message
+
+
+class JamSuggestConfirmView(discord.ui.View):
+    """One-shot propose-and-confirm view for /jam suggest (D-07 trust discipline).
+
+    Finite timeout, never registered in bot.py's setup_hook — sibling of
+    cogs/music.py::DiscoverQueueView's one-shot confirm shape (14-04), not
+    NowPlayingView's persistent always-on controller (which never expires).
+    The shared jam snapshot is mutated ONLY inside the Confirm callback;
+    Cancel and timeout leave it completely untouched.
+    """
+
+    def __init__(
+        self,
+        bot: commands.Bot,
+        guild_id: str,
+        jam_name: str,
+        candidates: list[dict],
+        timeout: float = 60.0,
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.jam_name = jam_name
+        self.candidates = candidates
+        self.message: discord.Message | None = None  # set after send
+        self._used = False
+
+    @discord.ui.button(label="confirm", style=discord.ButtonStyle.success)
+    async def confirm_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        if self._used:
+            await interaction.response.send_message("already handled that.", ephemeral=True)
+            return
+        self._used = True
+        for child in self.children:
+            child.disabled = True
+
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            # Defensive reload — protects against a concurrent edit landing between
+            # the propose step and this confirm press.
+            existing = await get_jam(self.bot.pool, guild_id=self.guild_id, name=self.jam_name)
+            snapshot = list(existing) if existing is not None else []
+
+            added = 0
+            for candidate in self.candidates:
+                try:
+                    data = await self.bot.youtube_service.async_extract(candidate["url"])
+                except Exception as exc:
+                    log.debug(
+                        "jam suggest confirm: extract failed for '%s' (%s)",
+                        candidate.get("url"), exc,
+                    )
+                    continue
+                if data["duration"] > config.MAX_SONG_DURATION_SECONDS:
+                    continue
+
+                track = Track(
+                    video_id=data["video_id"],
+                    title=data["title"],
+                    artist=data.get("artist") or candidate.get("artist"),
+                    url=data["url"],
+                    duration_seconds=data["duration"],
+                    requested_by=interaction.user.id,
+                    was_auto_queued=True,
+                    thumbnail=data.get("thumbnail"),
+                )
+                snapshot.append(track.to_dict())
+                added += 1
+
+            if added == 0:
+                await interaction.followup.send(
+                    "couldn't lock any of those in after all — the jam is untouched.",
+                    ephemeral=True,
+                )
+                return
+
+            await save_jam(
+                self.bot.pool, guild_id=self.guild_id, name=self.jam_name, snapshot=snapshot
+            )
+            log.info(
+                "Guild %s: jam '%s' got %d /jam suggest addition(s) confirmed by user %s",
+                self.guild_id, self.jam_name, added, interaction.user.id,
+            )
+            await interaction.followup.send(
+                f"added {added} track(s) to jam \"{self.jam_name}\"."
+                f" use /jam load \"{self.jam_name}\" to queue it up.",
+                ephemeral=True,
+            )
+        except Exception as exc:
+            log.error(
+                "jam suggest: confirm failed for guild %s jam '%s': %s",
+                self.guild_id, self.jam_name, exc, exc_info=True,
+            )
+            await interaction.followup.send(
+                "something broke saving those. the jam wasn't touched.", ephemeral=True
+            )
+
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+    @discord.ui.button(label="cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        if self._used:
+            await interaction.response.send_message("already handled that.", ephemeral=True)
+            return
+        self._used = True
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.send_message(
+            "cancelled — nothing was added.", ephemeral=True
+        )
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
 
 
 async def setup(bot: commands.Bot) -> None:

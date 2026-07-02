@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import inspect
 
-from cogs.library import LibraryCog
+from cogs.library import JamSuggestConfirmView, LibraryCog
 
 
 def _jam_suggest_source() -> str:
@@ -20,6 +20,21 @@ def _jam_suggest_source() -> str:
     # coroutine is reachable via .callback (same shape as app_commands.command,
     # confirmed in tests/test_discover.py for MusicCog.discover).
     return inspect.getsource(LibraryCog.jam_suggest.callback)
+
+
+def _confirm_view_class_source() -> str:
+    return inspect.getsource(JamSuggestConfirmView)
+
+
+def _confirm_button_source() -> str:
+    # discord.ui.button decorates the function in place (unlike app_commands.command,
+    # which wraps it in a separate Command object) — directly inspectable, same as
+    # DiscoverQueueView.queue_button in tests/test_discover.py.
+    return inspect.getsource(JamSuggestConfirmView.confirm_button)
+
+
+def _cancel_button_source() -> str:
+    return inspect.getsource(JamSuggestConfirmView.cancel_button)
 
 
 # ---------------------------------------------------------------------------
@@ -127,3 +142,80 @@ class TestJamSuggestImports:
         import cogs.library as library_module
 
         assert library_module.build_jam_suggestion_prompt is not None
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — propose-and-confirm view + snapshot append (D-07)
+# ---------------------------------------------------------------------------
+
+
+class TestJamSuggestConfirmViewIsOneShot:
+    def test_view_class_exists(self):
+        assert JamSuggestConfirmView is not None
+
+    def test_view_uses_finite_timeout_not_none(self):
+        """This is a one-shot confirm view — it must NOT use timeout=None,
+        which is reserved for NowPlayingView's persistent, setup_hook-registered
+        controller."""
+        src = _confirm_view_class_source()
+        assert "timeout=None" not in src
+        assert "def __init__" in src
+        assert "timeout: float" in src or "timeout=60" in src or "timeout: float = 60.0" in src
+
+    def test_view_not_registered_in_setup_hook(self):
+        """JamSuggestConfirmView must never appear in bot.py's setup_hook —
+        unlike NowPlayingView, it is not a persistent view."""
+        import bot as bot_module
+
+        setup_hook_src = inspect.getsource(bot_module.DexterBot.setup_hook)
+        assert "JamSuggestConfirmView" not in setup_hook_src
+
+
+class TestJamSuggestConfirmCallback:
+    def test_confirm_calls_save_jam(self):
+        assert "save_jam(" in _confirm_button_source()
+
+    def test_confirm_reloads_snapshot_via_get_jam(self):
+        """Defensive reload against a concurrent edit between propose and confirm."""
+        assert "get_jam(" in _confirm_button_source()
+
+    def test_confirm_appends_to_existing_snapshot(self):
+        """Append semantics identical to /jam add — the reloaded existing
+        snapshot is extended, never replaced wholesale."""
+        src = _confirm_button_source()
+        assert "existing" in src
+        assert "snapshot.append(" in src or "snapshot +" in src or ".append(" in src
+
+    def test_confirm_checks_duration_cap(self):
+        assert "MAX_SONG_DURATION_SECONDS" in _confirm_button_source()
+
+
+class TestJamSuggestCancelCallback:
+    def test_cancel_does_not_call_save_jam(self):
+        assert "save_jam(" not in _cancel_button_source()
+
+
+class TestJamSuggestAttachesViewOnlyOnSurvivorsPath:
+    def test_view_attached_after_none_survive_guard(self):
+        """JamSuggestConfirmView is constructed textually after the
+        none-survive cold-start guard — i.e. only reachable once at least one
+        candidate survived validation."""
+        src = _jam_suggest_source()
+        guard_idx = src.index("if not validated_candidates:")
+        view_construction_idx = src.index("JamSuggestConfirmView(")
+        assert view_construction_idx > guard_idx
+
+    def test_view_attached_after_non_existent_jam_guard(self):
+        src = _jam_suggest_source()
+        guard_idx = src.index("if existing is None:")
+        view_construction_idx = src.index("JamSuggestConfirmView(")
+        assert view_construction_idx > guard_idx
+
+    def test_cold_start_paths_do_not_construct_view(self):
+        """Neither early-return branch (non-existent jam, none-survive) can
+        reach JamSuggestConfirmView construction — both return before it."""
+        src = _jam_suggest_source()
+        non_existent_guard_idx = src.index("if existing is None:")
+        non_existent_return_idx = src.index("return", non_existent_guard_idx)
+        view_construction_idx = src.index("JamSuggestConfirmView(")
+        assert non_existent_return_idx < view_construction_idx
