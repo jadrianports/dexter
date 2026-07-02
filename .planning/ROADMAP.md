@@ -181,7 +181,15 @@ Plans:
   3. A safety-blocked image reaction is silently skipped — no visible refusal message, never routed through the generic rate-limit/API-down fallback template used elsewhere (VIS-02)
   4. Explicit `safety_settings` are applied to every Gemini call that can receive user-influenced content, per the in-phase decision on whether to retrofit `/ask`/`/imagine` alongside vision (VIS-03)
 
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+**Wave 1** *(config-dependent leaf foundations — single owner of config.py, no cross-plan config conflict)*
+
+- [ ] 17-01-PLAN.md — Config knobs + `_build_safety_settings` retrofit across all 3 generate_content sites + image-carrying `chat()` (None-on-block contract preserved) + pure `logic/vision.py` gate + unit tests (VIS-01, VIS-03)
+
+**Wave 2** *(events glue — blocked on 17-01)*
+
+- [ ] 17-02-PLAN.md — `build_vision_prompt` conduct clause + `VISION_ROAST_FALLBACKS` (transport-only) + `cogs/events.py` glue (before-download mime/size gate, dedicated str|None generator, `_maybe_fire_vision_roast`, on_message dispatch, opt-out reuse) + behavioral tests (VIS-01, VIS-02)
 
 ## Progress
 
@@ -206,5 +214,4 @@ Plans:
 | 14. Smarter Music Brain | v1.3 | 5/5 | Complete    | 2026-07-02 |
 | 15. RAG Reach | v1.3 | 3/3 | Complete    | 2026-07-02 |
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete    | 2026-07-02 |
-| 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
-</content>
+| 17. Vision / Multimodal Roasting | v1.3 | 0/2 | Planned | - |
