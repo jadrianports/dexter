@@ -89,12 +89,23 @@ class EventsCog(commands.Cog):
         member: discord.Member,
         scenario: str,
         fallback_pool: list[str],
+        *,
+        pre_recalled_memories: list[str] | None = None,
     ) -> str:
         """Generate an ambient roast line, Gemini-first with template fallback.
 
         Priority-2 Gemini (personalized to the member's tracked taste) is attempted
         first. Falls back to pick_random(fallback_pool) on GeminiRateLimitError or
         any other exception. Never raises. Never uses priority 1.
+
+        Args:
+            pre_recalled_memories: Phase 16 / Pitfall 1 bypass. When not None, the
+                internal MEMORY_CALLBACK_CHANCE-gated recall roll and the internal
+                memory_service.recall() call are both skipped entirely — the
+                supplied list is used as-is as the recall result. Default None
+                preserves byte-identical behavior for the two voice-event call
+                sites (on_voice_state_update join/leave), which still run the
+                internal chance-gated recall unchanged.
         """
         fallback_line = pick_random(fallback_pool)
         # Apply {name} placeholder if present (tolerate lines without it)
@@ -124,18 +135,28 @@ class EventsCog(commands.Cog):
             # Phase 11 / MEM-06: occasional recall for stat×episode callback (D-04).
             # The substituted scenario string doubles as the recall anchor. Cadence
             # gate keeps recalls rare; degrade to [] on any error (non-fatal).
-            amb_memories: list[str] = []
-            if random.random() < config.MEMORY_CALLBACK_CHANCE:
-                _memory_svc = getattr(self.bot, "memory_service", None)
-                if _memory_svc is not None:
-                    try:
-                        amb_memories = await _memory_svc.recall(
-                            str(member.id),
-                            str(member.guild.id),
-                            scenario,   # formatted scenario is the recall anchor
-                        )
-                    except Exception as _mem_err:
-                        log.debug("memory.recall failed (non-fatal): %s", _mem_err)
+            #
+            # Phase 16 / Pitfall 1: when the proactive surface (plan 16-03) already
+            # did its own floor-checked recall, it passes the result in via
+            # pre_recalled_memories and this whole gated block is skipped — calling
+            # this method unmodified from that surface would otherwise triple-gate
+            # (proactive chance gate -> this 0.35 roll -> the floor check again).
+            # Default None keeps the two voice-event call sites byte-identical.
+            if pre_recalled_memories is not None:
+                amb_memories: list[str] = pre_recalled_memories
+            else:
+                amb_memories = []
+                if random.random() < config.MEMORY_CALLBACK_CHANCE:
+                    _memory_svc = getattr(self.bot, "memory_service", None)
+                    if _memory_svc is not None:
+                        try:
+                            amb_memories = await _memory_svc.recall(
+                                str(member.id),
+                                str(member.guild.id),
+                                scenario,   # formatted scenario is the recall anchor
+                            )
+                        except Exception as _mem_err:
+                            log.debug("memory.recall failed (non-fatal): %s", _mem_err)
 
             # Use the locked few-shot DEXTER voice (D-06: examples >> descriptions).
             # mood="normal" is a pure MOOD_CONTEXTS lookup (no DB call); seasonal omitted.

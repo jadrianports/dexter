@@ -35,6 +35,7 @@ __all__ = [
     "ROAST_SELF_LINES",
     "ROAST_BOT_LINES",
     "ROAST_NO_HISTORY_LINES",
+    "PROACTIVE_CALLBACK_FALLBACKS",
 ]
 
 
@@ -201,6 +202,23 @@ ROAST_NO_HISTORY_LINES: list[str] = [
     "no data on {name}. either they've never queued anything or they know i'm watching. one of those is smart.",
     "{name} is a blank slate in my logs. that changes the second they pick a song. i'm already judging the first choice.",
     "nothing on {name}. no songs, no history, no basis for a roast. so: who are you and why are you here.",
+]
+
+
+# ---------------------------------------------------------------------------
+# Proactive callback fallback pool (Phase 16 / PROACT-01, D-04)
+# Fires only when Gemini is unavailable for a proactive callback. No numeric
+# placeholders (accuracy firewall) — {name} is optional, .format()'d at the
+# call site when present.
+# ---------------------------------------------------------------------------
+
+PROACTIVE_CALLBACK_FALLBACKS: list[str] = [
+    "{name}, i remember your taste. i wish i didn't, but here we are.",
+    "you again. i've got a running file on your history and it's not flattering.",
+    "just thinking about your queue history. that's on me, honestly.",
+    "{name}. i know things about your taste. i'm choosing not to say all of them right now.",
+    "your history's been on my mind. that's less a compliment and more a diagnosis.",
+    "{name}, don't mind me. just recalling your track record. it's a lot.",
 ]
 
 
