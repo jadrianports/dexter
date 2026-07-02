@@ -64,7 +64,7 @@ Full phase details, success criteria, and decisions archived in
 **Milestone Goal:** Turn Dexter's listening history into semantic long-term memory that powers a genuinely good DJ (smarter auto-queue, discovery, generative jams), memory-aware `/roast` + `/ask`, and proactive callbacks — plus vision/multimodal roasting — deepening the v1.2 RAG foundation on existing infra (`pgvector` + the separate 60 RPM embed limiter), at zero new cost.
 
 - [x] **Phase 13: Semantic Music Memory** — new number-free `taste_episode` memory kind, its own salience/decay tier, background distillation task distinct from existing loops (foundation for everything below) (completed 2026-07-02)
-- [ ] **Phase 14: Smarter Music Brain** — taste-aware auto-queue (skip history as negative hint), artist/genre discovery command grounded in SQL co-occurrence, generative "continue this jam" suggestions
+- [x] **Phase 14: Smarter Music Brain** — taste-aware auto-queue (skip history as negative hint), artist/genre discovery command grounded in SQL co-occurrence, generative "continue this jam" suggestions (completed 2026-07-02)
 - [ ] **Phase 15: RAG Reach** — `recall()` grounds `/roast @user` (target-scoped) and `/ask`; `/memory` view + `/memory forget` (verified hard-delete, the trust escape hatch)
 - [ ] **Phase 16: Proactive Memory Callbacks** — background surface volunteers a memory at an active moment, rarer than ambient roasts, with a per-user opt-out
 - [ ] **Phase 17: Vision / Multimodal Roasting** — cadence-gated, safety-guarded image reactions via `gemini-2.5-flash` vision, sequenced last for blast-radius reasons
@@ -121,7 +121,7 @@ Plans:
 
 - [x] 14-03-PLAN.md — taste-aware auto-queue: negative skip hint + positive room-taste blend + D-02 hard post-filter (BRAIN-01)
 - [x] 14-04-PLAN.md — /discover command: invoker-anchored SQL co-occurrence adjacency + confirm-to-queue (BRAIN-02)
-- [ ] 14-05-PLAN.md — /jam suggest subcommand: validated generative jam assist, propose-and-confirm (BRAIN-03)
+- [x] 14-05-PLAN.md — /jam suggest subcommand: validated generative jam assist, propose-and-confirm (BRAIN-03)
 
 ### Phase 15: RAG Reach
 
@@ -184,7 +184,7 @@ Plans:
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete (live-runtime UAT deferred) | 2026-06-29 |
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
-| 14. Smarter Music Brain | v1.3 | 4/5 | In Progress|  |
+| 14. Smarter Music Brain | v1.3 | 5/5 | Complete   | 2026-07-02 |
 | 15. RAG Reach | v1.3 | 0/TBD | Not started | - |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
