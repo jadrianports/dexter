@@ -224,6 +224,14 @@ DISCOVER_COOCCURRENCE_WINDOW_DAYS = 90   # D-04: get_artist_cooccurrence recency
 JAM_SUGGEST_CANDIDATE_COUNT = 3          # D-06: /jam suggest candidate additions requested
 
 
+# --- Phase 16: Proactive Memory Callbacks ---
+# D-02: chance MUST stay strictly below both ambient cadences (UNPROMPTED_ROAST_CHANCE
+# = 0.30, MEMORY_CALLBACK_CHANCE = 0.35) — this is the rarest of the three cadences
+# (locked by tests/test_proactive_logic.py::test_proactive_chance_is_rarer_than_ambient).
+PROACTIVE_CALLBACK_CHANCE = 0.10         # D-02: strictly < UNPROMPTED_ROAST_CHANCE (0.30) and < MEMORY_CALLBACK_CHANCE (0.35)
+PROACTIVE_CALLBACK_DAILY_CAP = 1         # D-02: additive per-user, per-calendar-day ceiling
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
