@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Dexter is a sarcastic, personality-driven Discord bot. It plays music from YouTube (yt-dlp + FFmpeg), chats via Google Gemini (gemini-2.0-flash), and generates images, while tracking user behavior to roast them. The persona is lowercase, dry, accurate-first-sarcastic-second, and uses at most one emoji per message. It is built for a single Discord community as a solo-developer project, with Claude as the implementer. As of v1.0 it is a complete, code-finished bot — music + AI + an "alive" unprompted-behavior layer — hardened and scaled to run 24/7 on PostgreSQL behind an `AutoShardedBot`.
+Dexter is a sarcastic, personality-driven Discord bot. It plays music from YouTube (yt-dlp + FFmpeg), chats via Google Gemini (gemini-2.5-flash), and generates images, while tracking user behavior to roast them. The persona is lowercase, dry, accurate-first-sarcastic-second, and uses at most one emoji per message. It is built for a single Discord community as a solo-developer project, with Claude as the implementer. As of v1.0 it is a complete, code-finished bot — music + AI + an "alive" unprompted-behavior layer — hardened and scaled to run 24/7 on PostgreSQL behind an `AutoShardedBot`.
 
 ## Core Value
 
@@ -125,7 +125,7 @@ Carried forward (host-gated / deferred, not scoped to v1.3):
 ## Constraints
 
 - **Tech stack**: Python 3.11+, discord.py (+ davey for DAVE voice encryption), yt-dlp + FFmpeg (opus 192kbps), **PostgreSQL via asyncpg** (migrated from SQLite/aiosqlite in Phase 4), Google Gemini via the `google-genai` SDK (NOT the deprecated `google-generativeai`) — fixed per CLAUDE.md, do not deviate
-- **AI model**: `GEMINI_MODEL = "gemini-2.0-flash"` for chat; all AI features share a single global 15 RPM rate limiter (`GEMINI_RPM_LIMIT = 15`), priority 1 = user commands (wait ≤60s), priority 2 = background/auto-queue (reject if wait >10s)
+- **AI model**: `GEMINI_MODEL = "gemini-2.5-flash"` for chat; all AI features share a single global 15 RPM rate limiter (`GEMINI_RPM_LIMIT = 15`), priority 1 = user commands (wait ≤60s), priority 2 = background/auto-queue (reject if wait >10s)
 - **Image model**: `gemini-2.5-flash-image` with `response_modalities=["IMAGE"]`; `MAX_IMAGES_PER_USER_PER_DAY = 10`
 - **Music limits**: `MAX_SONG_DURATION_SECONDS = 900` (reject longer), reject livestreams, `MAX_PLAYLIST_IMPORT = 50` (truncate + inform), `IDLE_TIMEOUT_SECONDS = 600` auto-leave, `AUDIO_CACHE_MAX_MB = 2048` (evict oldest by atime, hourly cleanup), `MAX_QUEUE_SIZE_PER_GUILD = 500` (cap enforced in `MusicQueue.add()`)
 - **Reliability**: explicit FFmpeg/voice cleanup on skip/stop/error/leave to avoid orphans; yt-dlp self-heals (daily 04:00 update + on-failure update→retry throttled ≤once/hour→stream fallback→error)

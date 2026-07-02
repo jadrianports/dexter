@@ -15,7 +15,8 @@ Read `dexter-architecture.md` for full context, personality samples, and rationa
 - **Music:** yt-dlp + FFmpeg (opus, 192kbps)
 - **AI Chat:** Google Gemini API via `google-genai` (free tier, `gemini-2.5-flash`)
 - **Image Gen:** `gemini-2.5-flash-image` via the Gemini API (free tier)
-- **Long-term memory (RAG):** `pgvector` on the same Neon Postgres + `gemini-embedding-001` @ 768d on a **separate** 60 RPM limiter (Phase 11 — zero new infra/cost)
+- **Vision (multimodal):** `gemini-2.5-flash` native image understanding for cadence-gated image roasts (Phase 17 — shares the 15 RPM chat budget at priority 2, NOT the embed limiter; explicit `safety_settings` on every user-content Gemini call)
+- **Long-term memory (RAG):** `pgvector` on the same Neon Postgres + `gemini-embedding-001` @ 768d on a **separate** 60 RPM limiter (Phase 11 — zero new infra/cost). Phase 13 added a number-free `taste_episode` memory kind (its own salience/decay tier) distilled from listening history
 - **Database:** PostgreSQL 16 via `asyncpg` 0.31.0 — migrated from SQLite in Phase 4; `vector` extension enabled in Phase 11
 - **Containerization:** Docker + Docker Compose (bot image only; DB is **Neon serverless Postgres**, not a colocated container — the Oracle-era `postgres:16-alpine` service was dropped in Phase 6)
 - **Lyrics:** Genius API via `lyricsgenius` (primary), AZLyrics scrape via `beautifulsoup4` (fallback), LRCLIB `/api/search` (third fallback, Phase 12)
@@ -33,18 +34,22 @@ dexter/
 ├── docker-compose.yml             # bot service only (DB = Neon, no colocated Postgres); named volumes
 ├── Dockerfile                     # bot image build
 ├── cogs/
-│   ├── music.py                   # Music slash commands + /seek /previous /jump /filter /autolyrics (Phases 6/7)
-│   ├── ai.py                      # /ask, /roast, AI auto-queue logic
+│   ├── music.py                   # Music slash commands + /seek /previous /jump /filter /autolyrics /discover (Phases 6/7/14)
+│   ├── ai.py                      # /ask, /roast (both RAG-grounded, Phase 15), AI auto-queue logic
 │   ├── imagine.py                 # /imagine
+│   ├── memory.py                  # Phase 15/16: /memory view|forget|callbacks (self-scoped, ephemeral)
 │   ├── help.py                    # /help
 │   ├── ops.py                     # /leaderboard, /skips, /stats (Phases 8/12)
-│   ├── library.py                 # /favorite(s), /playlist group, /jam group (Phases 7/12)
-│   └── events.py                  # Unprompted roasts, reactions, mood, status, idle
+│   ├── library.py                 # /favorite(s), /playlist group, /jam group (+ /jam suggest, Phase 14) (Phases 7/12/14)
+│   └── events.py                  # Unprompted roasts, reactions, mood, status, idle, proactive callbacks (P16), vision roasts (P17)
 ├── logic/                         # Phase 10: pure, mock-free decision logic (TDD seam)
 │   ├── playback.py                # TrackEndAction enum + 5 keyword-only playback fns
 │   ├── health.py                  # determine_health_status + assemble_degraded_reasons
 │   ├── roasts.py                  # decide_ambient_roast + cooldown_elapsed
 │   ├── autoqueue.py               # token-set-containment hallucination validator (Phase 12)
+│   ├── taste.py                   # Phase 13/14: classify_artist bands + positive-taste selection
+│   ├── proactive.py               # Phase 16: should_fire_proactive_callback gate (chance + daily cap)
+│   ├── vision.py                  # Phase 17: should_fire_vision_roast gate (chance + per-user cooldown)
 │   └── skip_stats.py              # /skips rate computation (Phase 12)
 ├── services/
 │   ├── youtube.py                 # yt-dlp: search, download, metadata extraction, resolution cache, self-heal
@@ -90,7 +95,9 @@ Defined in `database.py` as `SCHEMA_SQL` (idempotent `CREATE TABLE IF NOT EXISTS
 (`TIMESTAMPTZ`, `BIGSERIAL`, `BOOLEAN`, `JSONB`, `now()`). Phase 3 added the streak columns;
 Phase 4 added the `guild_queues` table for queue persistence; Phase 6 added `resolution_cache`;
 Phase 7 added `user_favorites` + `user_playlists`; Phase 8 added `bot_daily_stats.total_errors`;
-Phase 11 enabled the `vector` extension + `user_memories`; Phase 12 added `guild_jams`.
+Phase 11 enabled the `vector` extension + `user_memories`; Phase 12 added `guild_jams`;
+Phase 16 added `user_profiles.proactive_opt_out`. (v1.3 added no new tables — the `taste_episode`
+memory is just a new `kind` on `user_memories`, per the kind-agnostic MemoryService design.)
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -101,7 +108,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     last_active_at     TIMESTAMPTZ DEFAULT now(),
     current_streak     INTEGER DEFAULT 0,   -- Phase 3
     longest_streak     INTEGER DEFAULT 0,   -- Phase 3
-    last_streak_date   TEXT                 -- Phase 3 (ISO date in STREAK_TIMEZONE)
+    last_streak_date   TEXT,                -- Phase 3 (ISO date in STREAK_TIMEZONE)
+    proactive_opt_out  BOOLEAN DEFAULT false -- Phase 16 (per-user proactive-callback silence; ALTER-added)
 );
 
 CREATE TABLE IF NOT EXISTS song_history (
@@ -198,7 +206,7 @@ CREATE TABLE IF NOT EXISTS user_memories (
     id               BIGSERIAL PRIMARY KEY,
     user_id          TEXT NOT NULL,
     guild_id         TEXT,
-    kind             TEXT,               -- milestone|late_night|repeat_song|auto_queue_ignored|daily_batch
+    kind             TEXT,               -- milestone|late_night|repeat_song|auto_queue_ignored|daily_batch|taste_episode (P13)
     fact             TEXT NOT NULL,
     embedding        vector(768) NOT NULL,  -- gemini-embedding-001 @ 768d
     salience         REAL DEFAULT 0,
@@ -209,13 +217,22 @@ CREATE TABLE IF NOT EXISTS user_memories (
     surface_count    INTEGER DEFAULT 0,
     expires_at       TIMESTAMPTZ         -- daily decay sweep evicts low-salience expired facts
 );
+
+-- Phase 16: per-user proactive-callback opt-out (distinct from /memory forget — silences the
+-- surface without deleting memories). Upserted via get/set_proactive_opt_out helpers.
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS proactive_opt_out BOOLEAN DEFAULT false;
 ```
+
+> **Phase 13 decay note:** `taste_episode` rows use a shorter decay horizon than Phase 11 kinds
+> (`MEMORY_DECAY_DAYS_BY_KIND["taste_episode"] = TASTE_DECAY_DAYS = 30` vs the 90-day default)
+> and a below-floor salience (0.4) so stale fads age out; `remember()` self-refreshes `expires_at`
+> on dedup for short-decay kinds only, leaving all Phase 11 kinds byte-identical (D-05).
 
 ---
 
 ## Configuration
 
-All in `config.py`. Single file. Phases 2–12 settings are now implemented — the block below shows the Phase 1 core; the full current set follows it. `config.py` is always the authoritative list.
+All in `config.py`. Single file. Phases 2–17 settings are now implemented — the block below shows the Phase 1 core; the full current set follows it. `config.py` is always the authoritative list.
 
 ```python
 # Paths
@@ -310,6 +327,37 @@ MEMORY_INJECT_CAP = 3; MEMORY_MAX_PER_USER = 150; MEMORY_DECAY_DAYS = 90
 MEMORY_CALLBACK_CHANCE = 0.35; MEMORY_DISTILL_BATCH_HOUR = 3   # + rerank weights + salience base weights
 ```
 
+**v1.3 "Taste Brain" (Phases 13–17):**
+
+```python
+# Semantic music memory (Phase 13) — taste_episode is a new memory KIND, not a new table
+TASTE_DECAY_DAYS = 30                # shorter half-life than MEMORY_DECAY_DAYS=90 (stale-taste guard, D-03)
+TASTE_DISTILL_BATCH_HOUR = 5         # distinct UTC slot, clear of 02:30/03:00/04:00 loops (no Neon herd, D-06)
+TASTE_LOOKBACK_DAYS = 7; TASTE_BASELINE_DAYS = 90; TASTE_MIN_ACTIVITY_TRACKS = 5
+TASTE_OBSESSION_MIN_PLAYS = 5; TASTE_NEW_ARRIVAL_MIN_PLAYS = 3; TASTE_STEADY_MIN_BASELINE = 5
+TASTE_BAND_HEAVY_PLAYS = 5; TASTE_BAND_FEW_PLAYS = 2     # qualitative bands — NEVER embed raw counts
+MEMORY_DECAY_DAYS_BY_KIND = {"taste_episode": TASTE_DECAY_DAYS}   # Phase 11 kinds fall back to MEMORY_DECAY_DAYS
+
+# Smarter music brain (Phase 14) — read-only over taste substrate + live SQL
+AUTO_QUEUE_POSITIVE_TASTE_CAP = 4        # max injected taste_episode facts into auto-queue prompt
+DISCOVER_ADJACENT_COUNT = 3              # max /discover adjacent artists surfaced
+DISCOVER_COOCCURRENCE_WINDOW_DAYS = 90   # get_artist_cooccurrence recency bound
+
+# RAG reach (Phase 15) — /memory view page budget (repurposed from a row-count to a char budget)
+MEMORY_VIEW_PAGE_SIZE = 3800             # chars per /memory view page (RAG-03)
+
+# Proactive callbacks (Phase 16) — additive 3rd ambient cadence, rarer than roasts
+PROACTIVE_CALLBACK_CHANCE = 0.10         # strictly < UNPROMPTED_ROAST_CHANCE (0.30) and MEMORY_CALLBACK_CHANCE (0.35)
+PROACTIVE_CALLBACK_DAILY_CAP = 1         # additive per-user, per-calendar-day ceiling
+
+# Vision / multimodal roasting (Phase 17) — highest blast-radius surface, gated hard
+VISION_ROAST_CHANCE = 0.12               # strictly < both ambient cadences (D-04)
+VISION_ROAST_COOLDOWN_SECONDS = 600      # per-user cooldown
+MAX_VISION_IMAGE_BYTES = 8 * 1024 * 1024 # 8MB raw — pre-download guard, headroom under Gemini's 20MB inline cap
+VISION_SAFETY_THRESHOLD = "BLOCK_MEDIUM_AND_ABOVE"  # real block — vision only
+TEXT_SAFETY_THRESHOLD = "BLOCK_ONLY_HIGH"           # permissive-but-explicit — /ask + /imagine + all non-image chat()
+```
+
 ---
 
 ## Slash Commands
@@ -334,14 +382,15 @@ MEMORY_CALLBACK_CHANCE = 0.35; MEMORY_DISTILL_BATCH_HOUR = 3   # + rerank weight
 | `/jump` | `<index>` | — |
 | `/filter` | `[bassboost\|nightcore\|slowed+reverb\|8d\|off]` | 5s |
 | `/autolyrics` | `[on\|off]` | — |
+| `/discover` | — (SQL co-occurrence artist adjacency + confirm-to-queue, Phase 14) | — |
 
 > Now-playing embed also carries a persistent 5-button control view (play/pause, skip, loop, shuffle, stop) — Phase 7.
 
 ### AI
 | Command | Args | Cooldown |
 |---------|------|----------|
-| `/ask` | `<question>` | 5s |
-| `/roast` | `@user` | 30s |
+| `/ask` | `<question>` (RAG-grounded on invoker's recalled memory, Phase 15) | 5s |
+| `/roast` | `@user` (RAG-grounded on the **target's** recalled history, Phase 15) | 30s |
 
 ### Image
 | Command | Args | Cooldown |
@@ -354,7 +403,16 @@ MEMORY_CALLBACK_CHANCE = 0.35; MEMORY_DISTILL_BATCH_HOUR = 3   # + rerank weight
 | `/favorite` | — (save now-playing) | 2s |
 | `/favorites` | — (view + queue) | 2s |
 | `/playlist save\|load\|list\|delete` | `[name]` | — |
-| `/jam save\|add\|load\|list\|delete` | `[name]` | — |
+| `/jam save\|add\|load\|list\|delete\|suggest` | `[name]` — `suggest` = validated generative jam additions (Phase 14) | — |
+
+### Memory (Phases 15/16)
+| Command | Args | Cooldown |
+|---------|------|----------|
+| `/memory view` | — (verbatim, ephemeral, paginated view of what Dexter remembers about you) | — |
+| `/memory forget` | — (count preview + danger-confirm; hard-deletes rows **and** embeddings — the trust escape hatch) | — |
+| `/memory callbacks` | `[on\|off]` (per-user proactive-callback opt-out; distinct from `forget`) | — |
+
+> All `/memory` subcommands are strictly self-scoped — no `target` arg, no way to inspect another user.
 
 ### Ops (Phases 8/12)
 | Command | Args | Cooldown |
@@ -501,6 +559,19 @@ Every 5 min, rotate from pool: current song, server count, personality lines, se
 ### Startup Message
 On boot: post "i'm back. did you miss me. probably not." in designated channel.
 
+### Proactive Memory Callbacks (Phase 16)
+A third, rarest ambient cadence. On `on_message` in the designated channel, a pure
+`should_fire_proactive_callback` gate (chance `0.10` + additive daily cap `1`, both below the
+ambient roast cadences) may volunteer a remembered detail — reply-anchored with
+`AllowedMentions.none()`, recall anchored on the triggering message so it reads as relevant, not
+surveillance. Per-user opt-out via `/memory callbacks off`. Never a cold poll, never a DM.
+
+### Vision / Multimodal Roasts (Phase 17)
+Image posted in the designated channel → `should_fire_vision_roast` gate (chance `0.12` + per-user
+cooldown, priority-2 on the 15 RPM budget). Oversized/wrong-mime images are rejected **before
+download**. A safety-blocked reaction is **silently skipped** (no visible refusal, no fallback
+template). Shares the Phase 16 `proactive_opt_out` silence.
+
 ---
 
 ## Now Playing Embed
@@ -571,6 +642,7 @@ Start on bot ready:
 5. Daily stats reset (midnight)
 6. Memory distill batch (daily 03:00 UTC — background message-buffer → RAG facts, Phase 11)
 7. Memory decay sweep (evicts low-salience expired `user_memories`, Phase 11)
+8. Taste distill batch (daily 05:00 UTC — `song_history` → number-free `taste_episode` facts; own slot, guild-scoped, Phase 13)
 
 > Fire-and-forget tasks are launched via `utils/tasks.py::make_task` (Phase 9) — a done-callback surfaces exceptions to `dexter.log` + the error channel instead of vanishing silently. Next-track prefetch (`_prefetch_next_track`) is generation-guarded to avoid racing skip/stop teardown (Phase 6).
 
@@ -688,7 +760,22 @@ Extracted decision logic into pure `logic/` modules (`playback`, `health`, `roas
 ### Phase 12 — Richer Music/UX ✅ COMPLETE
 Per-server `/jam` shared playlists, `/skips` analytics, LRCLIB third lyrics fallback, token-set auto-queue hallucination validation (`logic/autoqueue.py`).
 
-> **Milestone status:** v1.0 (Phases 1–4), v1.1 "Live & Lethal" (Phases 5–8), and v1.2 "Sharper & Smarter" (Phases 9–12) all shipped (code) & archived — tags `v1.0`/`v1.1`/`v1.2`. Next: **v1.3 (planning)**. The 24/7 live deploy + the Phase 03–06/09/11 live-runtime UAT tail remain **parked** behind an always-on residential host. See `.planning/PROJECT.md` + `.planning/STATE.md` for authoritative current state.
+### Phase 13 — Semantic Music Memory ✅ COMPLETE
+New number-free `taste_episode` memory kind (own salience 0.4 + 30-day decay tier via `MEMORY_DECAY_DAYS_BY_KIND`), `song_history` aggregate helpers, D-05 self-refresh-on-dedup (`refresh_memory_expiry`), and a `taste_distill_batch` @tasks.loop @ 05:00 UTC — foundation the rest of v1.3 reads from. Zero new tables (kind-agnostic MemoryService).
+
+### Phase 14 — Smarter Music Brain ✅ COMPLETE
+Taste-aware auto-queue (recent skips as negative hint + positive room-taste blend + D-02 hard post-filter), `/discover` (invoker-anchored SQL co-occurrence adjacency, never hallucinated), `/jam suggest` (validated generative jam additions reusing `logic/autoqueue.py`). Read-only over taste substrate + live SQL; `logic/taste.py` pure seam.
+
+### Phase 15 — RAG Reach ✅ COMPLETE
+`recall()` grounds `/roast @user` (target-scoped) and `/ask` (D-01 removed the `MEMORY_CALLBACK_CHANCE` gate from these two only; ambient surfaces keep it). New `cogs/memory.py`: `/memory view` (verbatim, ephemeral, char-budget paginated) + `/memory forget` (verified hard-delete of rows **and** embeddings — the trust escape hatch Phase 16 depends on). `list_user_memories` / `delete_all_user_memories` helpers.
+
+### Phase 16 — Proactive Memory Callbacks ✅ COMPLETE
+Additive 3rd ambient cadence: pure `logic/proactive.py` gate (`PROACTIVE_CALLBACK_CHANCE=0.10` + `DAILY_CAP=1`, rarer than roasts) volunteers a memory on `on_message` in the designated channel. `user_profiles.proactive_opt_out` column + `/memory callbacks on|off`. Pitfall-1 `pre_recalled_memories` bypass keeps the ambient 0.30/0.35 cadence byte-identical.
+
+### Phase 17 — Vision / Multimodal Roasting ✅ COMPLETE
+Cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image roasts via `gemini-2.5-flash` vision; before-download mime/size gate (`MAX_VISION_IMAGE_BYTES=8MB`); safety-block = **silent skip** (never a fallback template); `_build_safety_settings` retrofit across all 3 `generate_content` sites (VIS-03). `logic/vision.py` pure gate; reuses Phase 16 opt-out.
+
+> **Milestone status:** v1.0 (Phases 1–4), v1.1 "Live & Lethal" (Phases 5–8), and v1.2 "Sharper & Smarter" (Phases 9–12) all shipped (code), archived & tagged — `v1.0`/`v1.1`/`v1.2`. **v1.3 "Taste Brain" (Phases 13–17) is CODE-COMPLETE + code-verified on `main` (18 plans, suite green through 848 tests), pending milestone close (`/gsd:complete-milestone`) — the whole v1.3 stack is still UNPUSHED.** The 24/7 live deploy + the Phase 03–06/09/11/13–17 live-Discord UAT tail remain **parked** behind an always-on residential host. See `.planning/PROJECT.md` + `.planning/STATE.md` for authoritative current state.
 
 ---
 
@@ -706,6 +793,10 @@ Per-server `/jam` shared playlists, `/skips` analytics, LRCLIB third lyrics fall
 10. **Cache cleanup must run — unchecked cache will fill the host's ephemeral disk (512MB cap, LFU eviction)**
 11. **Embeddings use the SEPARATE 60 RPM limiter — never the shared 15 RPM chat budget (RAG memory must not starve `/ask`)**
 12. **Memory is roast ammo, not a number source — hard numbers in output come from live SQL, never from embedded facts (accuracy firewall)**
+13. **Never embed raw play counts in `taste_episode` facts — distill to qualitative bands (`TASTE_BAND_*`); the accuracy firewall applies to taste memory too (Phase 13)**
+14. **Every Gemini call that can receive user-influenced content sets explicit `safety_settings`** — Gemini 2.5 defaults them OFF; vision uses a real block (`BLOCK_MEDIUM_AND_ABOVE`), `/ask`/`/imagine` stay permissive-but-explicit (`BLOCK_ONLY_HIGH`) so edgy output doesn't regress (Phase 17 / VIS-03)
+15. **A safety-blocked vision reaction is a SILENT skip — never a visible refusal or the generic rate-limit fallback template (Phase 17 / VIS-02)**
+16. **`/memory forget` must be a real hard-delete (rows + embeddings) — it is the trust escape hatch proactive callbacks (Phase 16) hard-depend on shipping first**
 
 ---
 
@@ -744,3 +835,17 @@ Per-server `/jam` shared playlists, `/skips` analytics, LRCLIB third lyrics fall
 - **Memory callback cadence gate is per-surface** (`random.random() < MEMORY_CALLBACK_CHANCE`) — an occasional stat×episode payoff, not every roast; `guild_id=''` is safe in `_build_roast_line` because ANN recall scopes to `user_id` only (D-04)
 - **`strip_lrc_headers` runs BEFORE `sanitize_lyrics`** for LRCLIB — sanitize only handles HTML/@mentions, not LRC metadata lines; use LRCLIB `/api/search` (not `/api/get`) — robust to missing duration, returns a relevance-sorted array (Phase 12 Pitfalls 1/2)
 - **Auto-queue hallucination check uses token-set containment, not `difflib`** — YouTube titles are longer than clean names, so a subset check is the semantically correct rejection test for a hallucinated track (`logic/autoqueue.py`, D-12)
+
+**Phases 13–17 (taste memory, music brain, RAG reach, proactive callbacks, vision):**
+- **`taste_episode` is a new `kind`, not a new table or code path** — `MemoryService.recall/remember/distill` is kind-agnostic by design; `MEMORY_DECAY_DAYS_BY_KIND` is a NEW mapping (not a mutation of `MEMORY_DECAY_DAYS`) so every Phase 11 kind falls back unchanged (Phase 13)
+- **`remember()` self-refreshes `expires_at` on dedup ONLY for kinds in `MEMORY_DECAY_DAYS_BY_KIND`** — the D-05 fix; Phase 11 kinds stay byte-identical. `refresh_memory_expiry` is an `expires_at`-only UPDATE sibling to `bump_memory_hit` (never touches hit_count/salience/last_seen_at)
+- **`taste_distill_batch` runs at `TASTE_DISTILL_BATCH_HOUR` (05:00 UTC), the only free slot** distinct from cache_cleanup/memory_sweep/memory_distill_batch/ytdlp_update — no Neon thundering-herd. It carries `guild_id` through to `distill_and_remember` (unlike `daily_batch`'s `None`) since taste is guild-scoped listening (D-06/D-07)
+- **`search_memories`/`recall` `kind` param defaults to `None` and OMITS the SQL clause entirely when unset** (never `kind IS NULL`) — byte-identical to pre-Phase-14 behavior; the guild-scoped `expires_at` search scoping is `user_id`-only, so a cross-kind sweep must not corrupt another kind's expiry (Phase 13 CR-01 scar)
+- **`/discover` anchor derives from guild-scoped `song_history` (`get_user_top_artist`), NOT the guild-less `user_artist_counts`** (OQ2 Option B); co-occurrence is a same-guild-calendar-day aggregate with no per-user attribution — multi-user-safe, never leaks one user's history into another's results (Phase 14)
+- **`select_positive_taste_context` checks the cap BEFORE appending** (not after) so `cap=0` returns `[]` — off-by-one scar found writing the cap=0 test (Phase 14)
+- **D-01: `/ask` and `/roast` recall on EVERY invocation (gate removed); ambient surfaces (`events.py`, `music.py`) keep the `MEMORY_CALLBACK_CHANCE` gate** — `test_ambient_recall_cadence.py` locks this split. Removing the gate deleted `import random` from `cogs/ai.py` entirely (assert behaviorally, don't `patch("cogs.ai.random")`) (Phase 15)
+- **`list_user_memories` callers pass `MEMORY_MAX_PER_USER`, never `MEMORY_INJECT_CAP`** — else the `/memory view` truncates below what `forget` erases (Phase 15 T-15-04)
+- **Proactive gate (`logic/proactive.py`) implements only opt-out + chance + daily-cap; the async recall-floor step lives in cog glue, not the pure logic** — keep the seam pure. `PROACTIVE_CALLBACK_CHANCE=0.10` is strictly below both ambient cadences, enforced by a rarity-invariant test (Phase 16)
+- **Pitfall-1: `_generate_ambient_roast` has its OWN internal `MEMORY_CALLBACK_CHANCE` gate** — calling it from the proactive surface unmodified triple-gates. The fix is an optional `pre_recalled_memories` param (default `None` = byte-identical ambient path), passed as an if/else split around the internal recall block, NOT an early return (Phase 16)
+- **Vision reuses a DEDICATED `_generate_vision_roast` (str|None), never the ambient always-str generator** — the ambient path collapses safety-block AND transport-failure into one `return fallback_line`, which would leak a visible template for a safety-blocked image (VIS-02). Success→line, transport-except→fallback, empty/blocked→`None` silent-skip. `chat()` already returns `None`-no-raise on empty/blocked (Phase 17)
+- **Vision mime allowlist EXCLUDES gif** (Gemini image-understanding 400s on GIF) and normalizes `content_type` (strip `;charset=`, `None`→reject); the mime/size gate runs BEFORE `attachment.read()`/download; the free structural gate runs BEFORE the DB opt-out lookup (WR-01/02/03 close-out fixes, Phase 17)
