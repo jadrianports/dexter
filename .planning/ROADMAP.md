@@ -66,7 +66,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 13: Semantic Music Memory** — new number-free `taste_episode` memory kind, its own salience/decay tier, background distillation task distinct from existing loops (foundation for everything below) (completed 2026-07-02)
 - [x] **Phase 14: Smarter Music Brain** — taste-aware auto-queue (skip history as negative hint), artist/genre discovery command grounded in SQL co-occurrence, generative "continue this jam" suggestions (completed 2026-07-02)
 - [x] **Phase 15: RAG Reach** — `recall()` grounds `/roast @user` (target-scoped) and `/ask`; `/memory` view + `/memory forget` (verified hard-delete, the trust escape hatch) (completed 2026-07-02)
-- [ ] **Phase 16: Proactive Memory Callbacks** — background surface volunteers a memory at an active moment, rarer than ambient roasts, with a per-user opt-out
+- [x] **Phase 16: Proactive Memory Callbacks** — background surface volunteers a memory at an active moment, rarer than ambient roasts, with a per-user opt-out (completed 2026-07-02)
 - [ ] **Phase 17: Vision / Multimodal Roasting** — cadence-gated, safety-guarded image reactions via `gemini-2.5-flash` vision, sequenced last for blast-radius reasons
 
 ## Phase Details
@@ -167,7 +167,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1)*
 
 - [x] 16-03-PLAN.md — Events glue: pre_recalled_memories bypass (Pitfall 1) + PROACTIVE_CALLBACK_FALLBACKS pool + _maybe_fire_proactive_callback + on_message designated-channel gate + behavioral tests (PROACT-01, PROACT-02)
-- [ ] 16-04-PLAN.md — /memory callbacks on|off opt-out subcommand (self-scoped, Choice-constrained, distinct from forget) + tests/test_memory_command.py additions (PROACT-02)
+- [x] 16-04-PLAN.md — /memory callbacks on|off opt-out subcommand (self-scoped, Choice-constrained, distinct from forget) + tests/test_memory_command.py additions (PROACT-02)
 
 ### Phase 17: Vision / Multimodal Roasting
 
@@ -205,6 +205,6 @@ Plans:
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
 | 14. Smarter Music Brain | v1.3 | 5/5 | Complete    | 2026-07-02 |
 | 15. RAG Reach | v1.3 | 3/3 | Complete    | 2026-07-02 |
-| 16. Proactive Memory Callbacks | v1.3 | 3/4 | In Progress|  |
+| 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete   | 2026-07-02 |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
 </content>

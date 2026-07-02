@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
-status: executing
-stopped_at: Completed 16-03-PLAN.md
-last_updated: "2026-07-02T20:25:36.268Z"
+status: verifying
+stopped_at: Completed 16-04-PLAN.md
+last_updated: "2026-07-02T20:34:53.001Z"
 last_activity: 2026-07-02 -- Phase 16 execution started
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 16
-  completed_plans: 15
-  percent: 60
+  completed_plans: 16
+  percent: 80
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 
 Phase: 16 (proactive-memory-callbacks) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-02 -- Phase 16 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 16 P01 | 3min | 2 tasks | 3 files |
 | Phase 16 P02 | 8min | 2 tasks | 2 files |
 | Phase 16 P03 | 13min | 3 tasks | 4 files |
+| Phase 16 P04 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,7 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase 16]: 16-02: set_proactive_opt_out locked to exactly (pool, user_id, opted_out) per the plan verify one-liner and Task 2 test; insert-branch username placeholder is user_id itself (never overwrites real username since DO UPDATE only touches proactive_opt_out)
 - [Phase 16]: [Phase 16]: pre_recalled_memories bypass implemented as an if/else split around the existing internal recall block (not an early return) to keep the internal MEMORY_CALLBACK_CHANCE literal present for test_ambient_surfaces_retain_gate while leaving all downstream Gemini/fallback logic untouched
 - [Phase 16]: _maybe_fire_proactive_callback calls database.get_proactive_opt_out(self.bot.pool, user_id) directly (not getattr-guarded), matching the plan's literal spec and the existing convention that bot.pool is always present
+- [Phase 16]: 16-04: memory_callbacks subcommand implements Task 1/2 exactly as planned (no signature or copy ambiguity to resolve)
 
 ### Pending Todos
 
@@ -134,7 +136,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T20:25:36.252Z
-Stopped at: Completed 16-03-PLAN.md
+Last session: 2026-07-02T20:34:52.980Z
+Stopped at: Completed 16-04-PLAN.md
 Next: Phase 14 complete (5/5 plans) — ready for `/gsd-verify-phase 14`
 </content>
