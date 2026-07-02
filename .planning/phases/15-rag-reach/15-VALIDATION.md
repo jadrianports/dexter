@@ -44,11 +44,10 @@ created: 2026-07-03
 
 | Requirement | Behavior | Test Type | Automated Command | File Exists |
 |-------------|----------|-----------|-------------------|-------------|
-| RAG-01 | `/roast @user` recall fires unconditionally (35% gate removed) | unit | `pytest tests/test_roast_command.py::test_roast_recall_always_fires -x` | ❌ W0 |
-| RAG-01 | `/roast` recall scoped to `target.id`, never `interaction.user.id` | unit | `pytest tests/test_roast_command.py::test_roast_recall_scoped_to_target -x` | ❌ W0 |
-| RAG-02 | `/ask` recall fires unconditionally (35% gate removed) | unit | `pytest tests/test_ask_command.py::test_ask_recall_always_fires -x` | ❌ W0 |
+| RAG-01 | `/roast @user` recall fires unconditionally (35% gate removed); scoped to `target.id` | unit | `pytest tests/test_ambient_recall_cadence.py -x` | ❌ W0 |
+| RAG-02 | `/ask` recall fires unconditionally (35% gate removed) | unit | `pytest tests/test_ambient_recall_cadence.py -x` | ❌ W0 |
 | RAG-02 | Byte-identical prompt when `recall()` returns `[]` | unit | `pytest tests/test_prompts.py -k memory_block -x` | ✅ (pre-existing lock — must stay green) |
-| RAG-01/02 regression | Ambient surfaces (`cogs/events.py:128`, `cogs/music.py:1272`) KEEP their 35% gate | unit | `pytest tests/test_ambient_recall_cadence.py -x` | ❌ W0 |
+| RAG-01/02 regression | Ambient surfaces (`cogs/events.py:128`, `cogs/music.py:1272`) KEEP their 35% gate — D-01 four-site invariant | unit | `pytest tests/test_ambient_recall_cadence.py -x` | ❌ W0 |
 | RAG-03 | `/memory view` shows verbatim facts; empty state in-character; ephemeral | unit | `pytest tests/test_memory_command.py -k memory_view -x` | ❌ W0 |
 | RAG-03 | `list_user_memories` scoped to `user_id`, ordered, capped at `MEMORY_MAX_PER_USER` | static-source + live-DB | `pytest tests/test_database_phase15.py -k list_user_memories -x` | ❌ W0 |
 | RAG-04 | `/memory forget` count preview + confirm/cancel/timeout (JamSuggestConfirmView shape) | unit | `pytest tests/test_memory_command.py::test_forget_confirm_flow -x` | ❌ W0 |
