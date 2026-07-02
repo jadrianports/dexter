@@ -439,9 +439,16 @@ class EventsCog(commands.Cog):
         if memory_service is None:
             return
 
+        # WR-03: anchor recall on the actual triggering message text so it can
+        # clear MEMORY_SIMILARITY_FLOOR against concrete stored facts — the prior
+        # static "a proactive callback moment" anchor was content-free and would
+        # almost never match, silently neutering the feature. Empty/whitespace
+        # content falls back to a taste/behavior-flavored phrase (still not a
+        # live-SQL number — accuracy firewall unaffected).
+        anchor = message.content.strip() or "this user's music taste and history"
         try:
             memories = await memory_service.recall(
-                user_id, str(message.guild.id), "a proactive callback moment"
+                user_id, str(message.guild.id), anchor
             )
         except Exception as _mem_err:
             log.debug("proactive callback: memory.recall failed (non-fatal): %s", _mem_err)
