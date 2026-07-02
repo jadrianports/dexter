@@ -1142,6 +1142,71 @@ async def evict_lowest_salience(
         )
 
 
+async def list_user_memories(
+    pool: asyncpg.Pool,
+    *,
+    user_id: str,
+    limit: int,
+) -> list[asyncpg.Record]:
+    """Return up to `limit` of a user's memory rows for the /memory view (RAG-03).
+
+    Unlike search_memories (ANN relevance recall) this is a plain listing query:
+    no embedding call, no similarity floor, no per-request cap tied to prompt
+    injection budget. Ordered salience DESC, created_at DESC (display ordering,
+    best/most-recent first) — NOT the eviction ordering used by
+    get_user_memories_for_eviction (which sorts ascending, lowest-value first).
+
+    Security (T-11-04c pattern): WHERE user_id = $1 — same cross-user guard as
+    every other user_memories query. No caller may pass a different user's id
+    (the /memory command never accepts a target-user argument).
+
+    Args:
+        pool:    asyncpg connection pool.
+        user_id: Discord user ID — sole scope, always interaction.user.id.
+        limit:   Row cap — the caller must pass config.MEMORY_MAX_PER_USER
+                 (never config.MEMORY_INJECT_CAP) so the view can never
+                 truncate below what forget would erase (Pitfall 2).
+
+    Returns:
+        Rows with: id, fact, kind, salience, created_at. May be empty.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT id, fact, kind, salience, created_at"
+            " FROM user_memories"
+            " WHERE user_id = $1"
+            " ORDER BY salience DESC, created_at DESC"
+            " LIMIT $2",
+            user_id, limit,
+        )
+
+
+async def delete_all_user_memories(pool: asyncpg.Pool, user_id: str) -> int:
+    """Hard-delete every user_memories row for user_id. Returns rows deleted.
+
+    RAG-04 escape hatch (D-03 nuke-all). Scoped WHERE user_id = $1 — the ONLY
+    filter, by design (T-11-04c pattern): a bug here can never touch another
+    user's rows because there is no second parameter to get wrong. Deleting
+    the row deletes its embedding column value in the same operation (pgvector
+    stores the vector in-row, not in a separate structure the app must also
+    clean) — "rows AND embeddings gone" is inherent to a single DELETE.
+
+    Args:
+        pool:    asyncpg connection pool.
+        user_id: Discord user ID — sole scope. Always interaction.user.id;
+                 /memory forget must never accept a target-user argument.
+
+    Returns:
+        Number of rows deleted (0 if the user had no stored memories).
+    """
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM user_memories WHERE user_id = $1",
+            user_id,
+        )
+    return int(result.split()[-1])
+
+
 async def bump_surfaced(pool: asyncpg.Pool, ids: list[int]) -> None:
     """Mark memories as surfaced: set last_surfaced_at = now(), increment surface_count.
 
