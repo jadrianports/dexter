@@ -15,9 +15,10 @@ Read `dexter-architecture.md` for full context, personality samples, and rationa
 - **Music:** yt-dlp + FFmpeg (opus, 192kbps)
 - **AI Chat:** Google Gemini API via `google-genai` (free tier, `gemini-2.5-flash`)
 - **Image Gen:** `gemini-2.5-flash-image` via the Gemini API (free tier)
-- **Database:** PostgreSQL 16 via `asyncpg` 0.31.0 — migrated from SQLite in Phase 4
+- **Long-term memory (RAG):** `pgvector` on the same Neon Postgres + `gemini-embedding-001` @ 768d on a **separate** 60 RPM limiter (Phase 11 — zero new infra/cost)
+- **Database:** PostgreSQL 16 via `asyncpg` 0.31.0 — migrated from SQLite in Phase 4; `vector` extension enabled in Phase 11
 - **Containerization:** Docker + Docker Compose (bot image only; DB is **Neon serverless Postgres**, not a colocated container — the Oracle-era `postgres:16-alpine` service was dropped in Phase 6)
-- **Lyrics:** Genius API via `lyricsgenius` (primary), AZLyrics scrape via `beautifulsoup4` (fallback)
+- **Lyrics:** Genius API via `lyricsgenius` (primary), AZLyrics scrape via `beautifulsoup4` (fallback), LRCLIB `/api/search` (third fallback, Phase 12)
 - **Hosting:** re-targeted Oracle A1 → Koyeb + Neon (Phase 5), then **24/7 deploy parked** (YouTube blocks datacenter IPs → free cloud non-viable). Runs on the user's PC (residential IP) on demand → **Neon serverless Postgres** (Singapore). Code is substrate-agnostic (Dockerfile + `DATABASE_URL`), so the host swap is config-only.
 
 ---
@@ -32,30 +33,42 @@ dexter/
 ├── docker-compose.yml             # bot service only (DB = Neon, no colocated Postgres); named volumes
 ├── Dockerfile                     # bot image build
 ├── cogs/
-│   ├── music.py                   # All music slash commands
-│   ├── ai.py                      # /ask, AI auto-queue logic
+│   ├── music.py                   # Music slash commands + /seek /previous /jump /filter /autolyrics (Phases 6/7)
+│   ├── ai.py                      # /ask, /roast, AI auto-queue logic
 │   ├── imagine.py                 # /imagine
 │   ├── help.py                    # /help
+│   ├── ops.py                     # /leaderboard, /skips, /stats (Phases 8/12)
+│   ├── library.py                 # /favorite(s), /playlist group, /jam group (Phases 7/12)
 │   └── events.py                  # Unprompted roasts, reactions, mood, status, idle
+├── logic/                         # Phase 10: pure, mock-free decision logic (TDD seam)
+│   ├── playback.py                # TrackEndAction enum + 5 keyword-only playback fns
+│   ├── health.py                  # determine_health_status + assemble_degraded_reasons
+│   ├── roasts.py                  # decide_ambient_roast + cooldown_elapsed
+│   ├── autoqueue.py               # token-set-containment hallucination validator (Phase 12)
+│   └── skip_stats.py              # /skips rate computation (Phase 12)
 ├── services/
-│   ├── youtube.py                 # yt-dlp: search, download, metadata extraction
-│   ├── gemini.py                  # Gemini API: chat, music recs, image gen
-│   ├── lyrics.py                  # Genius + AZLyrics
+│   ├── youtube.py                 # yt-dlp: search, download, metadata extraction, resolution cache, self-heal
+│   ├── gemini.py                  # Gemini API: chat, music recs, image gen, embed() (RAG)
+│   ├── memory.py                  # Phase 11: RAG long-term memory (recall/remember/dedup/decay)
+│   ├── metrics.py                 # Phase 6: PerfMetrics rolling aggregates for /stats
+│   ├── lyrics.py                  # Genius + AZLyrics + LRCLIB
 │   ├── queue_persistence.py       # Phase 4: persist/restore queues (guild_queues JSONB), smart-rejoin
-│   └── audio.py                   # FFmpeg audio source management
+│   └── audio.py                   # FFmpeg audio source management (opus-copy / filter transcode)
 ├── models/
 │   ├── queue.py                   # Per-server queue (loop, shuffle, 500 cap, _play_generation counter)
 │   ├── user_profile.py            # User taste tracking
+│   ├── memory.py                  # Phase 11: MemoryFact dataclass
 │   ├── server_state.py            # Per-server runtime state
 │   └── message_buffer.py          # Rolling 10-message context per channel
 ├── personality/
-│   ├── prompts.py                 # Gemini system prompts
+│   ├── prompts.py                 # Gemini system prompts (+ memory-context slot)
 │   ├── responses.py               # Templated music command responses
 │   ├── roasts.py                  # Unprompted roast logic
 │   └── seasonal.py                # Date-aware personality
 ├── utils/
 │   ├── embeds.py                  # Discord embed builders
 │   ├── formatters.py              # Duration, progress bars, etc.
+│   ├── tasks.py                   # Phase 9: make_task — fire-and-forget with failure surfacing
 │   └── logger.py                  # File + Discord channel logging
 ├── scripts/                       # Phase 4/5 ops: deploy.sh, backup.sh, keepalive.sh,
 │                                  #   lifecycle-policy.json, seed_restore_test.py
@@ -75,7 +88,9 @@ dexter/
 Defined in `database.py` as `SCHEMA_SQL` (idempotent `CREATE TABLE IF NOT EXISTS`, applied by
 `init_db()` over an asyncpg pool). Migrated from SQLite in Phase 4 — Postgres types throughout
 (`TIMESTAMPTZ`, `BIGSERIAL`, `BOOLEAN`, `JSONB`, `now()`). Phase 3 added the streak columns;
-Phase 4 added the `guild_queues` table for queue persistence.
+Phase 4 added the `guild_queues` table for queue persistence; Phase 6 added `resolution_cache`;
+Phase 7 added `user_favorites` + `user_playlists`; Phase 8 added `bot_daily_stats.total_errors`;
+Phase 11 enabled the `vector` extension + `user_memories`; Phase 12 added `guild_jams`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -133,13 +148,74 @@ CREATE TABLE IF NOT EXISTS guild_queues (    -- Phase 4: queue persistence
     payload    JSONB NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Phase 6: resolution cache (skip YouTube re-search on repeat queries; TTL-expired)
+CREATE TABLE IF NOT EXISTS resolution_cache (
+    query_key  TEXT PRIMARY KEY,
+    video_id   TEXT NOT NULL,
+    title      TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+-- Phase 7: per-user favorites (25 cap) and named playlist snapshots
+CREATE TABLE IF NOT EXISTS user_favorites (
+    user_id          TEXT NOT NULL,
+    video_id         TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    artist           TEXT,
+    url              TEXT NOT NULL,
+    duration_seconds INTEGER,
+    thumbnail        TEXT,
+    added_at         TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (user_id, video_id)
+);
+CREATE TABLE IF NOT EXISTS user_playlists (
+    user_id    TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    snapshot   JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (user_id, name)
+);
+
+-- Phase 8: central error counter
+ALTER TABLE bot_daily_stats ADD COLUMN IF NOT EXISTS total_errors INTEGER DEFAULT 0;
+
+-- Phase 12: per-server shared "jam" mixtapes (distinct from per-user favorites)
+CREATE TABLE IF NOT EXISTS guild_jams (
+    guild_id   TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    snapshot   JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (guild_id, name)
+);
+
+-- Phase 11: RAG long-term memory. Requires `CREATE EXTENSION IF NOT EXISTS vector;`
+-- (run FIRST in SCHEMA_SQL) + per-connection pgvector codec via create_pool(init=...).
+CREATE TABLE IF NOT EXISTS user_memories (
+    id               BIGSERIAL PRIMARY KEY,
+    user_id          TEXT NOT NULL,
+    guild_id         TEXT,
+    kind             TEXT,               -- milestone|late_night|repeat_song|auto_queue_ignored|daily_batch
+    fact             TEXT NOT NULL,
+    embedding        vector(768) NOT NULL,  -- gemini-embedding-001 @ 768d
+    salience         REAL DEFAULT 0,
+    hit_count        INTEGER DEFAULT 1,
+    created_at       TIMESTAMPTZ DEFAULT now(),
+    last_seen_at     TIMESTAMPTZ DEFAULT now(),
+    last_surfaced_at TIMESTAMPTZ,
+    surface_count    INTEGER DEFAULT 0,
+    expires_at       TIMESTAMPTZ         -- daily decay sweep evicts low-salience expired facts
+);
 ```
 
 ---
 
 ## Configuration
 
-All in `config.py`. Single file. Phases 2–4 settings are now implemented — the block below shows the Phase 1 core; the full current set follows it.
+All in `config.py`. Single file. Phases 2–12 settings are now implemented — the block below shows the Phase 1 core; the full current set follows it. `config.py` is always the authoritative list.
 
 ```python
 # Paths
@@ -199,10 +275,39 @@ LYRICS_PAGE_SIZE = 1500; HISTORY_PAGE_SIZE = 10; HISTORY_FETCH_LIMIT = 50
 
 # Database / scale (Phase 4)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dexter:dexter@localhost:5432/dexter")
-DB_POOL_MIN = 2; DB_POOL_MAX = 10
+DB_POOL_MIN = 2; DB_POOL_MAX = 5
 MAX_QUEUE_SIZE_PER_GUILD = 500                     # enforced in MusicQueue.add()
 MESSAGE_BUFFER_TTL_HOURS = 24
 HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "") # Healthchecks.io dead-man switch
+
+# Neon pool tuning (Phase 5 / K-04)
+DB_MAX_INACTIVE_CONN_LIFETIME = 240                # recycle before Neon scale-to-zero
+DB_STATEMENT_CACHE_SIZE = 0                        # disable prepared stmts for PgBouncer tx-mode
+
+# Speed & caching (Phase 6)
+PREFETCH_TIMEOUT_SECONDS = 45; RES_CACHE_TTL_DAYS = 14; PERF_ROLLING_WINDOW = 50
+SPONSORBLOCK_CATEGORIES = frozenset({"sponsor","selfpromo","intro","outro","interaction","music_offtopic"})
+
+# Player UX & filters (Phase 7)
+FFMPEG_FILTERS = {"bassboost","nightcore","slowed+reverb","8d"}  # name → -af chain; "off" = passthrough
+FAVORITES_MAX_PER_USER = 25; PLAYLISTS_MAX_PER_USER = 25; PLAYLIST_NAME_MAX_LENGTH = 60
+SEEK_COOLDOWN_SECONDS = 2; FILTER_COOLDOWN_SECONDS = 5; FAVORITE_COOLDOWN_SECONDS = 2
+
+# Social & ops (Phases 8/12)
+LEADERBOARD_TOP_N = 5; ROAST_COOLDOWN_SECONDS = 30
+JAMS_PER_GUILD_MAX = 25; SKIP_STATS_MIN_PLAYS = 5; AUTO_QUEUE_SEARCH_CANDIDATES = 3
+
+# Reliability & ops hardening (Phase 9)
+HEALTH_STRICT_STATUS = True         # 503 when degraded (strict) vs legacy 200; env-overridable
+DB_COMMAND_TIMEOUT_SECONDS = 30; INIT_WATCHDOG_TIMEOUT_SECONDS = 120; SYNC_TIMEOUT_SECONDS = 30
+TASK_ERROR_CHANNEL_COOLDOWN_SECONDS = 300          # dedup window per (task_name, exc_type)
+YTDLP_RETRY_BACKOFF_SECONDS = 1.0; YTDLP_MAX_QUICK_RETRIES = 2; HEALTH_DB_PROBE_TIMEOUT = 3.0
+
+# RAG long-term memory (Phase 11) — embeddings on a SEPARATE 60 RPM limiter, never the 15 RPM chat budget
+EMBEDDING_MODEL = "gemini-embedding-001"; EMBED_DIM = 768; EMBED_RPM_LIMIT = 60
+MEMORY_TOP_K = 8; MEMORY_SIMILARITY_FLOOR = 0.70; MEMORY_DEDUP_THRESHOLD = 0.92
+MEMORY_INJECT_CAP = 3; MEMORY_MAX_PER_USER = 150; MEMORY_DECAY_DAYS = 90
+MEMORY_CALLBACK_CHANCE = 0.35; MEMORY_DISTILL_BATCH_HOUR = 3   # + rerank weights + salience base weights
 ```
 
 ---
@@ -224,21 +329,46 @@ HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "") # Healthchecks.io dead-man sw
 | `/replay` | — | 2s |
 | `/history` | — | 5s |
 | `/lyrics` | — | 10s |
+| `/seek` | `<position>` | 2s |
+| `/previous` | — | — |
+| `/jump` | `<index>` | — |
+| `/filter` | `[bassboost\|nightcore\|slowed+reverb\|8d\|off]` | 5s |
+| `/autolyrics` | `[on\|off]` | — |
+
+> Now-playing embed also carries a persistent 5-button control view (play/pause, skip, loop, shuffle, stop) — Phase 7.
 
 ### AI
 | Command | Args | Cooldown |
 |---------|------|----------|
 | `/ask` | `<question>` | 5s |
+| `/roast` | `@user` | 30s |
 
 ### Image
 | Command | Args | Cooldown |
 |---------|------|----------|
 | `/imagine` | `<prompt>` | 30s |
 
+### Library (Phases 7/12)
+| Command | Args | Cooldown |
+|---------|------|----------|
+| `/favorite` | — (save now-playing) | 2s |
+| `/favorites` | — (view + queue) | 2s |
+| `/playlist save\|load\|list\|delete` | `[name]` | — |
+| `/jam save\|add\|load\|list\|delete` | `[name]` | — |
+
+### Ops (Phases 8/12)
+| Command | Args | Cooldown |
+|---------|------|----------|
+| `/leaderboard` | — (per-guild songs/streaks/skips) | — |
+| `/skips` | — (skip-rate analytics) | — |
+| `/stats` | — (owner-only) | — |
+
 ### Utility
 | Command | Args | Cooldown |
 |---------|------|----------|
 | `/help` | — | 5s |
+
+> `/health` is an aiohttp HTTP endpoint on `0.0.0.0:8000` (not a slash command) — returns degraded-503 when MusicCog fails to load (Phases 5/8/9).
 
 ---
 
@@ -436,9 +566,13 @@ On download failure: attempt update → retry → fallback stream → error mess
 Start on bot ready:
 1. Status rotation (every 5 min)
 2. Idle voice channel check (every 60s)
-3. Cache cleanup (every hour)
+3. Cache cleanup (every hour) — LFU by `song_history` play count, protects in-use tracks (Phase 6)
 4. yt-dlp update check (daily 4am)
 5. Daily stats reset (midnight)
+6. Memory distill batch (daily 03:00 UTC — background message-buffer → RAG facts, Phase 11)
+7. Memory decay sweep (evicts low-salience expired `user_memories`, Phase 11)
+
+> Fire-and-forget tasks are launched via `utils/tasks.py::make_task` (Phase 9) — a done-callback surfaces exceptions to `dexter.log` + the error channel instead of vanishing silently. Next-track prefetch (`_prefetch_next_track`) is generation-guarded to avoid racing skip/stop teardown (Phase 6).
 
 ---
 
@@ -459,6 +593,13 @@ Enable all in Discord Developer Portal.
 DISCORD_TOKEN=
 GEMINI_API_KEY=
 GENIUS_TOKEN=
+DATABASE_URL=            # Neon Postgres DSN (sanitized to strip channel_binding/sslmode)
+OWNER_ID=               # owner-only commands (/stats, /sync)
+DEXTER_CHANNEL_ID=      # designated ambient/response channel
+ERROR_LOG_CHANNEL_ID=   # private error-log channel
+HEALTHCHECK_URL=        # optional Healthchecks.io / UptimeRobot dead-man switch
+STREAK_TIMEZONE=        # optional IANA tz override (default America/New_York)
+HEALTH_STRICT_STATUS=   # optional; "false" reverts /health to legacy 200
 ```
 
 ---
@@ -520,16 +661,34 @@ GENIUS_TOKEN=
 5. Docker Compose (`postgres:16-alpine` + bot), healthcheck / keepalive
 6. ~~Web config dashboard~~ — dropped (never committed)
 
-### Phase 5 — Ship It Live ◆ CODE COMPLETE (awaiting live Oracle A1 UAT)
-1. Docker Compose standup on Oracle A1 ARM + reboot survival
-2. `clear_persisted()` gap closure on idle-leave / reconnect-failure (DEPLOY-06)
-3. Reconnect-race hardening + diagnostic logging (DEPLOY-04 — live `/gsd:debug` pending)
-4. TZ-correct late-night roast via `ZoneInfo(STREAK_TIMEZONE)` (D-06)
-5. Ops scripts: `deploy.sh`, `backup.sh` (6h cadence), OCI lifecycle policy, non-destructive seed/restore-verify
-6. Consolidated 20-check live-UAT runbook (`.planning/phases/05-ship-it-live/05-UAT-RUNBOOK.md`) — **the phase is verified when it passes live on Oracle, not when code lands**
+### Phase 5 — Ship It Live ✅ CODE COMPLETE (24/7 deploy PARKED)
+1. Deploy substrate re-targeted **Oracle A1 → Koyeb WEB + Neon serverless Postgres** (the Oracle attempt is archived under `.planning/phases/05-ship-it-live/oracle-attempt/`)
+2. Neon-tuned asyncpg pool (`ssl='require'`, `statement_cache_size=0`, 240s lifetime), `sanitize_database_url`, aiohttp `/health` on `0.0.0.0:8000`, de-Oracle'd Dockerfile, stdout logging
+3. `clear_persisted()` gap closure on idle-leave / reconnect-failure (DEPLOY-06), reconnect-race hardening (DEPLOY-04), TZ-correct late-night roast via `ZoneInfo(STREAK_TIMEZONE)` (D-06)
+4. `docs/DEPLOY-KOYEB.md` + a 22-check live-UAT runbook — **24/7 deploy PARKED behind the YouTube datacenter-IP block; bot runs on the user's PC (residential IP) → Neon Singapore on demand**
 
-> **Milestone status:** v1.0 (Phases 1–4) shipped & archived. Now on v1.1 "Live & Lethal" (Phases 5–8).
-> Phases 6–8 (perf, player UX, social/leaderboard) live in `.planning/ROADMAP.md`.
+### Phase 6 — Speed & Caching ✅ COMPLETE
+Generation-guarded next-track prefetch (zero inter-song gap), Postgres `resolution_cache` (URL-bypass), 3-PP SponsorBlock→FFmpegExtractAudio→ModifyChapters chain + codec-path logging, download-timeout→stream fallback, LFU cache eviction (protects in-use), `PerfMetrics` in `/stats`.
+
+### Phase 7 — Player UX & Filters ✅ COMPLETE
+Persistent 5-button `NowPlayingView`, `/seek` `/previous` `/jump`, four `/filter` presets (opus-passthrough preserved for non-filtered tracks), `user_favorites` + JSONB `user_playlists`.
+
+### Phase 8 — Social & Ops ✅ COMPLETE
+`/roast @user` (Gemini-personalized, template fallback, `AllowedMentions.none()`), per-guild `/leaderboard`, owner-only `/stats`, degraded-but-always-200 `/health`, `total_errors` tracking.
+
+### Phase 9 — Reliability & Ops Hardening ✅ COMPLETE
+Truthful `/health` (degraded-503, `_ready_done`-guarded), fire-and-forget failure surfacing via `make_task`, un-wedgeable `on_ready` watchdog + `_sync_retry_active`-guarded startup-sync recovery, config-driven DB query timeouts, bounded YouTube search/extract self-heal. *(Live-runtime UAT parked behind the host.)*
+
+### Phase 10 — Critical-Path Test Coverage ✅ COMPLETE
+Extracted decision logic into pure `logic/` modules (`playback`, `health`, `roasts`, later `autoqueue`/`skip_stats`) locked by ~83 mock-free unit tests with three named scar regressions; full-suite-green + clean-boot regression gate.
+
+### Phase 11 — RAG Long-Term Memory ✅ COMPLETE
+`pgvector` on Neon + `gemini-embedding-001` @ 768d on a separate 60 RPM limiter; full read (recall/rerank/floor) + write (remember/dedup/cap-evict) halves, sensitivity/PII + numbers-from-SQL accuracy firewall, callback roasts at four surfaces, daily decay sweep. **Zero new infra.** *(Live-runtime UAT parked behind the host.)*
+
+### Phase 12 — Richer Music/UX ✅ COMPLETE
+Per-server `/jam` shared playlists, `/skips` analytics, LRCLIB third lyrics fallback, token-set auto-queue hallucination validation (`logic/autoqueue.py`).
+
+> **Milestone status:** v1.0 (Phases 1–4), v1.1 "Live & Lethal" (Phases 5–8), and v1.2 "Sharper & Smarter" (Phases 9–12) all shipped (code) & archived — tags `v1.0`/`v1.1`/`v1.2`. Next: **v1.3 (planning)**. The 24/7 live deploy + the Phase 03–06/09/11 live-runtime UAT tail remain **parked** behind an always-on residential host. See `.planning/PROJECT.md` + `.planning/STATE.md` for authoritative current state.
 
 ---
 
@@ -544,7 +703,9 @@ GENIUS_TOKEN=
 7. **One emoji max per message — the bot is too tired for more**
 8. **Lowercase everything — the bot does not use caps lock**
 9. **Designated channel only — don't spam every channel**
-10. **Cache cleanup must run — unchecked cache will fill Oracle's free disk**
+10. **Cache cleanup must run — unchecked cache will fill the host's ephemeral disk (512MB cap, LFU eviction)**
+11. **Embeddings use the SEPARATE 60 RPM limiter — never the shared 15 RPM chat budget (RAG memory must not starve `/ask`)**
+12. **Memory is roast ammo, not a number source — hard numbers in output come from live SQL, never from embedded facts (accuracy firewall)**
 
 ---
 
@@ -570,3 +731,16 @@ GENIUS_TOKEN=
 - **Persistent discord.py views:** `timeout=None` + stable `custom_id`s registered in `setup_hook` (NOT `on_ready`) — otherwise buttons stop responding after a restart (Phase 7)
 - **opus-copy is the default fast path; transcode ONLY when `active_filter` is set** per-track — don't remove the opus-copy path for non-filtered tracks (PERF-02 / PLAYER-07, D-10/D-12)
 - **SponsorBlock PP order** is `SponsorBlock(when=after_filter) → FFmpegExtractAudio → ModifyChapters`; don't hand-write opus-copy — `FFmpegExtractAudioPP` already copies natively, `download()` only adds `postprocessor_hooks` for codec-path logging (D-01)
+
+**Phases 9–12 (reliability, tests, RAG memory, richer UX):**
+- **`/health` degraded check is guarded by `_ready_done`** — without it the endpoint reports false-degraded during legitimate startup before MusicCog loads (Pitfall 3). `HEALTH_STRICT_STATUS` env-toggles 503-vs-200 so a deploy can opt out without a code change (D-01)
+- **`asyncio.TimeoutError` must be caught BEFORE generic `except Exception`** in `on_ready`/DB handlers — in Python 3.11+ `TimeoutError` is a subclass of `Exception`; asyncpg client-side timeout raises `TimeoutError`, not `QueryCanceledError` (REL-04)
+- **`_sync_retry_active` module-level bool** guards against multiple READY shards spawning concurrent sync-retry chains; `first_run` sync failure logs + closes (no running loop to retry into) (Pitfall 5 / REL-03)
+- **`_play_track` create_task calls stay bare `asyncio.create_task`** — they handle failures internally; a `make_task` callback there would double-log track errors (Pitfall 4). Use `make_task` only for genuine fire-and-forget (prefetch, auto-queue, auto-lyrics)
+- **YouTube self-heal reuses the existing `update_ytdlp()` + `_UPDATE_THROTTLE_SECONDS`** path — no second update path; `_is_transient_ytdlp_error` returns False only for `ExtractorError.expected=True` (conservative: treat unknown errors as transient) (D-08)
+- **`logic/` is the pure-logic seam** — Discord/process glue dispatches on the returned enum/verdict (e.g. `TrackEndAction`); do NOT mirror the branch logic back in the caller (D-02). Phase 11's rerank/dedup follow the same clock-injectable, keyword-only, mock-free convention
+- **pgvector codec registers per-connection via `create_pool(init=...)`** — a per-connection codec, NOT a prepared statement, so `statement_cache_size=0` is a verified non-issue. `CREATE EXTENSION IF NOT EXISTS vector;` must run FIRST in `SCHEMA_SQL` (extension-first boot)
+- **Accuracy firewall (Phase 11):** never embed SQL-known numbers (counts/streaks); the distillation gate strips sensitive/PII content, and hard numbers in a roast come from live SQL — memory supplies the *episode*, SQL supplies the *number* (Critical Rules 5/12)
+- **Memory callback cadence gate is per-surface** (`random.random() < MEMORY_CALLBACK_CHANCE`) — an occasional stat×episode payoff, not every roast; `guild_id=''` is safe in `_build_roast_line` because ANN recall scopes to `user_id` only (D-04)
+- **`strip_lrc_headers` runs BEFORE `sanitize_lyrics`** for LRCLIB — sanitize only handles HTML/@mentions, not LRC metadata lines; use LRCLIB `/api/search` (not `/api/get`) — robust to missing duration, returns a relevance-sorted array (Phase 12 Pitfalls 1/2)
+- **Auto-queue hallucination check uses token-set containment, not `difflib`** — YouTube titles are longer than clean names, so a subset check is the semantically correct rejection test for a hallucinated track (`logic/autoqueue.py`, D-12)
