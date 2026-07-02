@@ -1,4 +1,5 @@
-"""Unit tests for cogs/memory.py — /memory view (RAG-03) + /memory forget (RAG-04).
+"""Unit tests for cogs/memory.py — /memory view (RAG-03), /memory forget
+(RAG-04), and /memory callbacks (PROACT-02, Phase 16).
 
 Mock style mirrors tests/test_roast_command.py (unit mocks, no live DB or
 Discord connection) and tests/test_discover.py's direct button-callback
@@ -15,6 +16,11 @@ Tests:
 - test_forget_confirm_deletes             — Confirm press hard-deletes via the DB helper
 - test_forget_cancel_leaves_memories      — Cancel press never deletes
 - test_memory_subcommands_have_no_target_param — V4 structural self-scoping guard
+  (extended in Phase 16 to also cover memory_callbacks)
+- test_memory_callbacks_off_then_on       — off/on round-trip writes opted_out correctly
+- test_memory_callbacks_response_ephemeral — both settings reply ephemeral=True
+- test_memory_callbacks_is_self_scoped    — signature guard: no target/user param
+- test_memory_callbacks_touches_no_memories — structural distinctness from /memory forget
 """
 
 from __future__ import annotations
@@ -208,8 +214,74 @@ async def test_forget_cancel_leaves_memories():
 
 
 def test_memory_subcommands_have_no_target_param():
-    """Neither subcommand accepts a target/user parameter — self-scoped only."""
+    """No subcommand accepts a target/user parameter — self-scoped only."""
     view_params = list(inspect.signature(MemoryCog.memory_view.callback).parameters)
     forget_params = list(inspect.signature(MemoryCog.memory_forget.callback).parameters)
+    callbacks_params = list(
+        inspect.signature(MemoryCog.memory_callbacks.callback).parameters
+    )
     assert view_params == ["self", "interaction"]
     assert forget_params == ["self", "interaction"]
+    assert callbacks_params == ["self", "interaction", "setting"]
+
+
+# ---------------------------------------------------------------------------
+# /memory callbacks (Phase 16, PROACT-02)
+# ---------------------------------------------------------------------------
+
+
+def _make_choice(value: str) -> discord.app_commands.Choice[str]:
+    return discord.app_commands.Choice(name=value, value=value)
+
+
+@pytest.mark.asyncio
+async def test_memory_callbacks_off_then_on():
+    """off sets opted_out=True; on sets opted_out=False, both self-scoped."""
+    bot = _make_bot()
+    interaction = _make_interaction()
+    cog = MemoryCog(bot)
+
+    set_mock = AsyncMock()
+    with patch("database.set_proactive_opt_out", new=set_mock):
+        await cog.memory_callbacks.callback(cog, interaction, _make_choice("off"))
+        set_mock.assert_awaited_once_with(
+            bot.pool, user_id=str(interaction.user.id), opted_out=True
+        )
+
+        set_mock.reset_mock()
+        await cog.memory_callbacks.callback(cog, interaction, _make_choice("on"))
+        set_mock.assert_awaited_once_with(
+            bot.pool, user_id=str(interaction.user.id), opted_out=False
+        )
+
+
+@pytest.mark.asyncio
+async def test_memory_callbacks_response_ephemeral():
+    """Both off and on replies are ephemeral=True."""
+    bot = _make_bot()
+    cog = MemoryCog(bot)
+
+    with patch("database.set_proactive_opt_out", new=AsyncMock()):
+        interaction_off = _make_interaction()
+        await cog.memory_callbacks.callback(cog, interaction_off, _make_choice("off"))
+        kwargs_off = interaction_off.response.send_message.call_args.kwargs
+        assert kwargs_off["ephemeral"] is True
+
+        interaction_on = _make_interaction()
+        await cog.memory_callbacks.callback(cog, interaction_on, _make_choice("on"))
+        kwargs_on = interaction_on.response.send_message.call_args.kwargs
+        assert kwargs_on["ephemeral"] is True
+
+
+def test_memory_callbacks_is_self_scoped():
+    """Structural V4 guard: exactly [self, interaction, setting], no target/user."""
+    params = list(inspect.signature(MemoryCog.memory_callbacks.callback).parameters)
+    assert params == ["self", "interaction", "setting"]
+
+
+def test_memory_callbacks_touches_no_memories():
+    """Source-inspection guard: callback never references the RAG memory store,
+    structurally distinct from /memory forget (T-16-08)."""
+    src = inspect.getsource(MemoryCog.memory_callbacks.callback)
+    assert "delete_all_user_memories" not in src
+    assert "user_memories" not in src
