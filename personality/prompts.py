@@ -180,10 +180,104 @@ def build_chat_prompt(
     ).rstrip()
 
 
-def build_recommendation_prompt(recent_songs: list[dict]) -> str:
-    """Build the auto-queue recommendation prompt from recent song history."""
+def build_recommendation_prompt(
+    recent_songs: list[dict],
+    *,
+    recently_skipped: list[dict] | None = None,
+    positive_taste: list[str] | None = None,
+) -> str:
+    """Build the auto-queue recommendation prompt from recent song history.
+
+    Args:
+        recent_songs:     Recently played songs (existing behavior, unchanged).
+        recently_skipped: Optional guild-scoped "recently skipped" (title, artist)
+                          rows (Phase 14 / BRAIN-01 / D-01). None or [] renders
+                          byte-identical to the pre-Phase-14 prompt (Pattern 1).
+                          A non-empty list appends an "AVOID these" block.
+        positive_taste:   Optional collective, unattributed list of taste_episode
+                          facts for the in-voice members (Phase 14 / D-03). None
+                          or [] renders byte-identical to the pre-Phase-14 prompt.
+                          A non-empty list appends a "THE ROOM TENDS TO LIKE" block.
+
+    Both new kwargs are keyword-only so every existing call site is unaffected.
+    """
     lines = []
     for song in recent_songs:
         artist = song.get("artist") or "Unknown"
         lines.append(f"- {song['title']} by {artist}")
-    return MUSIC_RECOMMENDATION_PROMPT.format(recent_songs="\n".join(lines))
+
+    skip_block = ""
+    if recently_skipped:
+        skip_lines = "\n".join(
+            f"- {s['title']} by {s.get('artist') or 'Unknown'}" for s in recently_skipped
+        )
+        skip_block = "\n\nAVOID these — the server keeps skipping them:\n" + skip_lines
+
+    taste_block = ""
+    if positive_taste:
+        taste_lines = "\n".join(f"- {t}" for t in positive_taste)
+        taste_block = "\n\nTHE ROOM TENDS TO LIKE:\n" + taste_lines
+
+    return MUSIC_RECOMMENDATION_PROMPT.format(
+        recent_songs="\n".join(lines),
+    ) + skip_block + taste_block
+
+
+DISCOVER_COMMENTARY_PROMPT = """\
+You are Dexter, a sarcastic music bot. A user's top artist in this server is {anchor_artist}. \
+Based on this server's listening history, the following artists are commonly played alongside \
+{anchor_artist}: {adjacent_artists}.
+
+Write ONE short, in-character, sarcastic line wrapping these exact artist names in commentary. \
+Do not invent or add artists — the picks above are fixed and already chosen; your only job is \
+the voice around them. Do not suggest a specific song. No markdown, no explanation, just the \
+line of commentary.
+"""
+
+
+def build_discover_commentary_prompt(anchor_artist: str, adjacent_artists: list[str]) -> str:
+    """Build the /discover commentary prompt (Phase 14 / BRAIN-02 / D-04 firewall).
+
+    The adjacent artists are 100% SQL-derived (get_artist_cooccurrence) — Gemini's
+    reply is used as plain text commentary only, never parsed as a suggestion.
+    Gemini is explicitly instructed to wrap the given names, not invent its own
+    picks (accuracy firewall, Critical Rule 12).
+    """
+    return DISCOVER_COMMENTARY_PROMPT.format(
+        anchor_artist=anchor_artist,
+        adjacent_artists=", ".join(adjacent_artists),
+    )
+
+
+JAM_SUGGESTION_PROMPT = """\
+You are a music recommendation engine. A shared jam playlist already contains the songs listed \
+below. Based on their vibe, suggest exactly {count} additional songs that would fit well. Return \
+ONLY a JSON array of objects with "title" and "artist" fields. No explanation, no markdown, no \
+extra text.
+
+Example output:
+[{{"title": "Midnight City", "artist": "M83"}}, {{"title": "Tadow", "artist": "Masego"}}, \
+{{"title": "Redbone", "artist": "Childish Gambino"}}]
+
+Existing jam tracks:
+{existing_tracks}"""
+
+
+def build_jam_suggestion_prompt(existing_tracks: list[dict], count: int) -> str:
+    """Build the /jam suggest prompt (Phase 14 / BRAIN-03 / D-06).
+
+    Modeled on MUSIC_RECOMMENDATION_PROMPT's shape and identical JSON-instruction
+    wording, so cogs.ai.parse_suggestions parses the reply unchanged — no new
+    parser is needed (D-06). Every suggestion is re-validated against real
+    YouTube search results via logic.autoqueue.validate_youtube_match at the cog
+    layer before ever being offered (BRAIN-03 hard requirement) — this builder
+    only assembles the prompt text.
+    """
+    lines = []
+    for track in existing_tracks:
+        artist = track.get("artist") or "Unknown"
+        lines.append(f"- {track['title']} by {artist}")
+    return JAM_SUGGESTION_PROMPT.format(
+        count=count,
+        existing_tracks="\n".join(lines),
+    )

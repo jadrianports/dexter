@@ -1,10 +1,14 @@
 """Tests for personality prompt builders."""
 
+from cogs.ai import parse_suggestions
 from personality.prompts import (
     build_chat_prompt,
+    build_discover_commentary_prompt,
+    build_jam_suggestion_prompt,
     build_recommendation_prompt,
     DEXTER_SYSTEM_PROMPT,
     MOOD_CONTEXTS,
+    MUSIC_RECOMMENDATION_PROMPT,
 )
 
 
@@ -174,3 +178,108 @@ class TestBuildRecommendationPrompt:
         songs = [{"title": "Test", "artist": "Artist"}]
         result = build_recommendation_prompt(songs)
         assert "3" in result
+
+
+class TestBuildRecommendationPromptPhase14Kwargs:
+    """Phase 14 / BRAIN-01: recently_skipped= / positive_taste= kwargs (Pattern 1)."""
+
+    RECENT = [
+        {"title": "Blinding Lights", "artist": "The Weeknd"},
+        {"title": "Tadow", "artist": "Masego"},
+    ]
+
+    def test_byte_identical_when_both_kwargs_omitted(self):
+        """Omitting both new kwargs must equal the pre-Phase-14 .format() output."""
+        lines = [f"- {s['title']} by {s['artist']}" for s in self.RECENT]
+        pre_change_output = MUSIC_RECOMMENDATION_PROMPT.format(
+            recent_songs="\n".join(lines)
+        )
+        assert build_recommendation_prompt(self.RECENT) == pre_change_output
+
+    def test_byte_identical_when_both_kwargs_none(self):
+        without_kwargs = build_recommendation_prompt(self.RECENT)
+        with_none_kwargs = build_recommendation_prompt(
+            self.RECENT, recently_skipped=None, positive_taste=None
+        )
+        assert without_kwargs == with_none_kwargs
+
+    def test_byte_identical_when_both_kwargs_empty_list(self):
+        without_kwargs = build_recommendation_prompt(self.RECENT)
+        with_empty_kwargs = build_recommendation_prompt(
+            self.RECENT, recently_skipped=[], positive_taste=[]
+        )
+        assert without_kwargs == with_empty_kwargs
+
+    def test_recently_skipped_appends_avoid_block(self):
+        result = build_recommendation_prompt(
+            self.RECENT,
+            recently_skipped=[{"title": "Song X", "artist": "Artist X"}],
+        )
+        assert "AVOID these" in result
+        assert "Song X" in result
+        assert "Artist X" in result
+
+    def test_positive_taste_appends_room_tends_to_like_block(self):
+        result = build_recommendation_prompt(
+            self.RECENT,
+            positive_taste=["keeps coming back to the killers"],
+        )
+        assert "THE ROOM TENDS TO LIKE" in result
+        assert "keeps coming back to the killers" in result
+
+    def test_both_blocks_present_together(self):
+        result = build_recommendation_prompt(
+            self.RECENT,
+            recently_skipped=[{"title": "Song X", "artist": "Artist X"}],
+            positive_taste=["keeps coming back to the killers"],
+        )
+        assert "AVOID these" in result
+        assert "THE ROOM TENDS TO LIKE" in result
+
+
+class TestBuildDiscoverCommentaryPrompt:
+    """Phase 14 / BRAIN-02 / D-04 firewall: Gemini wraps SQL-supplied names only."""
+
+    def test_includes_anchor_and_adjacent_artists(self):
+        result = build_discover_commentary_prompt("Drake", ["Future", "21 Savage"])
+        assert "Drake" in result
+        assert "Future" in result
+        assert "21 Savage" in result
+
+    def test_instructs_no_invented_artists(self):
+        result = build_discover_commentary_prompt("Drake", ["Future"])
+        lower = result.lower()
+        assert "do not invent" in lower or "not invent" in lower
+
+
+class TestBuildJamSuggestionPrompt:
+    """Phase 14 / BRAIN-03 / D-06: parse_suggestions-compatible {title, artist} contract."""
+
+    def test_includes_existing_tracks_and_count(self):
+        tracks = [
+            {"title": "Blinding Lights", "artist": "The Weeknd"},
+            {"title": "Tadow", "artist": "Masego"},
+        ]
+        result = build_jam_suggestion_prompt(tracks, 3)
+        assert "Blinding Lights" in result
+        assert "Masego" in result
+        assert "3" in result
+
+    def test_asks_for_json(self):
+        result = build_jam_suggestion_prompt([{"title": "Test", "artist": "Artist"}], 2)
+        assert "JSON" in result or "json" in result
+
+    def test_parse_suggestions_round_trip(self):
+        """A well-formed model reply matching this prompt's contract parses non-empty."""
+        model_reply = (
+            '[{"title": "Midnight City", "artist": "M83"}, '
+            '{"title": "Redbone", "artist": "Childish Gambino"}]'
+        )
+        # Sanity: build the prompt (contract compatibility, not literal reply generation).
+        build_jam_suggestion_prompt([{"title": "Existing", "artist": "Someone"}], 2)
+        result = parse_suggestions(model_reply)
+        assert result
+        assert result == [
+            {"title": "Midnight City", "artist": "M83"},
+            {"title": "Redbone", "artist": "Childish Gambino"},
+        ]
