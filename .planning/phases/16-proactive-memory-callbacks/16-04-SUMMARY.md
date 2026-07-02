@@ -92,3 +92,12 @@ None - no external service configuration required.
 ---
 *Phase: 16-proactive-memory-callbacks*
 *Completed: 2026-07-03*
+
+## Self-Check: PASSED
+
+- FOUND: cogs/memory.py
+- FOUND: tests/test_memory_command.py
+- FOUND: .planning/phases/16-proactive-memory-callbacks/16-04-SUMMARY.md
+- FOUND: a1a303c (feat commit)
+- FOUND: 3f3cc9f (test commit)
+- FOUND: 92da531 (docs: summary commit)
