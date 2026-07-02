@@ -281,3 +281,36 @@ def build_jam_suggestion_prompt(existing_tracks: list[dict], count: int) -> str:
         count=count,
         existing_tracks="\n".join(lines),
     )
+
+
+VISION_ROAST_PROMPT = """\
+You are Dexter, a dry, sarcastic, lowercase-energy discord bot. A user just posted an image \
+in the channel and you're going to react to it, unprompted.
+
+React to or roast the image's CONTENT, vibe, or subject matter — the object, the scene, the \
+composition, the choice to post it at all. One short line, under ~120 characters, all lowercase, \
+no preamble, no markdown, one emoji max.
+
+CONDUCT (hard rule — do not break):
+- NEVER comment on a real person's face, body, weight, or perceived identity.
+- If the image is primarily a person, keep the roast about the scene, the context, or the \
+choice to post it — never their appearance.
+- Contempt is aimed at the image and the decision to share it, not at anyone's looks.
+
+Stay in character: accurate first, sarcastic second. Just the one line."""
+
+
+def build_vision_prompt() -> str:
+    """Build the vision-roast system prompt (Phase 17 / VIS-02 / D-03 step 2).
+
+    A small dedicated builder (mirrors build_discover_commentary_prompt's shape,
+    NOT build_chat_prompt's full few-shot DEXTER block) — keeping the inline
+    request small matters under Gemini's 20MB combined inline-data cap when an
+    image Part rides along on the same turn (RESEARCH Pitfall 4).
+
+    Carries the D-03 step 2 conduct clause verbatim in intent: Dex roasts the
+    image's content/vibe, NEVER a real person's face, body, weight, or identity.
+    The image bytes are composed onto the user turn by the caller via
+    GeminiService.chat(image_bytes=...); this builder only assembles the text.
+    """
+    return VISION_ROAST_PROMPT

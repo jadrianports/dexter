@@ -36,6 +36,7 @@ __all__ = [
     "ROAST_BOT_LINES",
     "ROAST_NO_HISTORY_LINES",
     "PROACTIVE_CALLBACK_FALLBACKS",
+    "VISION_ROAST_FALLBACKS",
 ]
 
 
@@ -219,6 +220,25 @@ PROACTIVE_CALLBACK_FALLBACKS: list[str] = [
     "{name}. i know things about your taste. i'm choosing not to say all of them right now.",
     "your history's been on my mind. that's less a compliment and more a diagnosis.",
     "{name}, don't mind me. just recalling your track record. it's a lot.",
+]
+
+
+# ---------------------------------------------------------------------------
+# Vision-roast fallback pool (Phase 17 / VIS-02, D-04)
+# Fires ONLY on a transport failure (rate-limit / API-down) when reacting to a
+# posted image — NEVER on a safety block (a safety block is a silent skip,
+# handled in cogs/events.py::_generate_vision_roast). Self-contained lines with
+# NO {name}/{title}/{count} placeholders, so the generator picks one without
+# .format(). Keeps the LOCKED voice register (lowercase, ≤500 chars, one emoji
+# max, contempt aimed outward at the choice to post, never a person's looks).
+# ---------------------------------------------------------------------------
+
+VISION_ROAST_FALLBACKS: list[str] = [
+    "i can see the image. i just can't currently muster a reaction that does it justice.",
+    "posting pictures now. bold. i'd roast it but my brain's rate-limited, count yourself lucky.",
+    "an image. wonderful. i'll form an opinion the second the servers stop crying.",
+    "i saw it. the commentary is temporarily out of order. the disappointment isn't.",
+    "nice upload. i had a whole line ready and the api ate it. you dodged one.",
 ]
 
 
