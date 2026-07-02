@@ -191,3 +191,49 @@ async def test_ask_always_recalls_invoker_scoped():
     assert call_args[0] == str(interaction.user.id), (
         f"Expected recall scoped to invoker id {interaction.user.id}, got {call_args[0]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# (C) Phase 16 / Pitfall 1 regression lock — pre_recalled_memories bypass
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_pre_recalled_bypasses_internal_recall():
+    """pre_recalled_memories provided -> internal recall() never awaited.
+
+    The default None path (unchanged) still runs the internal
+    MEMORY_CALLBACK_CHANCE-gated recall — proving the two voice-event call
+    sites remain byte-identical while only the proactive caller (plan 16-03)
+    bypasses the internal gate.
+    """
+    bot = _make_bot()
+    bot.gemini_service = MagicMock()
+    bot.gemini_service.chat = AsyncMock(return_value="a generated line")
+
+    member = _make_target(user_id=5, display_name="Bypasser")
+    member.guild = MagicMock(spec=discord.Guild)
+    member.guild.id = 100
+
+    with (
+        patch("cogs.events.get_user_summary", new=AsyncMock(return_value="taste summary")),
+        patch("cogs.events.build_chat_prompt", return_value="system prompt"),
+    ):
+        cog = cogs.events.EventsCog(bot)
+        result = await cog._generate_ambient_roast(
+            member, "scenario text", ["fallback line"], pre_recalled_memories=["fact"],
+        )
+
+    bot.memory_service.recall.assert_not_awaited()
+    assert result == "a generated line"
+
+    # Default None path (the two voice-event call sites) still runs the
+    # internal chance-gated recall, unchanged.
+    bot.memory_service.recall.reset_mock()
+    with (
+        patch("cogs.events.get_user_summary", new=AsyncMock(return_value="taste summary")),
+        patch("cogs.events.build_chat_prompt", return_value="system prompt"),
+        patch("cogs.events.random.random", return_value=0.0),  # force MEMORY_CALLBACK_CHANCE gate to pass
+    ):
+        await cog._generate_ambient_roast(member, "scenario text", ["fallback line"])
+
+    bot.memory_service.recall.assert_awaited_once()
