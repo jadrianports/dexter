@@ -265,7 +265,8 @@ async def _cleanup_partial_init() -> None:
     """Tear down a partially-initialized boot so the next READY retries cleanly (WR-04).
 
     Loops stopped: idle_check, cache_cleanup, ytdlp_update, status_rotation,
-    memory_distill_batch (Phase 11 / D-09 path 2), memory_sweep (Phase 11 / MEM-07).
+    memory_distill_batch (Phase 11 / D-09 path 2), memory_sweep (Phase 11 / MEM-07),
+    taste_distill_batch (Phase 13 / TASTE-03).
 
     _initialize_once starts the background loops + health server BEFORE the
     fail-prone steps (DB ready, restore_queues). If init then hangs (watchdog
@@ -278,9 +279,10 @@ async def _cleanup_partial_init() -> None:
     """
     # Stop loops bound to the dying pool (each guarded — may not have started).
     # Loops stopped: idle_check, cache_cleanup, ytdlp_update, status_rotation,
-    # memory_distill_batch (Phase 11 / D-09 path 2), memory_sweep (Phase 11 / MEM-07).
+    # memory_distill_batch (Phase 11 / D-09 path 2), memory_sweep (Phase 11 / MEM-07),
+    # taste_distill_batch (Phase 13 / TASTE-03).
     for _loop in (idle_check, cache_cleanup, ytdlp_update, status_rotation,
-                  memory_distill_batch, memory_sweep):
+                  memory_distill_batch, memory_sweep, taste_distill_batch):
         try:
             if _loop.is_running():
                 _loop.cancel()
@@ -460,6 +462,9 @@ async def _initialize_once() -> None:
     # Phase 11 / MEM-07: once-daily decay sweep (memory_service guarded inside)
     if not memory_sweep.is_running():
         memory_sweep.start()
+    # Phase 13 / TASTE-03: once-daily taste distill batch (memory_service guarded inside)
+    if not taste_distill_batch.is_running():
+        taste_distill_batch.start()
 
     # K-02: Minimal HTTP health endpoint for Koyeb WEB service.
     # No before_loop guard — endpoint must be up early so Koyeb's health check
