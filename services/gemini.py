@@ -28,6 +28,39 @@ class GeminiRefusalError(Exception):
     """Raised when content is filtered or generation is refused."""
 
 
+# ──────────────────────────── SAFETY SETTINGS ────────────────────────────
+
+# The four adjustable, non-deprecated safety categories the installed google-genai
+# SDK exposes for gemini-2.5-flash text/vision (RESEARCH Assumption A2 — verified
+# against list(types.HarmCategory) at implementation time; the additional
+# HARM_CATEGORY_IMAGE_*/CIVIC_INTEGRITY/JAILBREAK entries are model-specific or
+# deprecated specials, not standard adjustable SafetySettings for this model).
+# Gemini 2.5-series defaults these to OFF when unspecified, so every user-influenced
+# generate_content call MUST set them explicitly (D-01 / VIS-03).
+_SAFETY_CATEGORIES = (
+    "HARM_CATEGORY_HARASSMENT",
+    "HARM_CATEGORY_HATE_SPEECH",
+    "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    "HARM_CATEGORY_DANGEROUS_CONTENT",
+)
+
+
+def _build_safety_settings(threshold: str) -> list[types.SafetySetting]:
+    """Build an explicit SafetySetting list applying ``threshold`` to every
+    adjustable HarmCategory.
+
+    ``threshold`` is a HarmBlockThreshold string value, e.g.
+    ``"BLOCK_MEDIUM_AND_ABOVE"`` (config.VISION_SAFETY_THRESHOLD — vision real block)
+    or ``"BLOCK_ONLY_HIGH"`` (config.TEXT_SAFETY_THRESHOLD — /ask + /imagine +
+    non-image chat(), permissive-but-explicit so edgy personality output is not
+    newly blocked).
+    """
+    return [
+        types.SafetySetting(category=cat, threshold=threshold)
+        for cat in _SAFETY_CATEGORIES
+    ]
+
+
 # ──────────────────────────── RATE LIMITER ────────────────────────────
 
 
@@ -148,6 +181,9 @@ class GeminiService:
         system_prompt: str,
         conversation: list[dict],
         priority: int = 1,
+        *,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
     ) -> str | None:
         """Send a chat request to Gemini.
 
@@ -155,13 +191,21 @@ class GeminiService:
             system_prompt: The assembled system instruction.
             conversation: List of {"role": "user"|"model", "content": "..."} dicts.
             priority: 1 = user command, 2 = background task.
+            image_bytes: Optional raw image bytes to compose onto the final user
+                turn (vision path, Phase 17 / VIS-01). When provided, the call uses
+                the real-block VISION_SAFETY_THRESHOLD instead of the permissive
+                TEXT_SAFETY_THRESHOLD.
+            image_mime_type: The attachment's already-gate-validated content_type
+                (e.g. "image/png"); not re-derived from bytes.
 
         Returns:
-            Response text, or None if empty.
+            Response text, or None if empty/blocked. NEVER raises for a safety
+            block — this None-on-empty contract is the VIS-02 silent-skip hinge
+            the Wave-2 glue depends on.
 
         Raises:
             GeminiRateLimitError: Rate limit reached.
-            GeminiAPIError: API error.
+            GeminiAPIError: API error (transport/network/server).
         """
         await self._rate_limiter.acquire(priority)
 
@@ -182,9 +226,25 @@ class GeminiService:
                 )
             )
 
+        # Phase 17 / VIS-01: compose the image onto the final user turn (before the
+        # empty-contents fallback, since an image call always supplies a user turn).
+        if image_bytes is not None and contents:
+            contents[-1].parts.append(
+                types.Part.from_bytes(data=image_bytes, mime_type=image_mime_type)
+            )
+
         # Gemini requires at least one user message
         if not contents:
             contents = "."
+
+        # Vision path uses the real-block threshold; every text path stays
+        # permissive-but-explicit so existing edgy /ask + ambient output is not
+        # newly blocked (D-01 / VIS-03).
+        threshold = (
+            config.VISION_SAFETY_THRESHOLD
+            if image_bytes is not None
+            else config.TEXT_SAFETY_THRESHOLD
+        )
 
         try:
             response = await self._client.aio.models.generate_content(
@@ -192,6 +252,7 @@ class GeminiService:
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
+                    safety_settings=_build_safety_settings(threshold),
                 ),
             )
         except errors.APIError as e:
@@ -226,6 +287,7 @@ class GeminiService:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_modalities=["IMAGE"],
+                    safety_settings=_build_safety_settings(config.TEXT_SAFETY_THRESHOLD),
                 ),
             )
         except errors.APIError as e:
