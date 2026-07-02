@@ -77,11 +77,26 @@ Full phase details, success criteria, and decisions archived in
 **Depends on**: Phase 12 (first v1.3 phase; extends the Phase 11 `MemoryService`/pgvector infrastructure already shipped, no schema fork)
 **Requirements**: TASTE-01, TASTE-02, TASTE-03
 **Success Criteria** (what must be TRUE):
+
   1. Dexter's stored memory for a user includes number-free "taste episode" facts (artist/genre preference narrative) distilled from real listening activity, with no raw counts embedded (TASTE-01)
   2. Taste-episode memories carry their own salience base weight and decay tier, distinct from and tunable separately from Phase 11's general-fact defaults (TASTE-02)
   3. Taste episodes are written by a background task on its own schedule, distinct from the existing distill-batch/decay-sweep loops, without spiking load on the Neon pool (TASTE-03)
   4. Existing memory-backed behavior (ambient callback roasts, current `/roast`/`/ask` wiring) continues to work unchanged — the new memory kind is additive, not disruptive
-**Plans**: TBD
+
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+
+- [ ] 13-01-PLAN.md — Taste config knobs + salience/decay tier + pure logic/taste.py banding & gate
+- [ ] 13-02-PLAN.md — song_history aggregate helpers + expires_at refresh helper
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 13-03-PLAN.md — kind-aware decay horizon + self-refresh-on-dedup fix (D-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 13-04-PLAN.md — taste_distill_batch @tasks.loop + 3-site boot registration
 
 ### Phase 14: Smarter Music Brain
 
@@ -89,10 +104,12 @@ Full phase details, success criteria, and decisions archived in
 **Depends on**: Phase 13 (auto-queue negative hints, discovery, and jam suggestions all read taste signal written by the foundation phase)
 **Requirements**: BRAIN-01, BRAIN-02, BRAIN-03
 **Success Criteria** (what must be TRUE):
+
   1. Auto-queue measurably stops re-suggesting tracks/artists a user has recently skipped — skip history acts as a negative hint in the Gemini-in-the-loop selection, not a trained model (BRAIN-01)
   2. A discovery command surfaces artist/genre adjacency grounded in real `song_history`/`user_artist_counts` co-occurrence SQL — never a hallucinated recommendation (BRAIN-02)
   3. Dexter can suggest additions to continue a server's `/jam` playlist using taste context + Gemini, and every suggestion passes hallucination validation (reusing `logic/autoqueue.py` token-set containment) before being queued (BRAIN-03)
   4. Discovery and jam-suggestion queries stay multi-user-safe (aggregate/server-scoped), never leaking one user's individual listening data into another user's results
+
 **Plans**: TBD
 
 ### Phase 15: RAG Reach
@@ -101,10 +118,12 @@ Full phase details, success criteria, and decisions archived in
 **Depends on**: Phase 14 (memory-driving-a-decision is validated end-to-end via auto-queue before extending memory to direct user-facing read/write surfaces)
 **Requirements**: RAG-01, RAG-02, RAG-03, RAG-04
 **Success Criteria** (what must be TRUE):
+
   1. `/roast @user` grounds its roast in the **target user's** own recalled history — never the invoker's — alongside the existing live SQL stat (RAG-01)
   2. `/ask` answers reflect the invoker's recalled memory when relevant, and produce a byte-identical prompt (no behavior change) when no memory clears the recall floor (RAG-02)
   3. A user can run `/memory` to see an in-character, read-only view of what Dexter remembers about them (RAG-03)
   4. A user can run `/memory forget` to delete their stored memories, and the rows **and** their embeddings are verifiably gone — later recall no longer returns them (RAG-04)
+
 **Plans**: TBD
 
 ### Phase 16: Proactive Memory Callbacks
@@ -113,9 +132,11 @@ Full phase details, success criteria, and decisions archived in
 **Depends on**: Phase 15 (hard dependency — `/memory forget` must ship and exist as the escape hatch before an autonomous memory-surfacing surface ships; bad trust ordering otherwise)
 **Requirements**: PROACT-01, PROACT-02
 **Success Criteria** (what must be TRUE):
+
   1. Dexter occasionally brings up a remembered detail unprompted, anchored to an active moment in the designated channel — never a cold poll, never a DM (PROACT-01)
   2. Proactive callbacks fire rarer than the existing 0.30–0.35 ambient-roast cadence, bounded by an additive daily cap on top of the probability roll (PROACT-01)
   3. A user can pause proactive callbacks for themselves without deleting their underlying memories — a control distinct from `/memory forget` (PROACT-02)
+
 **Plans**: TBD
 
 ### Phase 17: Vision / Multimodal Roasting
@@ -124,10 +145,12 @@ Full phase details, success criteria, and decisions archived in
 **Depends on**: Phase 16 (sequenced last for blast-radius reasons, not a technical dependency — architecturally independent of the taste-brain track; benefits from freshly-proven cadence-gating discipline)
 **Requirements**: VIS-01, VIS-02, VIS-03
 **Success Criteria** (what must be TRUE):
+
   1. Dexter occasionally reacts to / roasts an image posted in the designated channel, gated by chance + per-user cooldown + priority-2 on the shared 15 RPM limiter — not every image, not every channel (VIS-01)
   2. Oversized (`MAX_VISION_IMAGE_BYTES`) or wrong-mime-type images are rejected before download, never reaching the Gemini call (VIS-01)
   3. A safety-blocked image reaction is silently skipped — no visible refusal message, never routed through the generic rate-limit/API-down fallback template used elsewhere (VIS-02)
   4. Explicit `safety_settings` are applied to every Gemini call that can receive user-influenced content, per the in-phase decision on whether to retrofit `/ask`/`/imagine` alongside vision (VIS-03)
+
 **Plans**: TBD
 
 ## Progress
@@ -149,7 +172,7 @@ Full phase details, success criteria, and decisions archived in
 | 10. Critical-Path Test Coverage | v1.2 | 4/4 | Complete | 2026-06-27 |
 | 11. RAG Long-Term Memory | v1.2 | 7/7 | Complete (live-runtime UAT deferred) | 2026-06-29 |
 | 12. Richer Music/UX | v1.2 | 4/4 | Complete | 2026-06-30 |
-| 13. Semantic Music Memory | v1.3 | 0/TBD | Not started | - |
+| 13. Semantic Music Memory | v1.3 | 0/4 | Planned | - |
 | 14. Smarter Music Brain | v1.3 | 0/TBD | Not started | - |
 | 15. RAG Reach | v1.3 | 0/TBD | Not started | - |
 | 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
