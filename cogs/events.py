@@ -27,6 +27,20 @@ from utils.logger import log
 # build_chat_prompt) per D-06 — examples beat descriptions. See _generate_ambient_roast.
 
 
+def _normalize_image_mime(attachment: discord.Attachment) -> str:
+    """Normalize an attachment's content_type for the allowlist AND the Gemini call.
+
+    Phase 17 / RESEARCH Pitfall 3 — canonicalize with
+    ``(attachment.content_type or "").split(";")[0].strip().lower()`` so a None
+    content_type collapses to ``""`` (-> allowlist reject) and a parameterized or
+    upper-cased type (e.g. ``"image/jpeg; charset=binary"``, ``"IMAGE/PNG"``) is
+    reduced to its canonical form. Single source of truth so the structural gate
+    and the value forwarded to ``types.Part.from_bytes(mime_type=...)`` can never
+    drift (WR-01).
+    """
+    return (attachment.content_type or "").split(";")[0].strip().lower()
+
+
 def _first_valid_image_attachment(
     message: discord.Message,
 ) -> discord.Attachment | None:
@@ -37,16 +51,15 @@ def _first_valid_image_attachment(
     trigger is attachments-only (never a message-content URL — SSRF, T-17-02);
     bytes come solely from attachment.read() (Discord CDN).
 
-    Each attachment's content_type is normalized with
-    ``(attachment.content_type or "").split(";")[0].strip().lower()`` to handle a
-    None content_type (-> reject) and a "; charset=" suffix (RESEARCH Pitfall 3).
-    An attachment is rejected if its normalized type is not in
+    Each attachment's content_type is normalized via ``_normalize_image_mime``
+    (handles a None content_type -> reject and a "; charset=" suffix, RESEARCH
+    Pitfall 3). An attachment is rejected if its normalized type is not in
     ``config.VISION_MIME_ALLOWLIST`` (image/gif deliberately excluded) or if its
     size exceeds ``config.MAX_VISION_IMAGE_BYTES``. The FIRST passing attachment
     is returned (roast the first valid image, D-02).
     """
     for attachment in message.attachments:
-        mime = (attachment.content_type or "").split(";")[0].strip().lower()
+        mime = _normalize_image_mime(attachment)
         if mime not in config.VISION_MIME_ALLOWLIST:
             continue
         if attachment.size > config.MAX_VISION_IMAGE_BYTES:
@@ -652,10 +665,14 @@ class EventsCog(commands.Cog):
         ):
             return
 
-        # 4. Only now fetch the bytes (single network read) and generate.
+        # 4. Only now fetch the bytes (single network read) and generate. Forward
+        # the NORMALIZED mime (not raw attachment.content_type) so Gemini's
+        # Part.from_bytes(mime_type=...) receives the same canonical value the gate
+        # validated — a parameterized/upper-cased type would otherwise 400 and
+        # surface a visible transport fallback, defeating Pitfall 3 (WR-01).
         image_bytes = await attachment.read()
         line = await self._generate_vision_roast(
-            message.author, image_bytes, attachment.content_type
+            message.author, image_bytes, _normalize_image_mime(attachment)
         )
         if line is None:
             # VIS-02 silent skip (safety-blocked/empty) — no send, no cooldown mark.
