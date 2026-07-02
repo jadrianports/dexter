@@ -13,8 +13,8 @@ Requirements for the v1.3 milestone. Each maps to a roadmap phase (13–17).
 
 ### Semantic Music Memory *(foundation — Phase 13)*
 
-- [ ] **TASTE-01**: Dexter distills a user's listening activity into number-free "taste episode" facts and stores them as a new `kind` in the existing `user_memories` vector store (no schema fork; accuracy firewall preserved — no counts embedded).
-- [ ] **TASTE-02**: Taste-episode memories use their own salience base weight and decay tier (deliberately set for taste, not inherited from the Phase 11 general-fact defaults).
+- [x] **TASTE-01**: Dexter distills a user's listening activity into number-free "taste episode" facts and stores them as a new `kind` in the existing `user_memories` vector store (no schema fork; accuracy firewall preserved — no counts embedded).
+- [x] **TASTE-02**: Taste-episode memories use their own salience base weight and decay tier (deliberately set for taste, not inherited from the Phase 11 general-fact defaults).
 - [ ] **TASTE-03**: A background task writes taste episodes on a schedule distinct from the existing distill-batch/sweep loops (no thundering-herd on the Neon pool), following the module-scope `@tasks.loop` + `make_task` failure-surfacing convention.
 
 ### Smarter Music Brain *(Phase 14)*
@@ -73,8 +73,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TASTE-01 | Phase 13 | Pending |
-| TASTE-02 | Phase 13 | Pending |
+| TASTE-01 | Phase 13 | Complete |
+| TASTE-02 | Phase 13 | Complete |
 | TASTE-03 | Phase 13 | Pending |
 | BRAIN-01 | Phase 14 | Pending |
 | BRAIN-02 | Phase 14 | Pending |
@@ -90,6 +90,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | VIS-03 | Phase 17 | Pending |
 
 **Coverage:**
+
 - v1.3 requirements: 15 total
 - Mapped to phases: 15/15 ✓ (confirmed by roadmapper — see ROADMAP.md Phases 13-17)
 - Unmapped: 0

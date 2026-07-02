@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
-status: planning
-stopped_at: Phase 13 context gathered
-last_updated: "2026-07-02T09:44:12.861Z"
-last_activity: 2026-07-02 — ROADMAP.md written for v1.3 (Phases 13-17), REQUIREMENTS.md traceability confirmed (15/15 mapped)
+status: executing
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-07-02T10:01:08.375Z"
+last_activity: 2026-07-02 -- Phase 13 execution started
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-02)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** v1.3 "Taste Brain" — Phase 13: Semantic Music Memory (foundation)
+**Current focus:** Phase 13 — semantic-music-memory
 
 ## Current Position
 
-Phase: 13 of 17 (Semantic Music Memory) — first of 5 phases in v1.3
-Plan: Not yet planned
-Status: Roadmap complete — ready to plan Phase 13
-Last activity: 2026-07-02 — ROADMAP.md written for v1.3 (Phases 13-17), REQUIREMENTS.md traceability confirmed (15/15 mapped)
+Phase: 13 (semantic-music-memory) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-07-02 -- Phase 13 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 | 17. Vision / Multimodal Roasting | 0/TBD | - | - |
 
 *Updated after each plan completion. Plan counts refined during /gsd-plan-phase.*
+| Phase 13 P01 | 12min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - Gemini 2.5-series models default `safety_settings` to OFF when unspecified — vision (Phase 17) must set them explicitly; whether to retrofit `/ask`/`/imagine` is an open decision for that phase (VIS-03).
 - `/memory forget` (Phase 15) must ship and be verified as a real hard-delete before proactive callbacks (Phase 16) — the required escape hatch; hard dependency, do not reorder.
 - Pure-logic TDD seam (`logic/*.py`, Phase 10 convention): `logic/taste.py` (Phase 14) and `logic/vision.py` (Phase 17) follow the same mock-free pattern.
+- [Phase 13]: taste_episode salience weight set to 0.4, below MEMORY_DECAY_SALIENCE_FLOOR (0.5) per D-04, so taste rows are sweep-eligible and fads age out per D-05 self-refresh intent
+- [Phase 13]: MEMORY_DECAY_DAYS_BY_KIND introduced as a new mapping (not a modification to MEMORY_DECAY_DAYS) so Phase 11 kinds fall back unchanged
+- [Phase 13]: classify_artist precedence is OBSESSION greater than NEW_ARRIVAL greater than STEADY greater than DROPPED_OFF greater than NONE; skips_in_window accepted for future-proofing but not consulted yet
 
 ### Pending Todos
 
@@ -90,7 +94,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T09:20:24.967Z
-Stopped at: Phase 13 context gathered
+Last session: 2026-07-02T10:01:08.360Z
+Stopped at: Completed 13-01-PLAN.md
 Next: `/gsd-plan-phase 13`
 </content>
