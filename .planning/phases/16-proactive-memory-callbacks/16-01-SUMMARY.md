@@ -101,3 +101,12 @@ None - no external service configuration required.
 ---
 *Phase: 16-proactive-memory-callbacks*
 *Completed: 2026-07-02*
+
+## Self-Check: PASSED
+
+- FOUND: logic/proactive.py
+- FOUND: tests/test_proactive_logic.py
+- FOUND: .planning/phases/16-proactive-memory-callbacks/16-01-SUMMARY.md
+- FOUND: f1a7eb1 (Task 1 commit)
+- FOUND: 8b30d44 (Task 2 commit)
+- FOUND: 048d571 (SUMMARY commit)

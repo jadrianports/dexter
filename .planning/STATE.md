@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Taste Brain
 status: executing
-stopped_at: Phase 16 context gathered
-last_updated: "2026-07-02T19:50:15.570Z"
-last_activity: 2026-07-02 -- Phase 16 planning complete
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-07-02T20:01:35.992Z"
+last_activity: 2026-07-02 -- Phase 16 execution started
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 16
+  completed_plans: 13
   percent: 60
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-02)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 15 — rag-reach
+**Current focus:** Phase 16 — proactive-memory-callbacks
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: 16 (proactive-memory-callbacks) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-07-02 -- Phase 16 planning complete
+Last activity: 2026-07-02 -- Phase 16 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 15 P01 | 5min | 3 tasks | 2 files |
 | Phase 15 P02 | 12min | 2 tasks | 2 files |
 | Phase 15 P03 | 15min | 3 tasks | 4 files |
+| Phase 16 P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ Full decision log lives in PROJECT.md Key Decisions and the milestone roadmaps. 
 - [Phase 15]: D-01: /ask and /roast now attempt memory recall on every invocation (gate removed); ambient surfaces (events.py, music.py) unchanged, still gated at MEMORY_CALLBACK_CHANCE
 - [Phase ?]: [Phase 15]: MemoryPageView clones LyricsPageView's exact button/on_timeout/AllowedMentions.none() shape, changing only embed title and color (0x9B59B6 purple)
 - [Phase ?]: [Phase 15]: ForgetConfirmView wording never promises Dexter will stop mentioning you -- it only describes the actual deletion; the ambient-behavior control is a separate Phase 16 concern (Pitfall 4)
+- [Phase 16]: PROACTIVE_CALLBACK_CHANCE set to 0.10 (D-02 0.08-0.12 band), strictly below UNPROMPTED_ROAST_CHANCE (0.30) and MEMORY_CALLBACK_CHANCE (0.35); enforced by a dedicated rarity-invariant test
+- [Phase 16]: Gate implements only D-02 steps 1-3 (opt-out, chance, daily-cap); the async recall-floor step 4 deliberately stays out of logic/proactive.py and lives in cog glue (plan 16-03)
 
 ### Pending Todos
 
@@ -126,7 +129,7 @@ Full detail (13 items) in MILESTONES.md v1.2 "Known Gaps" section.
 
 ## Session Continuity
 
-Last session: 2026-07-02T19:19:35.846Z
-Stopped at: Phase 16 context gathered
+Last session: 2026-07-02T20:01:35.968Z
+Stopped at: Completed 16-01-PLAN.md
 Next: Phase 14 complete (5/5 plans) — ready for `/gsd-verify-phase 14`
 </content>
