@@ -1243,3 +1243,76 @@ async def get_user_skip_rate(
             " WHERE guild_id = $1 AND user_id = $2",
             guild_id, user_id,
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: Semantic Music Memory — taste aggregate helpers (TASTE-01/TASTE-03)
+# ---------------------------------------------------------------------------
+
+
+async def get_active_taste_users(
+    pool: asyncpg.Pool, *, since: datetime
+) -> list[asyncpg.Record]:
+    """Return (guild_id, user_id, tracks_in_window) for every guild+user pair
+    active in song_history since the given cutoff.
+
+    Candidate-user query for the taste_distill_batch loop (TASTE-03): one row
+    per (guild_id, user_id) pair with its window track count so the caller can
+    apply the D-08 min-activity-tracks gate itself — no thresholding happens
+    here in SQL. `since` is a Python datetime bound as $1 (never string-
+    interpolated), and `queued_at > $1` keeps the scan aligned with
+    idx_history_guild/idx_history_user (T-13-03 DoS mitigation).
+
+    This is intentionally a global (non-guild-scoped) aggregate — it enumerates
+    every active (guild, user) pair in one pass; each returned row already
+    carries its own guild_id/user_id so the caller stays scoped when it fans
+    out per-user (no cross-user data is ever merged into a single row).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT guild_id, user_id, COUNT(*) AS tracks_in_window"
+            " FROM song_history"
+            " WHERE queued_at > $1"
+            " GROUP BY guild_id, user_id",
+            since,
+        )
+
+
+async def get_user_artist_activity(
+    pool: asyncpg.Pool,
+    *,
+    guild_id: str,
+    user_id: str,
+    since: datetime,
+    baseline_since: datetime,
+) -> list[asyncpg.Record]:
+    """Return per-artist play/skip counts split across the recent window vs before it.
+
+    Scoped to BOTH guild_id ($1) and user_id ($2) — preventing cross-guild and
+    cross-user data leakage (Pitfall 6 / T-13-02), the same discipline as
+    get_user_skip_rate. Returns one row per artist with:
+      - plays_in_window:     COUNT(*) FILTER (WHERE queued_at > $3)   — recent (D-07 lookback)
+      - plays_before_window: COUNT(*) FILTER (WHERE queued_at <= $3)  — baseline, bounded by $4
+      - skips_in_window:     COUNT(*) FILTER (WHERE queued_at > $3 AND was_skipped) —
+        accepted for future-proofing; not consulted by classify_artist yet.
+
+    `queued_at > $4` (baseline_since) bounds how far back "before_window" reaches
+    so the scan stays index-friendly against idx_history_guild rather than
+    scanning all-time history. All banding/classification (obsession /
+    new-arrival / steady / dropped-off) is the caller's job (logic.taste, not
+    here) — this helper returns raw counts only, no thresholding in SQL.
+    All inputs bound as $1/$2/$3/$4 positional params — no string interpolation
+    (T-13-05).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT artist,"
+            " COUNT(*) FILTER (WHERE queued_at > $3) AS plays_in_window,"
+            " COUNT(*) FILTER (WHERE queued_at <= $3) AS plays_before_window,"
+            " COUNT(*) FILTER (WHERE queued_at > $3 AND was_skipped) AS skips_in_window"
+            " FROM song_history"
+            " WHERE guild_id = $1 AND user_id = $2"
+            "   AND artist IS NOT NULL AND queued_at > $4"
+            " GROUP BY artist",
+            guild_id, user_id, since, baseline_since,
+        )
