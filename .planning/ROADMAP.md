@@ -157,7 +157,17 @@ Plans:
   2. Proactive callbacks fire rarer than the existing 0.30–0.35 ambient-roast cadence, bounded by an additive daily cap on top of the probability roll (PROACT-01)
   3. A user can pause proactive callbacks for themselves without deleting their underlying memories — a control distinct from `/memory forget` (PROACT-02)
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+**Wave 1** *(parallel — no file overlap)*
+
+- [ ] 16-01-PLAN.md — Pure logic/proactive.py gate (should_fire_proactive_callback) + PROACTIVE_CALLBACK_CHANCE/DAILY_CAP config knobs + mock-free boundary/rarity tests (PROACT-01)
+- [ ] 16-02-PLAN.md — DB opt-out substrate: user_profiles.proactive_opt_out column + get/set_proactive_opt_out helpers + tests/test_database_phase16.py (signature guards + live-DB round-trip + independence-from-forget) (PROACT-02)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 16-03-PLAN.md — Events glue: pre_recalled_memories bypass (Pitfall 1) + PROACTIVE_CALLBACK_FALLBACKS pool + _maybe_fire_proactive_callback + on_message designated-channel gate + behavioral tests (PROACT-01, PROACT-02)
+- [ ] 16-04-PLAN.md — /memory callbacks on|off opt-out subcommand (self-scoped, Choice-constrained, distinct from forget) + tests/test_memory_command.py additions (PROACT-02)
 
 ### Phase 17: Vision / Multimodal Roasting
 
@@ -195,6 +205,6 @@ Plans:
 | 13. Semantic Music Memory | v1.3 | 4/4 | Complete   | 2026-07-02 |
 | 14. Smarter Music Brain | v1.3 | 5/5 | Complete    | 2026-07-02 |
 | 15. RAG Reach | v1.3 | 3/3 | Complete    | 2026-07-02 |
-| 16. Proactive Memory Callbacks | v1.3 | 0/TBD | Not started | - |
+| 16. Proactive Memory Callbacks | v1.3 | 0/4 | Planned | - |
 | 17. Vision / Multimodal Roasting | v1.3 | 0/TBD | Not started | - |
 </content>
