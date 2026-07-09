@@ -32,9 +32,16 @@ from utils.logger import log
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-if not DISCORD_TOKEN:
-    log.error("DISCORD_TOKEN not set in .env")
-    sys.exit(1)
+
+def _require_discord_token() -> None:
+    """Exit if no token is configured. Called from main(), never at import.
+
+    Importing this module must never terminate the interpreter — the test suite
+    and any tooling that inspects bot.py import it without a token present.
+    """
+    if not DISCORD_TOKEN:
+        log.error("DISCORD_TOKEN not set in .env")
+        sys.exit(1)
 
 
 class DexterBot(commands.AutoShardedBot):
@@ -1129,6 +1136,8 @@ async def first_run(guild_id: str | None = None):
 
 
 def main():
+    _require_discord_token()
+
     parser = argparse.ArgumentParser(description="Dexter Discord Bot")
     parser.add_argument("--first-run", action="store_true", help="Sync commands and exit")
     parser.add_argument("--guild", type=str, help="Guild ID for dev sync")
