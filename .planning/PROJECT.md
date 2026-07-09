@@ -37,6 +37,11 @@ The Phase 09/11 live-runtime UAT/verification tail (4 items) is deferred behind 
 
 Every phase passed verification (4/4 or 10/10 code-level) and code review; the goal-blocking Phase 16 WR-03 (content-free recall anchor) and the Phase 17 vision-input guards were fixed before close. Suite green at 848 pass / 108 skip / 0 fail. The Phase 14–17 live-Discord UAT tail (plus the carried v1.1/v1.2 checks) is deferred behind the same parked residential host — 24 items acknowledged at close, all `human_needed`, zero code gaps (see STATE.md Deferred Items).
 
+**In progress: v1.4 "Open House" — Phase 18 complete (2026-07-09)**, 7 plans across 5 waves. All 6 requirements (CONFIG-01…05, CICD-01) validated in Phase 18. Delivered:
+- **Phase 18 (Per-Guild Config Foundation & CI Gate):** the hardcoded single-channel assumption is gone. A `guild_config` table + pure `logic/guild_config.py` decision seam + cache-owning `services/guild_config.py::GuildConfigService` (loaded once at boot, fail-closed, zero per-event round-trips) now drive every ambient surface. `bot.py::_resolve_dexter_channel` and `cogs/events.py::_get_ambient_channel` are deleted and both bare-equality `DEXTER_CHANNEL_ID` gates are replaced — the env var no longer appears anywhere under `cogs/`, demoted to a one-time home-guild bootstrap seed (`ON CONFLICT DO NOTHING`). **An unconfigured guild is structurally silent.** Ruff adopted repo-wide as a blocking lint/format gate, and `.github/workflows/ci.yml` runs ruff + pytest against a `pgvector/pgvector:pg16` service container on every push and PR, with zero repo secrets.
+
+**CI is green on `main`** ([run 29056570511](https://github.com/jadrianports/dexter/actions/runs/29056570511) — 1017 passed, 0 skipped). This is the first milestone where the ~111 live-DB tests actually execute rather than skip: the gate's first run caught a sentinel collision that would have made CI silently skip them, plus two latent pre-existing bugs invisible on a long-uptime dev box (an import-time `sys.exit` in `bot.py`, and a `0.0`-vs-monotonic-clock sentinel that suppressed vision roasts for 10 minutes and yt-dlp self-heal for an hour after any reboot). All fixed and locked by `tests/test_fresh_boot_regressions.py`. Phases 19–23 now execute behind a real green gate. Phase 18's 3 remaining live-Discord UAT items are deferred behind the same parked host.
+
 ## Current Milestone: v1.4 "Open House"
 
 **Goal:** Turn Dexter from a single-community bot into a publicly-invitable, multi-tenant-robust portfolio piece — a recruiter can invite it to any server and it just works — without changing the on-demand, owner-run hosting model (music keeps working on the residential IP; the bot responds when the owner has it running).
@@ -224,4 +229,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-10 after starting milestone v1.4 "Open House"*
+*Last updated: 2026-07-10 after completing Phase 18 (Per-Guild Config Foundation & CI Gate)*
