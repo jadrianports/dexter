@@ -509,21 +509,24 @@ async def _post_startup_messages() -> None:
     # Phase 3: Startup message — MUST be last (after all load_extension calls and
     # background-task starts) so commands are registered first (Pitfall 5).
     # Uses STARTUP_MESSAGES (arrogant, D-02) — never self-deprecating.
-    # Wrapped in try/except so a post failure does NOT abort startup.
     # SECURITY (T-03-19): allowed_mentions=none() prevents mention injection.
-    try:
-        from personality.roasts import STARTUP_MESSAGES
-        from personality.roasts import pick_random as _pick_random
+    from personality.roasts import STARTUP_MESSAGES
+    from personality.roasts import pick_random as _pick_random
 
-        for guild in bot.guilds:
+    # WR-03: try/except lives INSIDE the loop body so one guild's send failure
+    # (e.g. discord.Forbidden after a permission change, a transient
+    # discord.HTTPException) is logged and skipped without aborting the
+    # startup announcement for every other guild.
+    for guild in bot.guilds:
+        try:
             channel = bot.guild_config.resolve_ambient_channel(guild)
             if channel:
                 await channel.send(
                     _pick_random(STARTUP_MESSAGES),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
-    except Exception as exc:
-        log.warning("Startup message post failed: %s", exc)
+        except Exception as exc:
+            log.warning("Startup message post failed for guild %s: %s", guild.id, exc)
 
 
 async def _background_sync_retry() -> None:
