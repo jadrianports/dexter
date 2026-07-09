@@ -96,49 +96,6 @@ bot = create_bot()
 _status_index: int = -1
 
 
-def _resolve_dexter_channel(guild: discord.Guild) -> discord.TextChannel | None:
-    """Resolve the Dexter ambient channel for a guild via D-09/D-10 fallback.
-
-    Order:
-      1. config.DEXTER_CHANNEL_ID (explicit env designation)
-      2. Last active music channel (MusicCog queue._text_channel_id)
-      3. guild.system_channel (if the bot can send there)
-      4. First writable text channel
-
-    Mirrors EventsCog._get_ambient_channel exactly; kept local to bot.py to
-    preserve file-ownership boundaries (duplication is acceptable per plan).
-    """
-    # Step 1: explicit designation
-    if config.DEXTER_CHANNEL_ID:
-        ch = guild.get_channel(config.DEXTER_CHANNEL_ID)
-        if ch and isinstance(ch, discord.TextChannel):
-            return ch
-
-    # Step 2: last active music channel
-    music_cog = bot.cogs.get("MusicCog")
-    if music_cog is not None:
-        queue = music_cog.get_queue(guild.id)
-        channel_id = getattr(queue, "_text_channel_id", None)
-        if channel_id is not None:
-            ch = guild.get_channel(channel_id)
-            if ch and isinstance(ch, discord.TextChannel):
-                return ch
-
-    # Step 3: system channel
-    if guild.system_channel is not None:
-        perms = guild.system_channel.permissions_for(guild.me)
-        if perms.send_messages:
-            return guild.system_channel
-
-    # Step 4: first writable text channel
-    for ch in guild.text_channels:
-        perms = ch.permissions_for(guild.me)
-        if perms.send_messages:
-            return ch
-
-    return None
-
-
 def _pick_next_status() -> str:
     """Cycle through the status pool, returning the next status string.
 
@@ -559,7 +516,7 @@ async def _post_startup_messages() -> None:
         from personality.roasts import pick_random as _pick_random
 
         for guild in bot.guilds:
-            channel = _resolve_dexter_channel(guild)
+            channel = bot.guild_config.resolve_ambient_channel(guild)
             if channel:
                 await channel.send(
                     _pick_random(STARTUP_MESSAGES),
@@ -777,7 +734,7 @@ async def idle_check():
                         from personality.roasts import IDLE_LONELINESS_MESSAGES
                         from personality.roasts import pick_random as _pr
 
-                        channel = _resolve_dexter_channel(guild)
+                        channel = bot.guild_config.resolve_ambient_channel(guild)
                         if channel:
                             await channel.send(
                                 _pr(IDLE_LONELINESS_MESSAGES),
