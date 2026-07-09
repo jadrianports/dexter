@@ -390,29 +390,29 @@ class EventsCog(commands.Cog):
         # Handle reactions / deflecting responses
         await self._handle_message_reactions(message)
 
+        # Phase 18 / CONFIG-02/04 / WR-02: computed once and reused by both gates
+        # below — both check the exact same (guild, channel) pair for this
+        # message, so re-deriving it per-gate is duplicated logic that could
+        # silently drift. The two cadences below remain SEPARATE, independent
+        # conditionals (do NOT merge them into one branch).
+        in_ambient_channel = message.guild is not None and is_ambient_channel(
+            config_row=self.bot.guild_config.get(message.guild.id),
+            channel_id=message.channel.id,
+        )
+
         # Phase 16 / PROACT-01: proactive callback gate — designated channel only,
         # never a DM (Pitfall 2). message.author.bot already returned above.
         # Phase 18 / CONFIG-02/04: routed through is_ambient_channel over the
         # guild's cached config row instead of the bare-equality env-var check —
         # an unconfigured guild is structurally silent here.
-        if message.guild is not None and is_ambient_channel(
-            config_row=self.bot.guild_config.get(message.guild.id),
-            channel_id=message.channel.id,
-        ):
+        if in_ambient_channel:
             await self._maybe_fire_proactive_callback(message)
 
         # Phase 17 / VIS-01: vision-roast gate — a FOURTH independent cadence
         # (do NOT merge with the proactive gate). Designated channel only, and
         # only when the message actually carries attachments (the structural
         # mime/size gate runs inside _maybe_fire_vision_roast).
-        if (
-            message.guild is not None
-            and is_ambient_channel(
-                config_row=self.bot.guild_config.get(message.guild.id),
-                channel_id=message.channel.id,
-            )
-            and message.attachments
-        ):
+        if in_ambient_channel and message.attachments:
             await self._maybe_fire_vision_roast(message)
 
     # ──────────────────────────── PROACTIVE CALLBACK ────────────────────────────
