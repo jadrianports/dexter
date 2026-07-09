@@ -118,7 +118,7 @@ Full phase details, success criteria, and decisions archived in
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 18-05-PLAN.md — bot.py boot wiring + home-guild seed + ambient call-site consolidation
-- [ ] 18-06-PLAN.md — cogs/events.py consolidation (3 voice sites + 2 on_message gates) + tests
+- [x] 18-06-PLAN.md — cogs/events.py consolidation (3 voice sites + 2 on_message gates) + tests
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -219,7 +219,7 @@ Full phase details, success criteria, and decisions archived in
 | 15. RAG Reach | v1.3 | 3/3 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
-| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 5/7 | In Progress|  |
+| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 6/7 | In Progress|  |
 | 19. Onboarding & Admin Setup | v1.4 | 0/TBD | Not started | - |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 0/TBD | Not started | - |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
