@@ -122,42 +122,42 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONFIG-01 | Phase [N] | Pending |
-| CONFIG-02 | Phase [N] | Pending |
-| CONFIG-03 | Phase [N] | Pending |
-| CONFIG-04 | Phase [N] | Pending |
-| CONFIG-05 | Phase [N] | Pending |
-| ONBOARD-01 | Phase [N] | Pending |
-| ONBOARD-02 | Phase [N] | Pending |
-| ONBOARD-03 | Phase [N] | Pending |
-| ONBOARD-04 | Phase [N] | Pending |
-| ONBOARD-05 | Phase [N] | Pending |
-| OWNER-01 | Phase [N] | Pending |
-| OWNER-02 | Phase [N] | Pending |
-| OWNER-03 | Phase [N] | Pending |
-| OWNER-04 | Phase [N] | Pending |
-| OWNER-05 | Phase [N] | Pending |
-| OWNER-06 | Phase [N] | Pending |
-| MEM-01 | Phase [N] | Pending |
-| MEM-02 | Phase [N] | Pending |
-| MEM-03 | Phase [N] | Pending |
-| MEM-04 | Phase [N] | Pending |
-| MEM-05 | Phase [N] | Pending |
-| RATE-01 | Phase [N] | Pending |
-| INVITE-01 | Phase [N] | Pending |
-| INVITE-02 | Phase [N] | Pending |
-| PORT-01 | Phase [N] | Pending |
-| PORT-02 | Phase [N] | Pending |
-| PORT-03 | Phase [N] | Pending |
-| PORT-04 | Phase [N] | Pending |
-| CICD-01 | Phase [N] | Pending |
-| CICD-02 | Phase [N] | Pending |
-| CICD-03 | Phase [N] | Pending |
+| CONFIG-01 | Phase 18 | Pending |
+| CONFIG-02 | Phase 18 | Pending |
+| CONFIG-03 | Phase 18 | Pending |
+| CONFIG-04 | Phase 18 | Pending |
+| CONFIG-05 | Phase 18 | Pending |
+| ONBOARD-01 | Phase 19 | Pending |
+| ONBOARD-02 | Phase 19 | Pending |
+| ONBOARD-03 | Phase 19 | Pending |
+| ONBOARD-04 | Phase 19 | Pending |
+| ONBOARD-05 | Phase 19 | Pending |
+| OWNER-01 | Phase 20 | Pending |
+| OWNER-02 | Phase 20 | Pending |
+| OWNER-03 | Phase 20 | Pending |
+| OWNER-04 | Phase 20 | Pending |
+| OWNER-05 | Phase 20 | Pending |
+| OWNER-06 | Phase 20 | Pending |
+| MEM-01 | Phase 21 | Pending |
+| MEM-02 | Phase 21 | Pending |
+| MEM-03 | Phase 21 | Pending |
+| MEM-04 | Phase 21 | Pending |
+| MEM-05 | Phase 21 | Pending |
+| RATE-01 | Phase 20 | Pending |
+| INVITE-01 | Phase 22 | Pending |
+| INVITE-02 | Phase 22 | Pending |
+| PORT-01 | Phase 23 | Pending |
+| PORT-02 | Phase 23 | Pending |
+| PORT-03 | Phase 23 | Pending |
+| PORT-04 | Phase 23 | Pending |
+| CICD-01 | Phase 18 | Pending |
+| CICD-02 | Phase 23 | Pending |
+| CICD-03 | Phase 23 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 31 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 31 ⚠️
+- Mapped to phases: 31/31 ✓
+- Unmapped: 0
 
 ---
 
@@ -190,4 +190,4 @@ If MEM-01/03/05 prove infeasible, the documented fallback is **"keep memory glob
 
 ---
 *Requirements defined: 2026-07-10*
-*Last updated: 2026-07-10 after milestone v1.4 scoping*
+*Last updated: 2026-07-10 after v1.4 roadmap creation (Phases 18–23, 31/31 requirements mapped)*
