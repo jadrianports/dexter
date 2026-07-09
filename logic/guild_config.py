@@ -54,7 +54,10 @@ def decide_ambient_channel(*, config_row: Mapping | None) -> int | None:
           ``None`` -> ``None`` (should not normally happen, but fails closed).
         - Row present, ``configured`` is ``True``, ``ambient_channel_id`` set ->
           the channel id, coerced with ``int(...)`` since the column is stored as
-          TEXT.
+          TEXT. A non-coercible value (e.g. ``""`` or ``"abc"``) also fails
+          closed to ``None`` (WR-01) rather than raising ``ValueError`` — the
+          column has no ``CHECK`` constraint, so a corrupted row must degrade to
+          silence like every other uncertain-state branch in this module.
     """
     if config_row is None:
         return None
@@ -63,7 +66,12 @@ def decide_ambient_channel(*, config_row: Mapping | None) -> int | None:
         return None
 
     channel_id = config_row.get("ambient_channel_id")
-    return int(channel_id) if channel_id is not None else None
+    if channel_id is None:
+        return None
+    try:
+        return int(channel_id)
+    except (TypeError, ValueError):
+        return None
 
 
 # ---------------------------------------------------------------------------

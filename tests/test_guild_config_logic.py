@@ -56,6 +56,16 @@ class TestDecideAmbientChannel:
         result = decide_ambient_channel(config_row={"ambient_channel_id": "123"})
         assert result is None
 
+    def test_malformed_channel_id_empty_string_returns_none(self):
+        """WR-01: a malformed (empty-string) ambient_channel_id fails closed to None."""
+        result = decide_ambient_channel(config_row={"configured": True, "ambient_channel_id": ""})
+        assert result is None
+
+    def test_malformed_channel_id_non_numeric_string_returns_none(self):
+        """WR-01: a non-numeric ambient_channel_id fails closed to None, never raises."""
+        result = decide_ambient_channel(config_row={"configured": True, "ambient_channel_id": "abc"})
+        assert result is None
+
 
 # ---------------------------------------------------------------------------
 # is_ambient_channel
@@ -90,6 +100,14 @@ class TestIsAmbientChannel:
         """configured=False -> False, even if channel_id matches ambient_channel_id."""
         result = is_ambient_channel(
             config_row={"configured": False, "ambient_channel_id": "123"},
+            channel_id=123,
+        )
+        assert result is False
+
+    def test_malformed_channel_id_returns_false(self):
+        """WR-01: a malformed ambient_channel_id fails closed to False, never raises."""
+        result = is_ambient_channel(
+            config_row={"configured": True, "ambient_channel_id": "not-a-number"},
             channel_id=123,
         )
         assert result is False
