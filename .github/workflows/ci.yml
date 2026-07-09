@@ -1,0 +1,59 @@
+name: CI
+
+# CICD-01: pytest + Ruff gate, blocking on every push and pull_request.
+# Deliberately the safe PR trigger below, NEVER its "_target" variant — the latter
+# would run a forked PR's untrusted code with write/secret access (T-18-CIPRIV).
+# Top-level `permissions: contents: read` denies write even to the default GITHUB_TOKEN.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read # least-privilege — this workflow only reads code and runs tests/lint
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      # pgvector/pgvector:pg16 ships the `vector` extension pre-built, so
+      # `CREATE EXTENSION IF NOT EXISTS vector;` (SCHEMA_SQL's first statement,
+      # run by init_db()) only needs to activate it, not compile it.
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: dexter
+          POSTGRES_PASSWORD: dexter
+          POSTGRES_DB: dexter_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # D-15: unskips the ~107 live-DB tests with zero secrets and zero Neon traffic.
+      # No Gemini API key here — every live-DB test embedding is a synthetic literal
+      # ([0.1] * config.EMBED_DIM), never a real Gemini call (confirmed at research time).
+      TEST_DATABASE_URL: postgresql://dexter:dexter@localhost:5432/dexter_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # NOTE (Pitfall 7): davey/PyNaCl are native-extension packages (Discord voice
+      # E2E encryption). PyNaCl ships manylinux wheels and should install cleanly;
+      # davey has less prebuilt-wheel track record. If the very first CI run fails
+      # here with a compiler-not-found error, add a step before this one:
+      #   - run: sudo apt-get update && sudo apt-get install -y build-essential libsodium-dev
+      # Do not add that step preemptively — only if a real run proves it's needed.
+      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt
+
+      - run: ruff check .
+      - run: ruff format --check .
+
+      - run: pytest -q
