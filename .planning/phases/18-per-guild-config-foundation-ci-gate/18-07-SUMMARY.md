@@ -104,3 +104,10 @@ None - no external service configuration required. The workflow's actual green-o
 ---
 *Phase: 18-per-guild-config-foundation-ci-gate*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+- FOUND: `.github/workflows/ci.yml`
+- FOUND: `.planning/phases/18-per-guild-config-foundation-ci-gate/18-07-SUMMARY.md`
+- FOUND: commit `6beff8c` (feat: add CI workflow)
+- FOUND: commit `4075883` (docs: add plan summary)
