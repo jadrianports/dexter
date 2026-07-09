@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
-status: executing
-stopped_at: Completed 18-06-PLAN.md
-last_updated: "2026-07-09T22:00:35.582Z"
+status: verifying
+stopped_at: Completed 18-07-PLAN.md
+last_updated: "2026-07-09T22:08:17.887Z"
 last_activity: 2026-07-09 -- Phase 18 execution started
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 6
-  percent: 0
+  completed_plans: 7
+  percent: 17
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 18 (per-guild-config-foundation-ci-gate) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-09 -- Phase 18 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 18 P04 | 16min | 3 tasks | 2 files |
 | Phase 18 P05 | 25min | 2 tasks | 1 files |
 | Phase 18-per-guild-config-foundation-ci-gate P06 | 20min | 2 tasks | 2 files |
+| Phase 18 P07 | 12min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 18]: GuildConfigService constructed unconditionally (no gemini-key guard) and both resolve_ambient_channel + resolve_announce_channel are synchronous (cache-only / no-await bodies) (18-04)
 - [Phase 18]: [Phase 18] bot.py boot wiring (18-05): GuildConfigService constructed + load_all()'d right after log_to_discord is wired, before Gemini-gated services; home-guild seed reads config.DEXTER_CHANNEL_ID via bot.get_channel, silent INFO skip on unset/unresolvable (D-10); _resolve_dexter_channel deleted, both bot.py ambient sites now call resolve_ambient_channel synchronously — Keeps the home guild's behavior unchanged while making every other guild ambient-silent by construction; cogs/events.py's remaining call sites are a sibling plan (18-06)
 - [Phase 18-06]: cogs/events.py ambient surfaces (3 voice sites + 2 on_message gates) consolidated onto the Phase 18 guild_config seam; DEXTER_CHANNEL_ID fully removed from cogs/ — Completes CONFIG-02/04 wiring for the events.py surface; tests updated to mock bot.guild_config.get() instead of patching the retired env var
+- [Phase 18-07]: Single combined GitHub Actions lint+test job (not split) with pgvector/pgvector:pg16 service container; pull_request (never pull_request_target) + top-level permissions: contents: read + zero secrets.* as the standing CI least-privilege posture
 
 ### Pending Todos
 
@@ -107,8 +109,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-09T22:00:35.563Z
-Stopped at: Completed 18-06-PLAN.md
+Last session: 2026-07-09T22:08:17.305Z
+Stopped at: Completed 18-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

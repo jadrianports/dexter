@@ -80,7 +80,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Milestone Goal:** Turn Dexter from a single-community bot into a publicly-invitable, multi-tenant-robust portfolio piece — a recruiter can invite it to any server and it just works — without changing the on-demand, owner-run hosting model.
 
-- [ ] **Phase 18: Per-Guild Config Foundation & CI Gate** - Replace the hardcoded single-channel/single-owner-guild assumption with a real per-guild config seam, behind a green CI gate
+- [x] **Phase 18: Per-Guild Config Foundation & CI Gate** - Replace the hardcoded single-channel/single-owner-guild assumption with a real per-guild config seam, behind a green CI gate (completed 2026-07-09)
 - [ ] **Phase 19: Onboarding & Admin Setup** - New servers get a welcome nudge and a self-service `/setup`, ambient-silent until configured
 - [ ] **Phase 20: Owner Control Plane & Rate Observability** - The owner can list, silence, and force-leave guilds — the abuse kill-switch, with per-guild AI usage visible
 - [ ] **Phase 21: Memory Scoping & Guild Data Lifecycle** - Third-party memory stops leaking across guilds and a departed guild's data gets purged (or the documented global-memory fallback ships instead)
@@ -122,7 +122,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 18-07-PLAN.md — GitHub Actions CI gate (pytest + Ruff, pgvector service container)
+- [x] 18-07-PLAN.md — GitHub Actions CI gate (pytest + Ruff, pgvector service container)
 
 ### Phase 19: Onboarding & Admin Setup
 
@@ -219,7 +219,7 @@ Full phase details, success criteria, and decisions archived in
 | 15. RAG Reach | v1.3 | 3/3 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
-| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 6/7 | In Progress|  |
+| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete   | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 0/TBD | Not started | - |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 0/TBD | Not started | - |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |

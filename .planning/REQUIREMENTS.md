@@ -72,7 +72,7 @@ Hybrid scoping: contain third-party exposure, keep self-recall global.
 
 ### CI/CD (CICD)
 
-- [ ] **CICD-01**: GitHub Actions runs the pytest suite + lint on every push and PR, with a build-status badge in the README
+- [x] **CICD-01**: GitHub Actions runs the pytest suite + lint on every push and PR, with a build-status badge in the README
 - [ ] **CICD-02**: The `/site` landing page auto-deploys to GitHub Pages on merge to `main`
 - [ ] **CICD-03**: The bot's Docker image builds and publishes to GHCR on tag/release, so a future always-on host is a `docker pull` away
 
@@ -150,7 +150,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PORT-02 | Phase 23 | Pending |
 | PORT-03 | Phase 23 | Pending |
 | PORT-04 | Phase 23 | Pending |
-| CICD-01 | Phase 18 | Pending |
+| CICD-01 | Phase 18 | Complete |
 | CICD-02 | Phase 23 | Pending |
 | CICD-03 | Phase 23 | Pending |
 
