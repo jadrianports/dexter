@@ -10,6 +10,7 @@ from discord.ext import commands
 
 import config
 import database
+from logic.guild_config import is_ambient_channel
 from logic.proactive import should_fire_proactive_callback
 from logic.roasts import RoastScenario, cooldown_elapsed, decide_ambient_roast
 from logic.vision import should_fire_vision_roast
@@ -90,47 +91,6 @@ class EventsCog(commands.Cog):
     def _mark_ambient_roast(self, user_id: int) -> None:
         """Record that a roast just fired for this user."""
         self._ambient_roast_times[user_id] = asyncio.get_event_loop().time()
-
-    # ──────────────────────────── CHANNEL RESOLVER ────────────────────────────
-
-    async def _get_ambient_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
-        """Resolve the channel for ambient posts via the D-09/D-10 fallback chain.
-
-        Order:
-        1. config.DEXTER_CHANNEL_ID (explicit designation)
-        2. Last active music channel (queue._text_channel_id)
-        3. guild.system_channel
-        4. First writable text channel
-        """
-        # Step 1: explicit designation
-        if config.DEXTER_CHANNEL_ID:
-            ch = guild.get_channel(config.DEXTER_CHANNEL_ID)
-            if ch and isinstance(ch, discord.TextChannel):
-                return ch
-
-        # Step 2: last active music channel
-        music_cog = self.bot.cogs.get("MusicCog")
-        if music_cog is not None:
-            queue = music_cog.get_queue(guild.id)
-            channel_id = getattr(queue, "_text_channel_id", None)
-            if channel_id is not None:
-                ch = guild.get_channel(channel_id)
-                if ch and isinstance(ch, discord.TextChannel):
-                    return ch
-
-        # Step 3: system channel
-        if guild.system_channel is not None:
-            perms = guild.system_channel.permissions_for(guild.me)
-            if perms.send_messages:
-                return guild.system_channel
-
-        # Step 4: first writable text channel
-        for ch in guild.text_channels:
-            perms = ch.permissions_for(guild.me)
-            if perms.send_messages:
-                return ch
-
-        return None
 
     # ──────────────────────────── MAXIMIZE-AI GENERATOR ────────────────────────────
 
@@ -259,7 +219,7 @@ class EventsCog(commands.Cog):
             and after.channel is not None
             and before.channel != after.channel
         ):
-            channel = await self._get_ambient_channel(member.guild)
+            channel = self.bot.guild_config.resolve_ambient_channel(member.guild)
             if channel:
                 await channel.send(
                     pick_random(roasts.BOT_MOVED_COMPLAINTS),
@@ -301,7 +261,7 @@ class EventsCog(commands.Cog):
                     fallback_pool = roasts.VOICE_JOIN_ROASTS
                     mem_kind = "daily_batch"  # WR-01: a daytime join is not a late_night event
                 line = await self._generate_ambient_roast(member, scenario, fallback_pool)
-                channel = await self._get_ambient_channel(guild)
+                channel = self.bot.guild_config.resolve_ambient_channel(guild)
                 if channel:
                     await channel.send(
                         line,
@@ -344,7 +304,7 @@ class EventsCog(commands.Cog):
                     "{name} just left the voice channel",
                     roasts.VOICE_LEAVE_ROASTS,
                 )
-                channel = await self._get_ambient_channel(guild)
+                channel = self.bot.guild_config.resolve_ambient_channel(guild)
                 if channel:
                     await channel.send(
                         line,
@@ -432,7 +392,13 @@ class EventsCog(commands.Cog):
 
         # Phase 16 / PROACT-01: proactive callback gate — designated channel only,
         # never a DM (Pitfall 2). message.author.bot already returned above.
-        if message.guild is not None and config.DEXTER_CHANNEL_ID and message.channel.id == config.DEXTER_CHANNEL_ID:
+        # Phase 18 / CONFIG-02/04: routed through is_ambient_channel over the
+        # guild's cached config row instead of the bare-equality env-var check —
+        # an unconfigured guild is structurally silent here.
+        if message.guild is not None and is_ambient_channel(
+            config_row=self.bot.guild_config.get(message.guild.id),
+            channel_id=message.channel.id,
+        ):
             await self._maybe_fire_proactive_callback(message)
 
         # Phase 17 / VIS-01: vision-roast gate — a FOURTH independent cadence
@@ -441,8 +407,10 @@ class EventsCog(commands.Cog):
         # mime/size gate runs inside _maybe_fire_vision_roast).
         if (
             message.guild is not None
-            and config.DEXTER_CHANNEL_ID
-            and message.channel.id == config.DEXTER_CHANNEL_ID
+            and is_ambient_channel(
+                config_row=self.bot.guild_config.get(message.guild.id),
+                channel_id=message.channel.id,
+            )
             and message.attachments
         ):
             await self._maybe_fire_vision_roast(message)
