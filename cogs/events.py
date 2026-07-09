@@ -243,7 +243,9 @@ class EventsCog(commands.Cog):
         if before.channel is None and after.channel is not None:
             chance_roll = random.random()
             late_night_roll = random.random()
-            seconds_since_last_roast = asyncio.get_event_loop().time() - self._ambient_roast_times.get(member.id, 0.0)
+            seconds_since_last_roast = asyncio.get_event_loop().time() - self._ambient_roast_times.get(
+                member.id, float("-inf")
+            )
             scenario_result = decide_ambient_roast(
                 event="join",
                 chance_roll=chance_roll,
@@ -290,7 +292,9 @@ class EventsCog(commands.Cog):
         # LEAVE: before.channel is not None, after.channel is None
         if before.channel is not None and after.channel is None:
             chance_roll = random.random()
-            seconds_since_last_roast = asyncio.get_event_loop().time() - self._ambient_roast_times.get(member.id, 0.0)
+            seconds_since_last_roast = asyncio.get_event_loop().time() - self._ambient_roast_times.get(
+                member.id, float("-inf")
+            )
             scenario_result = decide_ambient_roast(
                 event="leave",
                 chance_roll=chance_roll,
@@ -606,7 +610,9 @@ class EventsCog(commands.Cog):
             return
 
         # 3. Pure cadence gate — opt-out / cooldown / chance. No I/O, no mark on fail.
-        seconds_since_last = asyncio.get_event_loop().time() - self._vision_roast_cooldowns.get(message.author.id, 0.0)
+        seconds_since_last = asyncio.get_event_loop().time() - self._vision_roast_cooldowns.get(
+            message.author.id, float("-inf")
+        )
         if not should_fire_vision_roast(
             opted_out=opted_out,
             cooldown_elapsed=cooldown_elapsed(seconds_since_last, config.VISION_ROAST_COOLDOWN_SECONDS),

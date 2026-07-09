@@ -19,7 +19,10 @@ from utils.logger import log
 _URL_PATTERN = re.compile(r"^https?://")
 
 # On-failure self-update throttle: attempt at most once per hour.
-_last_ytdlp_update: float = 0.0
+# -inf, not 0.0: the throttle compares against time.monotonic(), which counts from
+# system boot. A 0.0 sentinel means "boot time", so on a host with uptime under
+# _UPDATE_THROTTLE_SECONDS the first failure would be wrongly treated as throttled.
+_last_ytdlp_update: float = float("-inf")
 _UPDATE_THROTTLE_SECONDS: float = 3600.0
 
 

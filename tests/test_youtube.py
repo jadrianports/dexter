@@ -288,7 +288,7 @@ class TestAsyncSearchRetry:
         # Reset the on-failure throttle before each test (mirrors test_ytdlp_selfheal.py pattern)
         import services.youtube as yt_mod
 
-        yt_mod._last_ytdlp_update = 0.0
+        yt_mod._last_ytdlp_update = float("-inf")
 
     @pytest.mark.asyncio
     async def test_success_on_first_attempt(self, yt_service):
@@ -352,7 +352,7 @@ class TestAsyncSearchRetry:
         import config as cfg
         import services.youtube as yt_mod
 
-        yt_mod._last_ytdlp_update = 0.0  # outside throttle window
+        yt_mod._last_ytdlp_update = float("-inf")  # outside throttle window
 
         with (
             patch.object(yt_service, "search", side_effect=Exception("persistent")) as mock_s,
@@ -392,7 +392,7 @@ class TestAsyncExtractRetry:
     def setup_method(self):
         import services.youtube as yt_mod
 
-        yt_mod._last_ytdlp_update = 0.0
+        yt_mod._last_ytdlp_update = float("-inf")
 
     @pytest.mark.asyncio
     async def test_success_on_first_attempt(self, yt_service):
@@ -456,7 +456,7 @@ class TestAsyncExtractRetry:
         import config as cfg
         import services.youtube as yt_mod
 
-        yt_mod._last_ytdlp_update = 0.0
+        yt_mod._last_ytdlp_update = float("-inf")
 
         with (
             patch.object(yt_service, "extract", side_effect=Exception("blip")) as mock_e,

@@ -18,7 +18,7 @@ class TestUpdateYtdlp:
             assert update_ytdlp() is False
 
     def test_update_sets_throttle(self):
-        yt._last_ytdlp_update = 0.0
+        yt._last_ytdlp_update = float("-inf")
         with patch("services.youtube.subprocess.run", return_value=MagicMock(returncode=0)):
             update_ytdlp()
         assert yt._last_ytdlp_update > 0.0
@@ -27,7 +27,7 @@ class TestUpdateYtdlp:
 class TestDownloadRetryAfterUpdate:
     def setup_method(self):
         # Reset the on-failure throttle before each test.
-        yt._last_ytdlp_update = 0.0
+        yt._last_ytdlp_update = float("-inf")
 
     def test_updates_and_retries_on_failure(self, tmp_path, monkeypatch):
         monkeypatch.setattr(yt.config, "AUDIO_CACHE_DIR", tmp_path)
