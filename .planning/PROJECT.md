@@ -37,14 +37,29 @@ The Phase 09/11 live-runtime UAT/verification tail (4 items) is deferred behind 
 
 Every phase passed verification (4/4 or 10/10 code-level) and code review; the goal-blocking Phase 16 WR-03 (content-free recall anchor) and the Phase 17 vision-input guards were fixed before close. Suite green at 848 pass / 108 skip / 0 fail. The Phase 14–17 live-Discord UAT tail (plus the carried v1.1/v1.2 checks) is deferred behind the same parked residential host — 24 items acknowledged at close, all `human_needed`, zero code gaps (see STATE.md Deferred Items).
 
-## Current Milestone: none active — v1.3 shipped, v1.4 unplanned
+## Current Milestone: v1.4 "Open House"
 
-v1.3 "Taste Brain" (Phases 13–17) is code-complete, archived, and tagged. Run `/gsd-new-milestone` to scope v1.4 (phase numbering continues at Phase 18).
+**Goal:** Turn Dexter from a single-community bot into a publicly-invitable, multi-tenant-robust portfolio piece — a recruiter can invite it to any server and it just works — without changing the on-demand, owner-run hosting model (music keeps working on the residential IP; the bot responds when the owner has it running).
 
-**Candidate v1.4 directions (carried from v1.3 scoping, not yet committed):**
+**Target features:**
+- **Multi-tenancy / fresh-server UX** — remove hardcoded single-channel/owner assumptions; per-guild configuration; onboarding when Dexter joins a new server; admin `/setup` to designate the ambient/response channel.
+- **Owner control plane (kill-switch)** — the owner can list servers, and silence or force-leave a specific guild to cut off abuse.
+- **Invite plumbing** — correct OAuth2 invite URL with the right scopes/permissions and an "Add to Discord" flow.
+- **Portfolio surface** — a landing page (feature showcase + invite button) and a README/architecture case study as the recruiter-facing deliverable.
+
+**Key context / decisions:**
+- **Hosting model is unchanged and intentional.** Dexter runs on the owner's PC (residential IP) on demand — recruiters can *invite* it, and it serves when the owner turns it on (ideal for a live demo). This sidesteps the parked 24/7 datacenter-IP block entirely; **music stays best-effort on the owner-run host**, not a cloud requirement.
+- **Scale target: invitable & robust at modest scale** — flawless on any single server it's added to, per-guild setup, but NOT engineered for 100+ servers or pushed through Discord bot verification this milestone.
+- **Personality stays full-savage everywhere** (unchanged) — the owner kill-switch is the stated mitigation for the ToS/abuse surface of roasting strangers and vision-roasting arbitrary images on public servers.
+
+<details>
+<summary>Deferred candidate directions (carried from v1.3 scoping, NOT in v1.4 scope)</summary>
+
 - **Salience reinforcement** — memories that get surfaced/hit gain durability (deferred out of v1.3).
 - **Vision → RAG memory (MEM-R2)** — persist a distilled fact from a vision roast (explicitly out of v1.3 scope).
 - **Resume the parked 24/7 deploy** — host-gated; closes DEPLOY-02/03/05/08 + the entire live-UAT tail once an always-on residential host exists.
+
+</details>
 
 <details>
 <summary>Previous: v1.3 "Taste Brain" milestone framing (archived — shipped 2026-07-03)</summary>
@@ -111,13 +126,17 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 
 ### Active
 
-<!-- No milestone active. v1.3 shipped; fresh REQUIREMENTS.md is created by `/gsd-new-milestone` for v1.4. -->
+<!-- v1.4 "Open House" active scope. REQ-IDs assigned in REQUIREMENTS.md by /gsd-new-milestone; roadmap maps them to Phases 18+. -->
 
-Candidate v1.4 scope (carried, not yet committed — `/gsd-new-milestone` will scope + assign REQ-IDs):
+v1.4 "Open House" — publicly-invitable, multi-tenant portfolio release:
+- [ ] Multi-tenancy / fresh-server UX — per-guild config, join onboarding, admin `/setup`, no hardcoded single channel
+- [ ] Owner control plane — list servers, silence/force-leave a guild (abuse kill-switch)
+- [ ] Invite plumbing — OAuth2 invite URL, scopes/permissions, "Add to Discord" flow
+- [ ] Portfolio surface — landing page (feature showcase + invite button) + README/architecture case study
+
+Carried forward (deferred, not milestone-scoped):
 - [ ] Salience reinforcement — surfaced/hit memories gain durability (deferred out of v1.3)
 - [ ] Vision → RAG memory (MEM-R2) — persist a distilled fact from a vision roast (out of v1.3 scope)
-
-Carried forward (host-gated / deferred, not milestone-scoped):
 - [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the entire live-UAT tail (Phases 03–06 v1.1, Phase 09/11 v1.2, Phases 14–17 v1.3)
 
 ### Out of Scope
@@ -205,4 +224,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 after v1.3 "Taste Brain" milestone completion*
+*Last updated: 2026-07-10 after starting milestone v1.4 "Open House"*
