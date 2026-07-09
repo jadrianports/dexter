@@ -195,6 +195,21 @@ CREATE TABLE IF NOT EXISTS guild_jams (
 );
 
 CREATE INDEX IF NOT EXISTS idx_jams_guild ON guild_jams(guild_id, updated_at DESC);
+
+-- Phase 18: per-guild configuration seam (CONFIG-01). One row per guild;
+-- guild_id alone is the PK (unlike guild_jams' composite key) since this is
+-- a single settings row, not a named collection. silenced/is_blocked ship
+-- now with sane false defaults but have NO reader in Phase 18 code — Phase 20
+-- adds the owner-control-plane readers/setters (D-11).
+CREATE TABLE IF NOT EXISTS guild_config (
+    guild_id           TEXT PRIMARY KEY,
+    ambient_channel_id TEXT,
+    configured         BOOLEAN NOT NULL DEFAULT false,
+    silenced           BOOLEAN NOT NULL DEFAULT false,   -- Phase 20 reader only (D-11)
+    is_blocked         BOOLEAN NOT NULL DEFAULT false,   -- Phase 20 reader only (D-11)
+    joined_at          TIMESTAMPTZ DEFAULT now(),
+    updated_at         TIMESTAMPTZ DEFAULT now()
+);
 """
 
 
@@ -383,6 +398,70 @@ async def get_proactive_opt_out(pool: asyncpg.Pool, user_id: str) -> bool:
     if row is None:
         return False
     return bool(row["proactive_opt_out"])
+
+
+async def load_all_guild_configs(pool: asyncpg.Pool) -> list[asyncpg.Record]:
+    """Return every guild_config row in ONE round-trip (CONFIG-03 / D-06).
+
+    Called once at boot by GuildConfigService to fill its in-memory cache.
+    Deliberately a bare, param-free SELECT — there is no per-guild filter
+    because this IS the full load-all, not a lookup. Every subsequent ambient
+    decision reads the cache, never issues its own query (D-06/D-07: a
+    boot-load failure must leave the caller's cache empty/fail-closed, never
+    fall back to a per-event Neon round-trip).
+
+    Returns:
+        All rows in guild_config: guild_id, ambient_channel_id, configured,
+        silenced, is_blocked, joined_at, updated_at. May be empty.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT guild_id, ambient_channel_id, configured, silenced,"
+            "       is_blocked, joined_at, updated_at"
+            " FROM guild_config"
+        )
+
+
+async def seed_guild_config_if_absent(
+    pool: asyncpg.Pool, *, guild_id: str, ambient_channel_id: str
+) -> asyncpg.Record | None:
+    """Idempotently seed the home-guild's guild_config row (CONFIG-05 / D-08/D-09).
+
+    Uses the ON CONFLICT (guild_id) DO NOTHING clause — deliberately NOT the
+    upsert-with-overwrite idiom. D-09: config.DEXTER_CHANNEL_ID is a one-time
+    bootstrap value with no ongoing authority. Once the row exists (whether
+    from this seed or a later /setup write), this call is forever a no-op for
+    that guild_id — re-asserting the env value on every boot would make a
+    later /setup silently self-revert (the exact bug D-09 exists to prevent).
+    See the SCAR WARNING in 18-PATTERNS.md: this is NOT the
+    set_proactive_opt_out overwrite-on-conflict shape — do not "fix" this to
+    match that shape.
+
+    Args:
+        pool:               asyncpg connection pool.
+        guild_id:            Discord guild id (TEXT) — derived from
+                             bot.get_channel(config.DEXTER_CHANNEL_ID).guild.id,
+                             never from user input (T-18-SEED).
+        ambient_channel_id: Discord channel id (TEXT) — the bootstrap channel.
+
+    Returns:
+        The current guild_config row for guild_id (whether just-inserted or
+        pre-existing), or None if the row somehow still can't be read back.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO guild_config (guild_id, ambient_channel_id, configured)"
+            " VALUES ($1, $2, true)"
+            " ON CONFLICT (guild_id) DO NOTHING",
+            guild_id,
+            ambient_channel_id,
+        )
+        return await conn.fetchrow(
+            "SELECT guild_id, ambient_channel_id, configured, silenced,"
+            "       is_blocked, joined_at, updated_at"
+            " FROM guild_config WHERE guild_id = $1",
+            guild_id,
+        )
 
 
 async def increment_daily_stat(pool: asyncpg.Pool, field: str) -> None:

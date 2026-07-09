@@ -98,6 +98,8 @@ Phase 7 added `user_favorites` + `user_playlists`; Phase 8 added `bot_daily_stat
 Phase 11 enabled the `vector` extension + `user_memories`; Phase 12 added `guild_jams`;
 Phase 16 added `user_profiles.proactive_opt_out`. (v1.3 added no new tables — the `taste_episode`
 memory is just a new `kind` on `user_memories`, per the kind-agnostic MemoryService design.)
+Phase 18 added the `guild_config` table — the per-guild configuration seam that replaces the
+hardcoded `config.DEXTER_CHANNEL_ID` single-channel assumption.
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -221,6 +223,21 @@ CREATE TABLE IF NOT EXISTS user_memories (
 -- Phase 16: per-user proactive-callback opt-out (distinct from /memory forget — silences the
 -- surface without deleting memories). Upserted via get/set_proactive_opt_out helpers.
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS proactive_opt_out BOOLEAN DEFAULT false;
+
+-- Phase 18: per-guild configuration seam (CONFIG-01). One row per guild (guild_id alone
+-- is the PK — unlike guild_jams' composite key, this is a single settings row, not a
+-- named collection). silenced/is_blocked ship now with false defaults but have NO reader
+-- until Phase 20 (D-11). Seeded idempotently for the home guild via
+-- seed_guild_config_if_absent (ON CONFLICT DO NOTHING, never DO UPDATE — D-09).
+CREATE TABLE IF NOT EXISTS guild_config (
+    guild_id           TEXT PRIMARY KEY,
+    ambient_channel_id TEXT,
+    configured         BOOLEAN NOT NULL DEFAULT false,
+    silenced           BOOLEAN NOT NULL DEFAULT false,   -- Phase 20 reader only (D-11)
+    is_blocked         BOOLEAN NOT NULL DEFAULT false,   -- Phase 20 reader only (D-11)
+    joined_at          TIMESTAMPTZ DEFAULT now(),
+    updated_at         TIMESTAMPTZ DEFAULT now()
+);
 ```
 
 > **Phase 13 decay note:** `taste_episode` rows use a shorter decay horizon than Phase 11 kinds
