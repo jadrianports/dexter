@@ -32,11 +32,11 @@ import database
 
 _LOCAL_DEFAULT = "postgresql://dexter:dexter@localhost:5432/dexter_test"
 _TEST_DSN = os.getenv("TEST_DATABASE_URL", _LOCAL_DEFAULT)
-_SKIP_LIVE = _TEST_DSN == _LOCAL_DEFAULT
+_SKIP_LIVE = os.getenv("TEST_DATABASE_URL") is None
 
 _skip_reason = (
-    "Live pgvector DB not configured — set TEST_DATABASE_URL to a "
-    "pgvector-enabled Postgres (e.g. Neon) to run Phase 18 integration tests"
+    "Live pgvector DB not configured — set TEST_DATABASE_URL to run Phase 18 "
+    "integration tests (e.g. a pgvector-enabled Postgres such as Neon)"
 )
 
 _GUILD_CONFIG_COLUMNS = [
