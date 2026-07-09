@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 18-04-PLAN.md (GuildConfigService cache + both resolvers + service tests)
-last_updated: "2026-07-09T21:24:16.761Z"
+stopped_at: Completed 18-05-PLAN.md (GuildConfigService boot wiring + bot.py ambient call-site consolidation)
+last_updated: "2026-07-09T21:46:04.861Z"
 last_activity: 2026-07-09 -- Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 18 (per-guild-config-foundation-ci-gate) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-07-09 -- Phase 18 execution started
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 18 P02 | 25min | 3 tasks | 4 files |
 | Phase 18 P03 | 15min | 2 tasks | 2 files |
 | Phase 18 P04 | 16min | 3 tasks | 2 files |
+| Phase 18 P05 | 25min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 18]: seed_guild_config_if_absent uses ON CONFLICT DO NOTHING (never DO UPDATE) so a stale DEXTER_CHANNEL_ID never overrides a later /setup write (D-09)
 - [Phase 18]: Extracted pure logic/guild_config.py decision seam (decide_ambient_channel + is_ambient_channel) mirroring logic/proactive.py; mock-free tested, no discord/asyncio/datetime/random imports — Locks the silent-until-configured invariant structurally so no future ambient surface can forget to guard itself (D-01/D-05)
 - [Phase 18]: GuildConfigService constructed unconditionally (no gemini-key guard) and both resolve_ambient_channel + resolve_announce_channel are synchronous (cache-only / no-await bodies) (18-04)
+- [Phase 18]: [Phase 18] bot.py boot wiring (18-05): GuildConfigService constructed + load_all()'d right after log_to_discord is wired, before Gemini-gated services; home-guild seed reads config.DEXTER_CHANNEL_ID via bot.get_channel, silent INFO skip on unset/unresolvable (D-10); _resolve_dexter_channel deleted, both bot.py ambient sites now call resolve_ambient_channel synchronously — Keeps the home guild's behavior unchanged while making every other guild ambient-silent by construction; cogs/events.py's remaining call sites are a sibling plan (18-06)
 
 ### Pending Todos
 
@@ -103,8 +105,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-09T21:24:16.746Z
-Stopped at: Completed 18-04-PLAN.md (GuildConfigService cache + both resolvers + service tests)
+Last session: 2026-07-09T21:45:23.154Z
+Stopped at: Completed 18-05-PLAN.md (GuildConfigService boot wiring + bot.py ambient call-site consolidation)
 Resume file: None
 
 ## Operator Next Steps
