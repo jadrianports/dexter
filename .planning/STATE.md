@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 18-01-PLAN.md (Ruff adoption + repo-wide lint/format cleanup)
-last_updated: "2026-07-09T20:29:43.553Z"
+stopped_at: Completed 18-02-PLAN.md (guild_config DDL + boot helpers + conftest pgvector fix)
+last_updated: "2026-07-09T20:46:46.830Z"
 last_activity: 2026-07-09 -- Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 18 (per-guild-config-foundation-ci-gate) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-07-09 -- Phase 18 execution started
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 | 22. Invite Plumbing | 0/TBD |
 | 23. Portfolio Surface & CI/CD | 0/TBD |
 | Phase 18 P01 | 40min | 3 tasks | 82 files |
+| Phase 18 P02 | 25min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - **v1.4 sequencing lock (from research + roadmap):** Phase 18 (config seam) blocks everything; Phase 19 (onboarding, preventive) before Phase 20 (owner control plane, reactive); Phase 21 (memory scoping) sequenced after Phase 20 because MEM-04's purge hangs off the force-leave/`on_guild_remove` hook; Phase 22 (invite) sequenced after Phase 20 so the abuse mitigation is real before promoting invites; Phase 23 (portfolio) is strictly last — it needs a real second-guild walkthrough to be honest.
 - **Standing Descope Rule (REQUIREMENTS.md):** if plan-time research proves a requirement infeasible, descope rather than force it — applies with particular force to MEM-01/03/05, whose documented zero-code fallback is "keep memory global + disclose."
 - [Phase 18]: Ruff adopted as the single lint+format tool (D-14); config files committed separately from the mechanical cleanup pass so the repo-wide reformat stays its own atomic commit (D-16).
+- [Phase 18]: seed_guild_config_if_absent uses ON CONFLICT DO NOTHING (never DO UPDATE) so a stale DEXTER_CHANNEL_ID never overrides a later /setup write (D-09)
 
 ### Pending Todos
 
@@ -97,8 +99,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-09T20:29:43.541Z
-Stopped at: Completed 18-01-PLAN.md (Ruff adoption + repo-wide lint/format cleanup)
+Last session: 2026-07-09T20:46:46.818Z
+Stopped at: Completed 18-02-PLAN.md (guild_config DDL + boot helpers + conftest pgvector fix)
 Resume file: None
 
 ## Operator Next Steps
