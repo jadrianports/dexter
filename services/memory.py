@@ -14,28 +14,27 @@ No Discord types, no asyncio.create_task — those live in the cog layer.
 
 from __future__ import annotations
 
+import json
+import re as _re
 from datetime import datetime, timedelta, timezone
 
 import asyncpg
 
 import config
 import database
-import json
-import re as _re
-
 from logic.taste import resolve_decay_days
 from models.memory import (
     MemoryFact,
     apply_floor,
-    rerank,
-    dedup_decision,
     choose_eviction,
     compute_salience,
-    is_sensitive,
     contains_number,
+    dedup_decision,
+    is_sensitive,
+    rerank,
 )
 from personality.prompts import DISTILL_PROMPT
-from services.gemini import GeminiService, GeminiAPIError, GeminiRateLimitError
+from services.gemini import GeminiAPIError, GeminiRateLimitError, GeminiService
 from utils.logger import log
 
 
@@ -179,10 +178,7 @@ class MemoryService:
 
         except Exception as e:
             # Wrap entire retrieval body — a broken recall must never crash the roast path
-            log.debug(
-                f"memory.recall: retrieval error, returning [] "
-                f"({type(e).__name__}: {e})"
-            )
+            log.debug(f"memory.recall: retrieval error, returning [] ({type(e).__name__}: {e})")
             return []
 
     # -------------------------------------------------------------------------
@@ -308,17 +304,12 @@ class MemoryService:
                 salience=salience,
                 expires_at=expires_at,
             )
-            log.debug(
-                f"memory.remember: inserted id={new_id} user={user_id} "
-                f"kind={kind} salience={salience:.2f}"
-            )
+            log.debug(f"memory.remember: inserted id={new_id} user={user_id} kind={kind} salience={salience:.2f}")
 
             # Step 5 — cap enforcement: evict lowest-value memories if over cap (D-08)
             count = await database.count_user_memories(self._pool, user_id)
             if count > config.MEMORY_MAX_PER_USER:
-                eviction_rows = await database.get_user_memories_for_eviction(
-                    self._pool, user_id=user_id
-                )
+                eviction_rows = await database.get_user_memories_for_eviction(self._pool, user_id=user_id)
                 # Map to MemoryFact for choose_eviction (similarity=0.0, unused by eviction)
                 eviction_facts = [
                     MemoryFact(
@@ -336,9 +327,7 @@ class MemoryService:
                 ]
                 ids_to_evict = choose_eviction(eviction_facts, config.MEMORY_MAX_PER_USER)
                 if ids_to_evict:
-                    await database.evict_lowest_salience(
-                        self._pool, user_id=user_id, ids=ids_to_evict
-                    )
+                    await database.evict_lowest_salience(self._pool, user_id=user_id, ids=ids_to_evict)
                     log.debug(
                         f"memory.remember: evicted {len(ids_to_evict)} memories "
                         f"(count was {count}, cap={config.MEMORY_MAX_PER_USER}) "
@@ -349,8 +338,7 @@ class MemoryService:
             # Swallow all unexpected errors — remember() is fire-and-forget from cogs.
             # A write failure must NEVER crash the ambient-roast or music event path.
             log.debug(
-                f"memory.remember: unexpected error swallowed "
-                f"({type(e).__name__}: {e}) user={user_id} kind={kind}"
+                f"memory.remember: unexpected error swallowed ({type(e).__name__}: {e}) user={user_id} kind={kind}"
             )
 
     # -------------------------------------------------------------------------
@@ -398,16 +386,10 @@ class MemoryService:
                 priority=2,
             )
         except (GeminiRateLimitError, GeminiAPIError) as e:
-            log.debug(
-                f"memory.distill: Gemini error, returning [] "
-                f"({type(e).__name__}: {e})"
-            )
+            log.debug(f"memory.distill: Gemini error, returning [] ({type(e).__name__}: {e})")
             return []
         except Exception as e:
-            log.debug(
-                f"memory.distill: unexpected Gemini error, returning [] "
-                f"({type(e).__name__}: {e})"
-            )
+            log.debug(f"memory.distill: unexpected Gemini error, returning [] ({type(e).__name__}: {e})")
             return []
 
         if not raw or not raw.strip():
@@ -458,13 +440,10 @@ class MemoryService:
                     log.debug(f"memory.distill: contains_number blocked: {f!r}")
                     continue
             safe.append(f)
-            if len(safe) >= 3:   # enforce 0-3 cap before returning
+            if len(safe) >= 3:  # enforce 0-3 cap before returning
                 break
 
-        log.debug(
-            f"memory.distill: produced {len(safe)} fact(s) from "
-            f"{len(facts)} model output(s)"
-        )
+        log.debug(f"memory.distill: produced {len(safe)} fact(s) from {len(facts)} model output(s)")
         return safe
 
     # -------------------------------------------------------------------------
@@ -504,9 +483,7 @@ class MemoryService:
             # them from the contains_number backstop so those artists are not silently
             # dropped (WR-13-02); is_sensitive still applies. Phase 11 kinds keep the
             # full firewall unchanged.
-            facts = await self.distill(
-                raw_text, exempt_numbers=(kind == "taste_episode")
-            )
+            facts = await self.distill(raw_text, exempt_numbers=(kind == "taste_episode"))
             salience = compute_salience(base_salience)
             for fact in facts:
                 await self.remember(
@@ -518,8 +495,7 @@ class MemoryService:
                 )
         except Exception as e:
             log.debug(
-                f"memory.distill_and_remember: error swallowed "
-                f"({type(e).__name__}: {e}) user={user_id} kind={kind}"
+                f"memory.distill_and_remember: error swallowed ({type(e).__name__}: {e}) user={user_id} kind={kind}"
             )
 
     # -------------------------------------------------------------------------

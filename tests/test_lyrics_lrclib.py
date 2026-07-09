@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # strip_lrc_headers tests (Task 1 — TDD)
 # ---------------------------------------------------------------------------
@@ -154,7 +153,9 @@ class TestGetLrclibMocked:
             {"instrumental": True, "plainLyrics": None},
             {
                 "instrumental": False,
-                "plainLyrics": "Is this the real life?\nIs this just fantasy?\nCaught in a landslide no escape from reality",
+                "plainLyrics": (
+                    "Is this the real life?\nIs this just fantasy?\nCaught in a landslide no escape from reality"
+                ),
             },
         ]
         mock_resp = self._make_response(200, data)

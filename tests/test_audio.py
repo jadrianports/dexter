@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from services.audio import AudioService, _build_ffmpeg_opts
 
@@ -79,10 +80,7 @@ def _make_pool_mock(url_to_plays: dict[str, int]) -> MagicMock:
 
     url_to_plays: mapping of YouTube URL → play count.
     """
-    rows = [
-        {"url": url, "plays": plays}
-        for url, plays in url_to_plays.items()
-    ]
+    rows = [{"url": url, "plays": plays} for url, plays in url_to_plays.items()]
 
     # conn_mock: the object returned inside `async with pool.acquire() as conn:`
     conn_mock = MagicMock()
@@ -108,15 +106,17 @@ class TestLFUEviction:
         file_low = tmp_cache / "vidLOW.opus"
         file_mid = tmp_cache / "vidMID.opus"
         file_high = tmp_cache / "vidHIGH.opus"
-        file_low.write_bytes(b"x" * (512 * 1024))   # 512KB, play_count=1
-        file_mid.write_bytes(b"x" * (512 * 1024))   # 512KB, play_count=3
+        file_low.write_bytes(b"x" * (512 * 1024))  # 512KB, play_count=1
+        file_mid.write_bytes(b"x" * (512 * 1024))  # 512KB, play_count=3
         file_high.write_bytes(b"x" * (512 * 1024))  # 512KB, play_count=5
 
-        pool = _make_pool_mock({
-            "https://youtube.com/watch?v=vidLOW": 1,
-            "https://youtube.com/watch?v=vidMID": 3,
-            "https://youtube.com/watch?v=vidHIGH": 5,
-        })
+        pool = _make_pool_mock(
+            {
+                "https://youtube.com/watch?v=vidLOW": 1,
+                "https://youtube.com/watch?v=vidMID": 3,
+                "https://youtube.com/watch?v=vidHIGH": 5,
+            }
+        )
 
         audio_service.max_cache_mb = 1  # 1MB cap
         await audio_service.cleanup_cache(pool, protected_video_ids=set())
@@ -132,12 +132,14 @@ class TestLFUEviction:
         """A video_id in protected_video_ids is never unlinked, even if it has the lowest play count."""
         file_low = tmp_cache / "vidPROTECTED.opus"
         file_other = tmp_cache / "vidOTHER.opus"
-        file_low.write_bytes(b"x" * (512 * 1024))   # 512KB, play_count=0 (not even in history)
-        file_other.write_bytes(b"x" * (700 * 1024)) # 700KB, play_count=5
+        file_low.write_bytes(b"x" * (512 * 1024))  # 512KB, play_count=0 (not even in history)
+        file_other.write_bytes(b"x" * (700 * 1024))  # 700KB, play_count=5
 
-        pool = _make_pool_mock({
-            "https://youtube.com/watch?v=vidOTHER": 5,
-        })
+        pool = _make_pool_mock(
+            {
+                "https://youtube.com/watch?v=vidOTHER": 5,
+            }
+        )
 
         audio_service.max_cache_mb = 1  # 1MB cap; total is 1.2MB → need to evict
         await audio_service.cleanup_cache(pool, protected_video_ids={"vidPROTECTED"})
@@ -156,14 +158,16 @@ class TestLFUEviction:
         file_new.write_bytes(b"x" * (512 * 1024))
 
         # Set mtime: old file earlier than new file
-        os.utime(file_old, (1000000, 1000000))   # epoch + ~11.5 days
-        os.utime(file_new, (9999999, 9999999))   # much newer
+        os.utime(file_old, (1000000, 1000000))  # epoch + ~11.5 days
+        os.utime(file_new, (9999999, 9999999))  # much newer
 
-        pool = _make_pool_mock({
-            # Both files have the same play_count via matching URLs
-            "https://youtube.com/watch?v=vidOLD": 2,
-            "https://youtube.com/watch?v=vidNEW": 2,
-        })
+        pool = _make_pool_mock(
+            {
+                # Both files have the same play_count via matching URLs
+                "https://youtube.com/watch?v=vidOLD": 2,
+                "https://youtube.com/watch?v=vidNEW": 2,
+            }
+        )
 
         audio_service.max_cache_mb = 0  # force at-least-one eviction (total 1MB > 0)
         await audio_service.cleanup_cache(pool, protected_video_ids=set())
@@ -194,6 +198,7 @@ class TestDownloadTimeout:
     async def test_timeout_falls_back_to_stream(self, audio_service, tmp_cache):
         """When async_download times out, get_source falls back to stream tier."""
         import discord
+
         from models.queue import Track
 
         # Build a track with no cached file
@@ -213,27 +218,24 @@ class TestDownloadTimeout:
 
         # Mock async_extract to return a stream URL (tier-3 path)
         stream_url = "https://example.com/stream.mp3"
-        audio_service.youtube_service.async_extract = AsyncMock(
-            return_value={"url": stream_url}
-        )
+        audio_service.youtube_service.async_extract = AsyncMock(return_value={"url": stream_url})
 
         # Patch asyncio.wait_for in services.audio namespace to raise TimeoutError
         with patch("services.audio.asyncio.wait_for", side_effect=asyncio.TimeoutError):
             with patch("services.audio.discord.FFmpegPCMAudio") as mock_ffmpeg:
                 mock_ffmpeg.return_value = MagicMock()
-                source = await audio_service.get_source(track, seek_seconds=0, ffmpeg_filter=None)
+                await audio_service.get_source(track, seek_seconds=0, ffmpeg_filter=None)
 
         # The stream tier was reached: FFmpegPCMAudio was instantiated with the stream URL
         mock_ffmpeg.assert_called_once()
         call_args = mock_ffmpeg.call_args
-        assert call_args[0][0] == stream_url, (
-            f"Expected stream URL {stream_url!r}, got {call_args[0][0]!r}"
-        )
+        assert call_args[0][0] == stream_url, f"Expected stream URL {stream_url!r}, got {call_args[0][0]!r}"
 
     @pytest.mark.asyncio
     async def test_timeout_warning_logged(self, audio_service, tmp_cache, caplog):
         """A warning is logged when the download timeout fires."""
         import logging
+
         from models.queue import Track
 
         track = Track(
@@ -246,9 +248,7 @@ class TestDownloadTimeout:
             artist=None,
         )
 
-        audio_service.youtube_service.async_extract = AsyncMock(
-            return_value={"url": "https://example.com/stream2.mp3"}
-        )
+        audio_service.youtube_service.async_extract = AsyncMock(return_value={"url": "https://example.com/stream2.mp3"})
 
         with patch("services.audio.asyncio.wait_for", side_effect=asyncio.TimeoutError):
             with patch("services.audio.discord.FFmpegPCMAudio"):

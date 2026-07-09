@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 
 import discord
@@ -22,9 +21,7 @@ FFMPEG_STREAM_OPTS = {
 }
 
 
-def _build_ffmpeg_opts(
-    seek_seconds: int = 0, ffmpeg_filter: str | None = None
-) -> dict:
+def _build_ffmpeg_opts(seek_seconds: int = 0, ffmpeg_filter: str | None = None) -> dict:
     """Build FFmpeg before_options/options for a seeked or filtered source.
 
     - Always includes reconnect flags in before_options.
@@ -110,7 +107,8 @@ class AudioService:
         except asyncio.TimeoutError:
             log.warning(
                 "download timeout after %ss video_id=%s, falling back to stream",
-                config.DOWNLOAD_TIMEOUT_SECONDS, track.video_id,
+                config.DOWNLOAD_TIMEOUT_SECONDS,
+                track.video_id,
             )
             path = None
         if path and path.exists():
@@ -151,9 +149,7 @@ class AudioService:
 
         # Fetch play counts for all URLs in song_history
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT url, COUNT(*) AS plays FROM song_history GROUP BY url"
-            )
+            rows = await conn.fetch("SELECT url, COUNT(*) AS plays FROM song_history GROUP BY url")
 
         # Build play_count dict keyed by video_id extracted from YouTube URLs
         play_counts: dict[str, int] = {}
@@ -190,5 +186,7 @@ class AudioService:
             total_bytes -= size
             log.info(
                 "cache evict video_id=%s play_count=%d size=%dKB",
-                vid, play_counts.get(vid, 0), size // 1024,
+                vid,
+                play_counts.get(vid, 0),
+                size // 1024,
             )

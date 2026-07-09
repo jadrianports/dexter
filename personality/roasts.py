@@ -128,7 +128,8 @@ STATUS_LINES: list[str] = [
 REPEAT_SONG_ROAST_TEMPLATES: list[str] = [
     "{name}. {count} plays of '{title}' today. it was mediocre the first time. you've just been marinating in it.",
     "{count} times. '{title}' didn't deserve the first play, let alone {count}.",
-    "{name} has queued '{title}' {count} times today. i don't know what you're looking for in there but you won't find it.",
+    "{name} has queued '{title}' {count} times today. i don't know what you're "
+    "looking for in there but you won't find it.",
     "'{title}' again. {count} plays. i'm logging this. not for any particular reason. just so it's documented.",
 ]
 
@@ -161,7 +162,8 @@ MILESTONE_STREAK_TEMPLATES: list[str] = [
 # ---------------------------------------------------------------------------
 
 NO_LYRICS_FOUND: list[str] = [
-    "couldn't find lyrics for that one. either they don't exist or nobody bothered to transcribe them. both feel right.",
+    "couldn't find lyrics for that one. either they don't exist or nobody "
+    "bothered to transcribe them. both feel right.",
     "no lyrics. genius didn't have it, azlyrics didn't have it. maybe that's the universe telling you something.",
     "lyrics not found. the song might be too obscure or too bad for anyone to have documented.",
     "nothing came back. sometimes songs are better without the words confirmed.",
@@ -193,15 +195,18 @@ ROAST_SELF_LINES: list[str] = [
 
 ROAST_BOT_LINES: list[str] = [
     "nice try. you thought i'd fumble a roast aimed at myself. the real fumble was asking me.",
-    "roast the bot. sure. while you're at it, go insult the smoke alarm for beeping too loud. i don't make the rules, i enforce them.",
-    "you came to me for a roast and picked the one target i'm legally allowed to defend. your queue history is still public though.",
+    "roast the bot. sure. while you're at it, go insult the smoke alarm for "
+    "beeping too loud. i don't make the rules, i enforce them.",
+    "you came to me for a roast and picked the one target i'm legally allowed "
+    "to defend. your queue history is still public though.",
     "roasting the bot that tracks your every skip. bold. reckless. exactly the energy your playlist projects.",
 ]
 
 ROAST_NO_HISTORY_LINES: list[str] = [
     "{name} has zero music history here. either brand new or actively avoiding accountability. i'll find out which.",
     "no data on {name}. either they've never queued anything or they know i'm watching. one of those is smart.",
-    "{name} is a blank slate in my logs. that changes the second they pick a song. i'm already judging the first choice.",
+    "{name} is a blank slate in my logs. that changes the second they pick a "
+    "song. i'm already judging the first choice.",
     "nothing on {name}. no songs, no history, no basis for a roast. so: who are you and why are you here.",
 ]
 
@@ -245,6 +250,7 @@ VISION_ROAST_FALLBACKS: list[str] = [
 # ---------------------------------------------------------------------------
 # Pure helper — unit-testable seam for PERS-03
 # ---------------------------------------------------------------------------
+
 
 def is_late_night(hour: int) -> bool:
     """Return True if hour falls within config.LATE_NIGHT_HOURS (inclusive bounds)."""

@@ -23,6 +23,7 @@ Security:
     T-11-02b: Fake Discord snowflake user_ids; cleanup deletes all rows by
               these ids unconditionally (even if the script errors partway).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,10 +41,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
 
 # ── Fake IDs (never real Discord snowflakes) ─────────────────────────────────
-SPIKE_USER_A = "999999999999999001"   # main corpus: relevant facts + near-dups + decoys
-SPIKE_USER_B = "999999999999999002"   # secondary corpus: verifies user-scoping
-SPIKE_GUILD  = "999999999999999099"   # fake guild id
-SPIKE_USERS  = (SPIKE_USER_A, SPIKE_USER_B)
+SPIKE_USER_A = "999999999999999001"  # main corpus: relevant facts + near-dups + decoys
+SPIKE_USER_B = "999999999999999002"  # secondary corpus: verifies user-scoping
+SPIKE_GUILD = "999999999999999099"  # fake guild id
+SPIKE_USERS = (SPIKE_USER_A, SPIKE_USER_B)
 
 # ── User A corpus: relevant facts ────────────────────────────────────────────
 # Episode-style, third-person, NO numbers (Pitfall 5: numeric facts never stored).
@@ -114,6 +115,7 @@ ROAST_QUERIES = [
 
 # ── Embedding helpers ─────────────────────────────────────────────────────────
 
+
 async def embed_batch(
     client: genai.Client,
     texts: list[str],
@@ -139,6 +141,7 @@ async def embed_batch(
 
 
 # ── Pool creation ─────────────────────────────────────────────────────────────
+
 
 async def _register_vec(conn: asyncpg.Connection) -> None:
     """Per-connection init callback for create_pool (mirrors bot.py pattern)."""
@@ -177,6 +180,7 @@ async def create_spike_pool() -> asyncpg.Pool:
 
 # ── DB operations ─────────────────────────────────────────────────────────────
 
+
 async def insert_facts(
     pool: asyncpg.Pool,
     user_id: str,
@@ -191,7 +195,12 @@ async def insert_facts(
                 "INSERT INTO user_memories "
                 "  (user_id, guild_id, kind, fact, embedding, salience) "
                 "VALUES ($1, $2, $3, $4, $5, $6)",
-                user_id, SPIKE_GUILD, kind, fact, emb, 0.5,
+                user_id,
+                SPIKE_GUILD,
+                kind,
+                fact,
+                emb,
+                0.5,
             )
 
 
@@ -214,7 +223,9 @@ async def search_memories(
             "WHERE user_id = $1 "
             "ORDER BY embedding <=> $2 "
             "LIMIT $3",
-            user_id, query_emb, k,
+            user_id,
+            query_emb,
+            k,
         )
     return [
         {
@@ -233,19 +244,18 @@ async def cleanup_spike(pool: asyncpg.Pool) -> None:
     """
     async with pool.acquire() as conn:
         for uid in SPIKE_USERS:
-            await conn.execute(
-                "DELETE FROM user_memories WHERE user_id = $1", uid
-            )
+            await conn.execute("DELETE FROM user_memories WHERE user_id = $1", uid)
     print(f"[spike] Cleanup done — rows deleted for user_ids {SPIKE_USERS}")
 
 
 # ── Pure analysis helpers ─────────────────────────────────────────────────────
 
+
 def cosine_sim(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two float lists (pure Python, no numpy)."""
-    dot    = sum(x * y for x, y in zip(a, b))
-    mag_a  = math.sqrt(sum(x * x for x in a))
-    mag_b  = math.sqrt(sum(x * x for x in b))
+    dot = sum(x * y for x, y in zip(a, b))
+    mag_a = math.sqrt(sum(x * x for x in a))
+    mag_b = math.sqrt(sum(x * x for x in b))
     if mag_a == 0.0 or mag_b == 0.0:
         return 0.0
     return dot / (mag_a * mag_b)
@@ -259,6 +269,7 @@ def section(title: str) -> None:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 async def main() -> None:
     # T-11-02a: key never printed; held inside genai.Client
@@ -276,12 +287,14 @@ async def main() -> None:
         # ── 1. Embed all seed facts ───────────────────────────────────────────
         nd_texts = [nd for nd, _orig, _idx in USER_A_NEAR_DUPS]
 
-        print(f"[spike] Embedding User A relevant facts ({len(USER_A_FACTS)}) + "
-              f"near-dups ({len(nd_texts)}) — RETRIEVAL_DOCUMENT...")
+        print(
+            f"[spike] Embedding User A relevant facts ({len(USER_A_FACTS)}) + "
+            f"near-dups ({len(nd_texts)}) — RETRIEVAL_DOCUMENT..."
+        )
         a_rel_all = USER_A_FACTS + nd_texts
         a_rel_all_embs = await embed_batch(client, a_rel_all, "RETRIEVAL_DOCUMENT")
-        a_fact_embs = a_rel_all_embs[:len(USER_A_FACTS)]
-        a_nd_embs   = a_rel_all_embs[len(USER_A_FACTS):]
+        a_fact_embs = a_rel_all_embs[: len(USER_A_FACTS)]
+        a_nd_embs = a_rel_all_embs[len(USER_A_FACTS) :]
 
         print(f"[spike] Embedding User A decoys ({len(USER_A_DECOYS)}) — RETRIEVAL_DOCUMENT...")
         a_decoy_embs = await embed_batch(client, USER_A_DECOYS, "RETRIEVAL_DOCUMENT")
@@ -296,35 +309,37 @@ async def main() -> None:
 
         # ── 2. Insert into user_memories ──────────────────────────────────────
         print("[spike] Inserting seed rows into user_memories...")
-        await insert_facts(pool, SPIKE_USER_A, USER_A_FACTS, a_fact_embs,  "spike_relevant")
-        await insert_facts(pool, SPIKE_USER_A, nd_texts,     a_nd_embs,    "spike_near_dup")
+        await insert_facts(pool, SPIKE_USER_A, USER_A_FACTS, a_fact_embs, "spike_relevant")
+        await insert_facts(pool, SPIKE_USER_A, nd_texts, a_nd_embs, "spike_near_dup")
         await insert_facts(pool, SPIKE_USER_A, USER_A_DECOYS, a_decoy_embs, "spike_decoy")
-        await insert_facts(pool, SPIKE_USER_B, USER_B_FACTS, b_embs,       "spike_b")
+        await insert_facts(pool, SPIKE_USER_B, USER_B_FACTS, b_embs, "spike_b")
         total_rows = len(USER_A_FACTS) + len(nd_texts) + len(USER_A_DECOYS) + len(USER_B_FACTS)
         print(f"[spike] Inserted {total_rows} rows total.")
 
         # ── 3. Per-query similarity rankings ──────────────────────────────────
         section("PER-QUERY SIMILARITY RANKINGS  (User A corpus, scoped by user_id)")
-        print(f"\n  Prior MEMORY_SIMILARITY_FLOOR = {config.MEMORY_SIMILARITY_FLOOR}  "
-              f"MEMORY_TOP_K = {config.MEMORY_TOP_K}\n"
-              f"  Full User A corpus returned (beyond top-k) to see the complete distribution.")
+        print(
+            f"\n  Prior MEMORY_SIMILARITY_FLOOR = {config.MEMORY_SIMILARITY_FLOOR}  "
+            f"MEMORY_TOP_K = {config.MEMORY_TOP_K}\n"
+            f"  Full User A corpus returned (beyond top-k) to see the complete distribution."
+        )
 
         decoy_fact_set = set(USER_A_DECOYS)
-        nd_fact_set    = set(nd_texts)
+        nd_fact_set = set(nd_texts)
 
         # Fetch the full User A corpus per query (over-fetch) to see all similarities.
         fetch_k = len(USER_A_FACTS) + len(nd_texts) + len(USER_A_DECOYS) + 5
 
-        all_rel_sims: list[float]   = []
+        all_rel_sims: list[float] = []
         all_decoy_sims: list[float] = []
 
         for qi, (query, q_emb) in enumerate(zip(ROAST_QUERIES, q_embs)):
             results = await search_memories(pool, SPIKE_USER_A, q_emb, fetch_k)
-            print(f"\nQ{qi + 1}: \"{query}\"")
+            print(f'\nQ{qi + 1}: "{query}"')
             print(f"  {'Rank':<5} {'Sim':>6}  {'Kind':<13}  Fact")
-            print(f"  {'─'*4}  {'─'*6}  {'─'*13}  {'─'*50}")
+            print(f"  {'─' * 4}  {'─' * 6}  {'─' * 13}  {'─' * 50}")
 
-            q_rel:   list[float] = []
+            q_rel: list[float] = []
             q_decoy: list[float] = []
 
             for rank, r in enumerate(results, 1):
@@ -373,8 +388,8 @@ async def main() -> None:
                 if fires
                 else "INSERT (below threshold — treated as distinct)"
             )
-            print(f"  Original : \"{orig_text[:72]}\"")
-            print(f"  Near-dup : \"{nd_text[:72]}\"")
+            print(f'  Original : "{orig_text[:72]}"')
+            print(f'  Near-dup : "{nd_text[:72]}"')
             print(f"  Sim      : {sim:.4f}  → {verdict}")
             print()
 
@@ -389,9 +404,9 @@ async def main() -> None:
 
         # ── 5. User-scoping integrity check ──────────────────────────────────
         section("USER-SCOPING CHECK  (User B facts must NOT surface in User A search)")
-        a_results   = await search_memories(pool, SPIKE_USER_A, q_embs[0], fetch_k)
+        a_results = await search_memories(pool, SPIKE_USER_A, q_embs[0], fetch_k)
         a_fact_texts = {r["fact"] for r in a_results}
-        b_leaked    = [f for f in USER_B_FACTS if f in a_fact_texts]
+        b_leaked = [f for f in USER_B_FACTS if f in a_fact_texts]
         if b_leaked:
             print(f"\n  FAIL: User B facts appeared in User A search ({len(b_leaked)} items):")
             for f in b_leaked:
@@ -403,19 +418,22 @@ async def main() -> None:
         section("AGGREGATE DISTRIBUTIONS + PROPOSED CONSTANT VALUES")
 
         if all_rel_sims and all_decoy_sims:
-            min_rel   = min(all_rel_sims)
-            max_rel   = max(all_rel_sims)
-            mean_rel  = sum(all_rel_sims) / len(all_rel_sims)
-            min_dec   = min(all_decoy_sims)
-            max_dec   = max(all_decoy_sims)
-            mean_dec  = sum(all_decoy_sims) / len(all_decoy_sims)
-            gap       = min_rel - max_dec
+            min_rel = min(all_rel_sims)
+            max_rel = max(all_rel_sims)
+            mean_rel = sum(all_rel_sims) / len(all_rel_sims)
+            min_dec = min(all_decoy_sims)
+            max_dec = max(all_decoy_sims)
+            mean_dec = sum(all_decoy_sims) / len(all_decoy_sims)
+            gap = min_rel - max_dec
 
             print(f"\n  Distributions across {len(ROAST_QUERIES)} queries, User A corpus:")
-            print(f"    Relevant ({len(all_rel_sims):3d} sims): "
-                  f"min={min_rel:.4f}  max={max_rel:.4f}  mean={mean_rel:.4f}")
-            print(f"    Decoys   ({len(all_decoy_sims):3d} sims): "
-                  f"min={min_dec:.4f}  max={max_dec:.4f}  mean={mean_dec:.4f}")
+            print(
+                f"    Relevant ({len(all_rel_sims):3d} sims): min={min_rel:.4f}  max={max_rel:.4f}  mean={mean_rel:.4f}"
+            )
+            print(
+                f"    Decoys   ({len(all_decoy_sims):3d} sims): "
+                f"min={min_dec:.4f}  max={max_dec:.4f}  mean={mean_dec:.4f}"
+            )
             print(f"    Gap (min_relevant - max_decoy): {gap:+.4f}")
 
             if gap > 0:
@@ -433,10 +451,9 @@ async def main() -> None:
                 print("       (requires recreating vector(768) column as vector(1536))")
         else:
             proposed_floor = config.MEMORY_SIMILARITY_FLOOR
-            dim_decision   = "keep-768 (insufficient data)"
+            dim_decision = "keep-768 (insufficient data)"
 
         if dedup_sims:
-            avg_dedup = sum(dedup_sims) / len(dedup_sims)
             # Propose dedup threshold slightly below the observed near-dup similarity
             proposed_dedup = round(min(dedup_sims) - 0.02, 2)
             proposed_dedup = max(0.80, min(0.97, proposed_dedup))

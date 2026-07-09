@@ -121,16 +121,16 @@ class QueuePersistenceService:
             if exceeds_queue_cap(len(restored), config.MAX_QUEUE_SIZE_PER_GUILD):
                 log.warning(
                     "restore_queues: guild %s queue (%d) exceeds cap %d — truncating",
-                    guild_id, len(restored), config.MAX_QUEUE_SIZE_PER_GUILD,
+                    guild_id,
+                    len(restored),
+                    config.MAX_QUEUE_SIZE_PER_GUILD,
                 )
                 restored = restored[: config.MAX_QUEUE_SIZE_PER_GUILD]
             queue.tracks = restored
 
             # Clamp current_index into range (CR-03): a stale or non-int index must
             # not reach get_current() -> _play_track(None).
-            queue.current_index = clamp_restore_index(
-                payload.get("current_index", 0), len(queue.tracks)
-            )
+            queue.current_index = clamp_restore_index(payload.get("current_index", 0), len(queue.tracks))
 
             queue.loop_mode = LoopMode(payload.get("loop_mode", "off"))
             queue._text_channel_id = payload.get("text_channel_id")
@@ -155,9 +155,7 @@ class QueuePersistenceService:
                             continue  # skip THIS guild only — never abort the whole restore loop (CR-01)
                         await music_cog._play_track(guild, current)
                     except Exception as exc:
-                        log.warning(
-                            "Smart rejoin failed for guild %s: %s", guild_id, exc
-                        )
+                        log.warning("Smart rejoin failed for guild %s: %s", guild_id, exc)
                 # else: restore silently — no humans present; user must /play or /resume
 
 

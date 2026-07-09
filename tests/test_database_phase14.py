@@ -25,7 +25,6 @@ import pytest_asyncio
 
 import database
 
-
 # ---------------------------------------------------------------------------
 # Static source-assertion checks — always run, no live DB needed
 # ---------------------------------------------------------------------------
@@ -35,26 +34,19 @@ class TestPhase14HelpersExist:
     """Verify all Task 2 artifacts exist with the right scoping (T-14-01/T-14-02)."""
 
     def test_get_recently_skipped_exists(self) -> None:
-        assert hasattr(database, "get_recently_skipped"), (
-            "get_recently_skipped must exist in database.py"
-        )
+        assert hasattr(database, "get_recently_skipped"), "get_recently_skipped must exist in database.py"
 
     def test_get_user_top_artist_exists(self) -> None:
-        assert hasattr(database, "get_user_top_artist"), (
-            "get_user_top_artist must exist in database.py"
-        )
+        assert hasattr(database, "get_user_top_artist"), "get_user_top_artist must exist in database.py"
 
     def test_get_artist_cooccurrence_exists(self) -> None:
-        assert hasattr(database, "get_artist_cooccurrence"), (
-            "get_artist_cooccurrence must exist in database.py"
-        )
+        assert hasattr(database, "get_artist_cooccurrence"), "get_artist_cooccurrence must exist in database.py"
 
     def test_get_recently_skipped_is_scoped(self) -> None:
         """get_recently_skipped must scope guild_id=$1 + was_skipped + queued_at bound (D-01)."""
         src = inspect.getsource(database.get_recently_skipped)
         assert "WHERE guild_id = $1 AND was_skipped = true AND queued_at > $2" in src, (
-            "get_recently_skipped must include"
-            " WHERE guild_id = $1 AND was_skipped = true AND queued_at > $2"
+            "get_recently_skipped must include WHERE guild_id = $1 AND was_skipped = true AND queued_at > $2"
         )
 
     def test_get_user_top_artist_is_scoped(self) -> None:
@@ -92,9 +84,7 @@ class TestPhase14HelpersExist:
             database.get_artist_cooccurrence,
         ):
             src = inspect.getsource(fn)
-            assert 'f"' not in src and "f'" not in src, (
-                f"{fn.__name__} must not use f-string SQL (T-14-01)"
-            )
+            assert 'f"' not in src and "f'" not in src, f"{fn.__name__} must not use f-string SQL (T-14-01)"
             assert "%s" not in src, f"{fn.__name__} must not use %-interpolated SQL (T-14-01)"
 
 
@@ -120,8 +110,14 @@ async def _insert_history_row(
             "INSERT INTO song_history"
             " (guild_id, user_id, title, artist, url, duration_seconds, queued_at, was_skipped)"
             " VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-            guild_id, user_id, title, artist,
-            f"https://youtube.com/watch?v=test{url_suffix}", 200, queued_at, was_skipped,
+            guild_id,
+            user_id,
+            title,
+            artist,
+            f"https://youtube.com/watch?v=test{url_suffix}",
+            200,
+            queued_at,
+            was_skipped,
         )
 
 
@@ -138,14 +134,17 @@ class TestGetRecentlySkipped:
         now = datetime.now(timezone.utc)
         since = now - timedelta(days=7)
         await _insert_history_row(
-            pool, guild_id="g14-skip1", user_id="u-a", artist="Radiohead",
-            title="Karma Police", queued_at=now - timedelta(hours=1),
-            was_skipped=True, url_suffix="skip1",
+            pool,
+            guild_id="g14-skip1",
+            user_id="u-a",
+            artist="Radiohead",
+            title="Karma Police",
+            queued_at=now - timedelta(hours=1),
+            was_skipped=True,
+            url_suffix="skip1",
         )
 
-        rows = await database.get_recently_skipped(
-            pool, guild_id="g14-skip1", since=since, limit=15
-        )
+        rows = await database.get_recently_skipped(pool, guild_id="g14-skip1", since=since, limit=15)
 
         assert len(rows) == 1
         assert rows[0]["title"] == "Karma Police"
@@ -158,18 +157,26 @@ class TestGetRecentlySkipped:
         since = now - timedelta(days=7)
         # not skipped
         await _insert_history_row(
-            pool, guild_id="g14-skip2", user_id="u-a", artist="Not Skipped Artist",
-            queued_at=now - timedelta(hours=1), was_skipped=False, url_suffix="notskip",
+            pool,
+            guild_id="g14-skip2",
+            user_id="u-a",
+            artist="Not Skipped Artist",
+            queued_at=now - timedelta(hours=1),
+            was_skipped=False,
+            url_suffix="notskip",
         )
         # skipped but stale (predates `since`)
         await _insert_history_row(
-            pool, guild_id="g14-skip2", user_id="u-a", artist="Stale Skip Artist",
-            queued_at=now - timedelta(days=30), was_skipped=True, url_suffix="staleskip",
+            pool,
+            guild_id="g14-skip2",
+            user_id="u-a",
+            artist="Stale Skip Artist",
+            queued_at=now - timedelta(days=30),
+            was_skipped=True,
+            url_suffix="staleskip",
         )
 
-        rows = await database.get_recently_skipped(
-            pool, guild_id="g14-skip2", since=since, limit=15
-        )
+        rows = await database.get_recently_skipped(pool, guild_id="g14-skip2", since=since, limit=15)
 
         assert rows == []
 
@@ -179,19 +186,27 @@ class TestGetRecentlySkipped:
         now = datetime.now(timezone.utc)
         since = now - timedelta(days=7)
         await _insert_history_row(
-            pool, guild_id="g14-skip3", user_id="u-a", artist="Artist A",
-            title="Song A", queued_at=now - timedelta(hours=2),
-            was_skipped=True, url_suffix="crossA",
+            pool,
+            guild_id="g14-skip3",
+            user_id="u-a",
+            artist="Artist A",
+            title="Song A",
+            queued_at=now - timedelta(hours=2),
+            was_skipped=True,
+            url_suffix="crossA",
         )
         await _insert_history_row(
-            pool, guild_id="g14-skip3", user_id="u-b", artist="Artist B",
-            title="Song B", queued_at=now - timedelta(hours=1),
-            was_skipped=True, url_suffix="crossB",
+            pool,
+            guild_id="g14-skip3",
+            user_id="u-b",
+            artist="Artist B",
+            title="Song B",
+            queued_at=now - timedelta(hours=1),
+            was_skipped=True,
+            url_suffix="crossB",
         )
 
-        rows = await database.get_recently_skipped(
-            pool, guild_id="g14-skip3", since=since, limit=15
-        )
+        rows = await database.get_recently_skipped(pool, guild_id="g14-skip3", since=since, limit=15)
 
         titles = {r["title"] for r in rows}
         assert titles == {"Song A", "Song B"}
@@ -213,17 +228,23 @@ class TestGetUserTopArtist:
         now = datetime.now(timezone.utc)
         for i in range(3):
             await _insert_history_row(
-                pool, guild_id=guild_id, user_id=user_id, artist="Heavy Rotation",
-                queued_at=now - timedelta(hours=i), url_suffix=f"heavy{i}",
+                pool,
+                guild_id=guild_id,
+                user_id=user_id,
+                artist="Heavy Rotation",
+                queued_at=now - timedelta(hours=i),
+                url_suffix=f"heavy{i}",
             )
         await _insert_history_row(
-            pool, guild_id=guild_id, user_id=user_id, artist="One Timer",
-            queued_at=now - timedelta(hours=5), url_suffix="onetime",
+            pool,
+            guild_id=guild_id,
+            user_id=user_id,
+            artist="One Timer",
+            queued_at=now - timedelta(hours=5),
+            url_suffix="onetime",
         )
 
-        rows = await database.get_user_top_artist(
-            pool, guild_id=guild_id, user_id=user_id, limit=5
-        )
+        rows = await database.get_user_top_artist(pool, guild_id=guild_id, user_id=user_id, limit=5)
 
         assert rows[0]["artist"] == "Heavy Rotation"
         assert rows[0]["play_count"] == 3
@@ -232,13 +253,15 @@ class TestGetUserTopArtist:
     async def test_excludes_other_users_and_other_guilds(self, pool) -> None:
         now = datetime.now(timezone.utc)
         await _insert_history_row(
-            pool, guild_id="g14-top2", user_id="u-other", artist="Not Mine",
-            queued_at=now - timedelta(hours=1), url_suffix="notmine",
+            pool,
+            guild_id="g14-top2",
+            user_id="u-other",
+            artist="Not Mine",
+            queued_at=now - timedelta(hours=1),
+            url_suffix="notmine",
         )
 
-        rows = await database.get_user_top_artist(
-            pool, guild_id="g14-top2", user_id="u-top2", limit=5
-        )
+        rows = await database.get_user_top_artist(pool, guild_id="g14-top2", user_id="u-top2", limit=5)
 
         assert rows == []
 
@@ -259,18 +282,30 @@ class TestGetArtistCooccurrence:
 
         # anchor artist played by user-a
         await _insert_history_row(
-            pool, guild_id=guild_id, user_id="u-a", artist="Anchor Artist",
-            queued_at=now - timedelta(hours=3), url_suffix="anchor1",
+            pool,
+            guild_id=guild_id,
+            user_id="u-a",
+            artist="Anchor Artist",
+            queued_at=now - timedelta(hours=3),
+            url_suffix="anchor1",
         )
         # co-occurring artist played same day by a DIFFERENT user
         await _insert_history_row(
-            pool, guild_id=guild_id, user_id="u-b", artist="Co-Occurring Artist",
-            queued_at=now - timedelta(hours=1), url_suffix="co1",
+            pool,
+            guild_id=guild_id,
+            user_id="u-b",
+            artist="Co-Occurring Artist",
+            queued_at=now - timedelta(hours=1),
+            url_suffix="co1",
         )
         # different day — must not appear
         await _insert_history_row(
-            pool, guild_id=guild_id, user_id="u-a", artist="Different Day Artist",
-            queued_at=now - timedelta(days=5), url_suffix="diffday",
+            pool,
+            guild_id=guild_id,
+            user_id="u-a",
+            artist="Different Day Artist",
+            queued_at=now - timedelta(days=5),
+            url_suffix="diffday",
         )
 
         rows = await database.get_artist_cooccurrence(
@@ -290,12 +325,20 @@ class TestGetArtistCooccurrence:
         since = now - timedelta(days=90)
 
         await _insert_history_row(
-            pool, guild_id="g14-co2-A", user_id="u-a", artist="Anchor",
-            queued_at=now - timedelta(hours=2), url_suffix="ganchorA",
+            pool,
+            guild_id="g14-co2-A",
+            user_id="u-a",
+            artist="Anchor",
+            queued_at=now - timedelta(hours=2),
+            url_suffix="ganchorA",
         )
         await _insert_history_row(
-            pool, guild_id="g14-co2-A", user_id="u-b", artist="Adjacent",
-            queued_at=now - timedelta(hours=1), url_suffix="gadjA",
+            pool,
+            guild_id="g14-co2-A",
+            user_id="u-b",
+            artist="Adjacent",
+            queued_at=now - timedelta(hours=1),
+            url_suffix="gadjA",
         )
 
         rows_other_guild = await database.get_artist_cooccurrence(

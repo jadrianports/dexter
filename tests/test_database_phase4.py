@@ -15,19 +15,18 @@ from __future__ import annotations
 
 import pytest
 
+import config
 from database import (
+    get_history_rows,
+    get_images_today,
+    get_repeat_song_count,
     init_db,
+    log_image,
     log_song,
     log_track_batch,
     update_user_profile,
     update_user_streak,
-    get_history_rows,
-    get_repeat_song_count,
-    get_images_today,
-    log_image,
 )
-import config
-
 
 # ---------------------------------------------------------------------------
 # TestPostgresSchema — schema creation (SCALE-02)
@@ -41,10 +40,7 @@ class TestPostgresSchema:
     async def test_all_tables_created(self, pool):
         """init_db must create all 7 tables in the public schema."""
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-                " ORDER BY tablename"
-            )
+            rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename")
         tables = {r["tablename"] for r in rows}
         expected = {
             "song_history",
@@ -54,25 +50,19 @@ class TestPostgresSchema:
             "bot_daily_stats",
             "guild_queues",
         }
-        assert expected.issubset(tables), (
-            f"Missing tables: {expected - tables}"
-        )
+        assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
     @pytest.mark.asyncio
     async def test_song_history_table_exists(self, pool):
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-            )
+            rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         tables = {r["tablename"] for r in rows}
         assert "song_history" in tables
 
     @pytest.mark.asyncio
     async def test_guild_queues_table_exists(self, pool):
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-            )
+            rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         tables = {r["tablename"] for r in rows}
         assert "guild_queues" in tables
 
@@ -102,9 +92,7 @@ class TestPostgresSchema:
         types = {r["column_name"]: r["data_type"] for r in rows}
         for col in ("first_seen_at", "last_active_at"):
             assert col in types, f"{col} column not found in user_profiles"
-            assert "timestamp" in types[col], (
-                f"{col} should be TIMESTAMPTZ, got {types[col]!r}"
-            )
+            assert "timestamp" in types[col], f"{col} should be TIMESTAMPTZ, got {types[col]!r}"
 
     @pytest.mark.asyncio
     async def test_song_history_was_skipped_is_boolean(self, pool):
@@ -118,9 +106,7 @@ class TestPostgresSchema:
         types = {r["column_name"]: r["data_type"] for r in rows}
         for col in ("was_skipped", "was_auto_queued"):
             assert col in types, f"{col} column not found in song_history"
-            assert types[col] == "boolean", (
-                f"{col} should be boolean, got {types[col]!r}"
-            )
+            assert types[col] == "boolean", f"{col} should be boolean, got {types[col]!r}"
 
     @pytest.mark.asyncio
     async def test_init_db_idempotent(self, pool):
@@ -153,13 +139,11 @@ class TestBatchTransaction:
         )
 
         async with pool.acquire() as conn:
-            sh_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM song_history WHERE guild_id = $1", "g1"
-            )
+            sh_count = await conn.fetchval("SELECT COUNT(*) FROM song_history WHERE guild_id = $1", "g1")
             ac_count = await conn.fetchval(
-                "SELECT play_count FROM user_artist_counts"
-                " WHERE user_id = $1 AND artist = $2",
-                "u1", "Test Artist",
+                "SELECT play_count FROM user_artist_counts WHERE user_id = $1 AND artist = $2",
+                "u1",
+                "Test Artist",
             )
             up_count = await conn.fetchval(
                 "SELECT total_songs_queued FROM user_profiles WHERE user_id = $1",
@@ -188,9 +172,9 @@ class TestBatchTransaction:
 
         async with pool.acquire() as conn:
             play_count = await conn.fetchval(
-                "SELECT play_count FROM user_artist_counts"
-                " WHERE user_id = $1 AND artist = $2",
-                "u2", "Same Artist",
+                "SELECT play_count FROM user_artist_counts WHERE user_id = $1 AND artist = $2",
+                "u2",
+                "Same Artist",
             )
             total_queued = await conn.fetchval(
                 "SELECT total_songs_queued FROM user_profiles WHERE user_id = $1",
@@ -219,9 +203,7 @@ class TestBatchTransaction:
                 "SELECT COUNT(*) FROM user_artist_counts WHERE user_id = $1",
                 "u3",
             )
-            sh_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM song_history WHERE user_id = $1", "u3"
-            )
+            sh_count = await conn.fetchval("SELECT COUNT(*) FROM song_history WHERE user_id = $1", "u3")
             up_count = await conn.fetchval(
                 "SELECT total_songs_queued FROM user_profiles WHERE user_id = $1",
                 "u3",
@@ -253,9 +235,7 @@ class TestHelpers:
             duration=240,
         )
         async with pool.acquire() as conn:
-            count = await conn.fetchval(
-                "SELECT COUNT(*) FROM song_history WHERE guild_id = $1", "gsmoke"
-            )
+            count = await conn.fetchval("SELECT COUNT(*) FROM song_history WHERE guild_id = $1", "gsmoke")
         assert count == 1
 
     @pytest.mark.asyncio
@@ -297,9 +277,7 @@ class TestHelpers:
                 url=f"https://yt.com/rep{i}",
                 duration=200,
             )
-        count = await get_repeat_song_count(
-            pool, guild_id="grep_guild", user_id="grep_user", title="Repeated Song"
-        )
+        count = await get_repeat_song_count(pool, guild_id="grep_guild", user_id="grep_user", title="Repeated Song")
         assert count == 2, f"Expected 2, got {count}"
 
     @pytest.mark.asyncio

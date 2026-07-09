@@ -10,17 +10,16 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
-from database import get_images_today, log_image, increment_daily_stat
+from database import get_images_today, increment_daily_stat, log_image
 from personality.responses import (
-    pick_random,
-    IMAGE_REFUSAL_MESSAGES,
-    IMAGE_CAP_MESSAGES,
-    RATE_LIMIT_MESSAGES,
     ERROR_MESSAGES,
+    IMAGE_CAP_MESSAGES,
+    IMAGE_REFUSAL_MESSAGES,
+    RATE_LIMIT_MESSAGES,
+    pick_random,
 )
-from services.gemini import GeminiRateLimitError, GeminiAPIError
+from services.gemini import GeminiAPIError, GeminiRateLimitError
 from utils.logger import log
-
 
 IMAGE_CAPTIONS: list[str] = [
     "here. i made this. you're welcome.",
@@ -52,9 +51,7 @@ class ImagineCog(commands.Cog):
         # Check daily cap
         images_today = await get_images_today(self.bot.pool, user_id=str(interaction.user.id))
         if images_today >= config.MAX_IMAGES_PER_USER_PER_DAY:
-            return await interaction.response.send_message(
-                pick_random(IMAGE_CAP_MESSAGES), ephemeral=True
-            )
+            return await interaction.response.send_message(pick_random(IMAGE_CAP_MESSAGES), ephemeral=True)
 
         await interaction.response.defer()
 

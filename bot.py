@@ -5,17 +5,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
-import json
-import random
+import os
 import sys
 import time
 
 import asyncpg
 import discord
-from pgvector.asyncpg import register_vector
 from aiohttp import web as _aio_web
 from discord import app_commands
 from discord.ext import commands, tasks
+from dotenv import load_dotenv
+from pgvector.asyncpg import register_vector
 
 import config
 import database
@@ -28,9 +28,6 @@ from services.audio import AudioService
 from services.metrics import PerfMetrics
 from services.youtube import YouTubeService
 from utils.logger import log
-
-from dotenv import load_dotenv
-import os
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -57,6 +54,7 @@ class DexterBot(commands.AutoShardedBot):
         (bot.py is imported by cogs; cogs import bot only via TYPE_CHECKING).
         """
         from cogs.music import NowPlayingView
+
         self.add_view(NowPlayingView(self))
         log.info("Registered persistent NowPlayingView")
 
@@ -81,9 +79,7 @@ def create_bot() -> DexterBot:
     bot = DexterBot(
         command_prefix="!",  # unused but required by commands.Bot
         intents=intents,
-        activity=discord.Activity(
-            type=discord.ActivityType.listening, name="music"
-        ),
+        activity=discord.Activity(type=discord.ActivityType.listening, name="music"),
         owner_id=config.OWNER_ID or None,  # wire configured owner so /sync auth works (WR-07)
     )
 
@@ -213,12 +209,14 @@ async def _run_health_server() -> None:
     Binds to 0.0.0.0 so Koyeb's health checker can reach it (not localhost).
     Returns the minimal {"status":"ok"} — no internal state exposed (T-05-01).
     """
+
     async def health(request: _aio_web.Request) -> _aio_web.Response:
         # Import at request time (function-scope) to avoid circular import at module load.
         # Matches the existing pattern for `from services.queue_persistence import restore_queues`.
         # Pitfall 6: health may fire before cogs are loaded → broad try/except fallback.
         try:
             from cogs.ops import gather_bot_metrics
+
             metrics = await gather_bot_metrics(bot)
             reasons = metrics.get("degraded_reasons", [])
         except Exception:
@@ -227,18 +225,16 @@ async def _run_health_server() -> None:
         # D-01: HEALTH_STRICT_STATUS (default True) → 503 when degraded; False → legacy 200.
         # D-27: body exposes ONLY status + generic reason strings (no guild/shard/pool internals).
         # D-02: single source of truth — logic.health.determine_health_status owns the decision.
-        status, body = determine_health_status(
-            reasons, getattr(config, "HEALTH_STRICT_STATUS", True)
-        )
+        status, body = determine_health_status(reasons, getattr(config, "HEALTH_STRICT_STATUS", True))
 
         return _aio_web.Response(
             text=body,
-            content_type='application/json',
+            content_type="application/json",
             status=status,
         )
 
     app = _aio_web.Application()
-    app.router.add_get('/health', health)
+    app.router.add_get("/health", health)
     runner = _aio_web.AppRunner(app)
     await runner.setup()
     try:
@@ -246,7 +242,7 @@ async def _run_health_server() -> None:
         # Railway / PC / local working unchanged. The /health route + an external
         # pinger (UptimeRobot) is what keeps a Render free web service from sleeping.
         _health_port = int(os.environ.get("PORT", "8000"))
-        site = _aio_web.TCPSite(runner, '0.0.0.0', _health_port)
+        site = _aio_web.TCPSite(runner, "0.0.0.0", _health_port)
         await site.start()
         log.info("Health endpoint listening on 0.0.0.0:%s/health", _health_port)
         # Keep the coroutine alive so the TCPSite is not torn down on return.
@@ -281,8 +277,15 @@ async def _cleanup_partial_init() -> None:
     # Loops stopped: idle_check, cache_cleanup, ytdlp_update, status_rotation,
     # memory_distill_batch (Phase 11 / D-09 path 2), memory_sweep (Phase 11 / MEM-07),
     # taste_distill_batch (Phase 13 / TASTE-03).
-    for _loop in (idle_check, cache_cleanup, ytdlp_update, status_rotation,
-                  memory_distill_batch, memory_sweep, taste_distill_batch):
+    for _loop in (
+        idle_check,
+        cache_cleanup,
+        ytdlp_update,
+        status_rotation,
+        memory_distill_batch,
+        memory_sweep,
+        taste_distill_batch,
+    ):
         try:
             if _loop.is_running():
                 _loop.cancel()
@@ -367,8 +370,8 @@ async def _initialize_once() -> None:
     _ext_dsn = config.sanitize_database_url(config.DATABASE_URL)
     _ext_conn = await asyncpg.connect(
         dsn=_ext_dsn,
-        ssl='require',                   # K-04: match pool ssl setting
-        statement_cache_size=0,          # K-04: disable prepared stmts for PgBouncer
+        ssl="require",  # K-04: match pool ssl setting
+        statement_cache_size=0,  # K-04: disable prepared stmts for PgBouncer
     )
     try:
         await _ext_conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
@@ -382,12 +385,12 @@ async def _initialize_once() -> None:
     bot.pool = await asyncpg.create_pool(
         dsn=config.sanitize_database_url(config.DATABASE_URL),
         min_size=config.DB_POOL_MIN,
-        max_size=config.DB_POOL_MAX,          # now 5 via K-04 constant update
+        max_size=config.DB_POOL_MAX,  # now 5 via K-04 constant update
         command_timeout=config.DB_COMMAND_TIMEOUT_SECONDS,
-        ssl='require',                         # K-05: explicit ssl, not via DSN string
+        ssl="require",  # K-05: explicit ssl, not via DSN string
         max_inactive_connection_lifetime=config.DB_MAX_INACTIVE_CONN_LIFETIME,  # K-04: 240s
-        statement_cache_size=config.DB_STATEMENT_CACHE_SIZE,                     # K-04: 0
-        init=_register_vector,                 # Phase 11: register vector codec on every pooled connection
+        statement_cache_size=config.DB_STATEMENT_CACHE_SIZE,  # K-04: 0
+        init=_register_vector,  # Phase 11: register vector codec on every pooled connection
     )
     await init_db(bot.pool)
 
@@ -406,6 +409,7 @@ async def _initialize_once() -> None:
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
         from services.gemini import GeminiService
+
         bot.gemini_service = GeminiService(api_key=gemini_key)
         log.info("Gemini service initialized")
     else:
@@ -418,6 +422,7 @@ async def _initialize_once() -> None:
     # and statement_cache_size=0 (Neon/K-04) is set on the pool above.
     if hasattr(bot, "gemini_service"):
         from services.memory import MemoryService
+
         bot.memory_service = MemoryService(bot.pool, bot.gemini_service)
         log.info("Memory service initialized")
 
@@ -426,16 +431,19 @@ async def _initialize_once() -> None:
     # SECURITY (T-03-18): token passed to LyricsService(); never logged here.
     genius_token = os.getenv("GENIUS_TOKEN")
     from services.lyrics import LyricsService
+
     bot.lyrics_service = LyricsService(genius_token)
     log.info("Lyrics service initialized")
 
     # Phase 2: Error log channel helper
     from utils.logger import log_to_discord as _log_to_discord
+
     bot.log_to_discord = lambda embed: _log_to_discord(bot, embed)
 
     # Phase 4: Queue persistence service (wired before cog loading so the service
     # exists on bot before MusicCog setup() runs)
     from services.queue_persistence import QueuePersistenceService
+
     bot.queue_persistence = QueuePersistenceService(bot.pool)
 
     # Load cogs (idempotent — a retry after a partial init must not double-load)
@@ -494,11 +502,13 @@ async def _initialize_once() -> None:
     # is registered (Pitfall 4). Runs before startup message so the bot is fully
     # ready before announcing itself (Anti-Pattern ordering).
     from services.queue_persistence import restore_queues
+
     await restore_queues(bot)
 
     # Phase 8: Monotonic uptime anchor — set after full init so gather_bot_metrics
     # reports time since the bot was fully ready, not since module load.
     import time as _time
+
     bot._start_monotonic = _time.monotonic()
 
 
@@ -510,7 +520,9 @@ async def _post_startup_messages() -> None:
     # Wrapped in try/except so a post failure does NOT abort startup.
     # SECURITY (T-03-19): allowed_mentions=none() prevents mention injection.
     try:
-        from personality.roasts import STARTUP_MESSAGES, pick_random as _pick_random
+        from personality.roasts import STARTUP_MESSAGES
+        from personality.roasts import pick_random as _pick_random
+
         for guild in bot.guilds:
             channel = _resolve_dexter_channel(guild)
             if channel:
@@ -533,12 +545,11 @@ async def _background_sync_retry() -> None:
     for attempt in range(1, 4):  # attempts 1, 2, 3
         await asyncio.sleep(60 * attempt)
         try:
-            synced = await asyncio.wait_for(
-                bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS
-            )
+            synced = await asyncio.wait_for(bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS)
             log.info(
                 "Command sync succeeded on retry attempt %d (%d commands)",
-                attempt, len(synced),
+                attempt,
+                len(synced),
             )
             _sync_retry_active = False
             return
@@ -552,9 +563,7 @@ async def _background_sync_retry() -> None:
 
 
 @bot.tree.error
-async def on_app_command_error(
-    interaction: discord.Interaction, error: app_commands.AppCommandError
-) -> None:
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
     """Global error handler for all slash commands."""
     if isinstance(error, app_commands.CommandOnCooldown):
         if not interaction.response.is_done():
@@ -569,8 +578,7 @@ async def on_app_command_error(
     if hasattr(bot, "log_to_discord"):
         embed = discord.Embed(
             title="Unhandled Command Error",
-            description=f"Command: {interaction.command.name if interaction.command else 'unknown'}\n"
-                        f"Error: {error}",
+            description=f"Command: {interaction.command.name if interaction.command else 'unknown'}\nError: {error}",
             color=0xFF0000,
         )
         await bot.log_to_discord(embed)
@@ -602,9 +610,7 @@ async def sync_commands(interaction: discord.Interaction, guild_id: str | None =
         guild = discord.Object(id=int(guild_id))
         bot.tree.copy_global_to(guild=guild)
         try:
-            synced = await asyncio.wait_for(
-                bot.tree.sync(guild=guild), timeout=config.SYNC_TIMEOUT_SECONDS
-            )
+            synced = await asyncio.wait_for(bot.tree.sync(guild=guild), timeout=config.SYNC_TIMEOUT_SECONDS)
             await interaction.followup.send(f"Synced {len(synced)} commands to guild {guild_id}.")
             log.info("Synced %d commands to guild %s", len(synced), guild_id)
         except Exception as exc:
@@ -618,9 +624,7 @@ async def sync_commands(interaction: discord.Interaction, guild_id: str | None =
             await interaction.followup.send(f"Sync failed: {exc}. Retrying in background.")
     else:
         try:
-            synced = await asyncio.wait_for(
-                bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS
-            )
+            synced = await asyncio.wait_for(bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS)
             await interaction.followup.send(f"Synced {len(synced)} commands globally.")
             log.info("Synced %d commands globally", len(synced))
         except Exception as exc:
@@ -735,7 +739,9 @@ async def idle_check():
                     # Only post once per silence window
                     vc._loneliness_posted = True
                     try:
-                        from personality.roasts import IDLE_LONELINESS_MESSAGES, pick_random as _pr
+                        from personality.roasts import IDLE_LONELINESS_MESSAGES
+                        from personality.roasts import pick_random as _pr
+
                         channel = _resolve_dexter_channel(guild)
                         if channel:
                             await channel.send(
@@ -772,7 +778,7 @@ async def cache_cleanup():
     if music_cog is not None:
         for queue in music_cog.queues.values():
             # Include current track and all upcoming tracks
-            for t in queue.tracks[queue.current_index:]:
+            for t in queue.tracks[queue.current_index :]:
                 protected_video_ids.add(t.video_id)
             # Include in-flight prefetch slot
             if queue._prefetch_video_id:
@@ -797,6 +803,7 @@ async def on_cache_cleanup_error(error: Exception) -> None:
 async def ytdlp_update():
     """Proactively update yt-dlp daily at 04:00 (it breaks often)."""
     from services.youtube import update_ytdlp
+
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, update_ytdlp)
 
@@ -890,7 +897,9 @@ async def memory_distill_batch() -> None:
             except Exception as exc:
                 log.debug(
                     "memory_distill_batch: error for user=%s channel=%d: %s",
-                    user_id, channel_id, exc,
+                    user_id,
+                    channel_id,
+                    exc,
                 )
 
     log.info("memory_distill_batch: batch pass complete")
@@ -966,12 +975,8 @@ async def taste_distill_batch() -> None:
     if memory_service is None or pool is None:
         return
 
-    since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
-        days=config.TASTE_LOOKBACK_DAYS
-    )
-    baseline_since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
-        days=config.TASTE_BASELINE_DAYS
-    )
+    since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=config.TASTE_LOOKBACK_DAYS)
+    baseline_since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=config.TASTE_BASELINE_DAYS)
 
     candidates = await database.get_active_taste_users(pool, since=since)
     if not candidates:
@@ -985,9 +990,7 @@ async def taste_distill_batch() -> None:
         tracks_in_window = row["tracks_in_window"]
 
         # D-08 gate: skip users below the min-activity floor for this window.
-        if not logic_taste.has_min_activity(
-            tracks_in_window, min_tracks=config.TASTE_MIN_ACTIVITY_TRACKS
-        ):
+        if not logic_taste.has_min_activity(tracks_in_window, min_tracks=config.TASTE_MIN_ACTIVITY_TRACKS):
             continue
 
         # Per-user isolation (T-13-08 / restore_queues per-guild continue discipline):
@@ -1031,7 +1034,9 @@ async def taste_distill_batch() -> None:
         except Exception as exc:
             log.debug(
                 "taste_distill_batch: error for guild=%s user=%s: %s",
-                guild_id, user_id, exc,
+                guild_id,
+                user_id,
+                exc,
             )
             continue
 
@@ -1087,9 +1092,7 @@ async def first_run(guild_id: str | None = None):
             guild = discord.Object(id=int(guild_id))
             bot.tree.copy_global_to(guild=guild)
             try:
-                synced = await asyncio.wait_for(
-                    bot.tree.sync(guild=guild), timeout=config.SYNC_TIMEOUT_SECONDS
-                )
+                synced = await asyncio.wait_for(bot.tree.sync(guild=guild), timeout=config.SYNC_TIMEOUT_SECONDS)
                 log.info(f"First-run: synced {len(synced)} commands to guild {guild_id}")
             except Exception as exc:
                 log.warning(
@@ -1098,9 +1101,7 @@ async def first_run(guild_id: str | None = None):
                 )
         else:
             try:
-                synced = await asyncio.wait_for(
-                    bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS
-                )
+                synced = await asyncio.wait_for(bot.tree.sync(), timeout=config.SYNC_TIMEOUT_SECONDS)
                 log.info(f"First-run: synced {len(synced)} commands globally")
             except Exception as exc:
                 log.warning(

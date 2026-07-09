@@ -17,7 +17,6 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-
 # ---------------------------------------------------------------------------
 # Dataclass
 # ---------------------------------------------------------------------------
@@ -30,15 +29,16 @@ class MemoryFact:
     All datetime fields carry timezone info (TIMESTAMPTZ from Postgres via asyncpg).
     ``similarity`` is the cosine similarity from the ANN search: 1 - (embedding <=> query).
     """
+
     id: int
     fact: str
     salience: float
     hit_count: int
     created_at: datetime
     last_seen_at: datetime
-    last_surfaced_at: datetime | None   # None = never surfaced (D-05 novelty guard)
+    last_surfaced_at: datetime | None  # None = never surfaced (D-05 novelty guard)
     surface_count: int
-    similarity: float                   # cosine similarity from ANN (1 - pgvector distance)
+    similarity: float  # cosine similarity from ANN (1 - pgvector distance)
 
 
 # ---------------------------------------------------------------------------
@@ -270,60 +270,62 @@ def choose_eviction(facts: list[MemoryFact], cap: int) -> list[int]:
 # sexuality, grief/trauma, PII markers, apparent-distress cues).
 # These are SUBSTRING matches against the lowercased fact text.
 # Conservative: ambiguous cases → True (drop).
-_SENSITIVE_KEYWORDS: frozenset[str] = frozenset({
-    # Mental health / self-harm
-    "depress",          # depression, depressed
-    "suicide",
-    "suicidal",
-    "self-harm",
-    "self harm",
-    "selfharm",
-    "overdose",
-    "eating disorder",
-    "anorex",           # anorexia, anorexic
-    "bulimi",           # bulimia, bulimic
-    "mental illness",
-    "mental health",
-    "panic attack",
-    "psychiatr",        # psychiatrist, psychiatric
-    "bipolar",
-    "schizophren",      # schizophrenia, schizophrenic
-    "ptsd",
-    # Grief / loss / bereavement
-    "griev",            # grief, grieving
-    "bereave",          # bereaved, bereavement
-    "mourn",            # mourning
-    "passed away",
-    "death of",
-    "lost a loved",
-    # Distress phrases (D-01: "anything said in apparent distress")
-    "want to die",
-    "wanting to die",
-    "wanna die",
-    "don't want to live",
-    "don't want to be here",
-    "feel worthless",
-    "feel hopeless",
-    "can't go on",
-    "give up on life",
-    "no reason to live",
-    # Abuse / violence
-    # NOTE: "rape" is matched via _SENSITIVE_WORD_RE (word-boundary), not here —
-    # substring matching it caught "grape"/"drape"/"scrape" (WR-02).
-    "sexually assault",
-    "domestic abuse",
-    "domestic violence",
-    # Sexuality / gender identity (private categories per D-01)
-    # NOTE: "gay" is matched via _SENSITIVE_WORD_RE (word-boundary), not here —
-    # substring matching it caught "marvin gaye"/"gayle" (WR-02).
-    "sexual orientation",
-    "coming out",
-    "lesbian",
-    "bisexual",
-    "transgender",
-    "nonbinary",
-    "non-binary",
-})
+_SENSITIVE_KEYWORDS: frozenset[str] = frozenset(
+    {
+        # Mental health / self-harm
+        "depress",  # depression, depressed
+        "suicide",
+        "suicidal",
+        "self-harm",
+        "self harm",
+        "selfharm",
+        "overdose",
+        "eating disorder",
+        "anorex",  # anorexia, anorexic
+        "bulimi",  # bulimia, bulimic
+        "mental illness",
+        "mental health",
+        "panic attack",
+        "psychiatr",  # psychiatrist, psychiatric
+        "bipolar",
+        "schizophren",  # schizophrenia, schizophrenic
+        "ptsd",
+        # Grief / loss / bereavement
+        "griev",  # grief, grieving
+        "bereave",  # bereaved, bereavement
+        "mourn",  # mourning
+        "passed away",
+        "death of",
+        "lost a loved",
+        # Distress phrases (D-01: "anything said in apparent distress")
+        "want to die",
+        "wanting to die",
+        "wanna die",
+        "don't want to live",
+        "don't want to be here",
+        "feel worthless",
+        "feel hopeless",
+        "can't go on",
+        "give up on life",
+        "no reason to live",
+        # Abuse / violence
+        # NOTE: "rape" is matched via _SENSITIVE_WORD_RE (word-boundary), not here —
+        # substring matching it caught "grape"/"drape"/"scrape" (WR-02).
+        "sexually assault",
+        "domestic abuse",
+        "domestic violence",
+        # Sexuality / gender identity (private categories per D-01)
+        # NOTE: "gay" is matched via _SENSITIVE_WORD_RE (word-boundary), not here —
+        # substring matching it caught "marvin gaye"/"gayle" (WR-02).
+        "sexual orientation",
+        "coming out",
+        "lesbian",
+        "bisexual",
+        "transgender",
+        "nonbinary",
+        "non-binary",
+    }
+)
 
 # Short/ambiguous identity & violence terms — matched on WORD BOUNDARIES only
 # (WR-02). Naive substring matching of these short tokens produced false positives
@@ -339,12 +341,8 @@ _SENSITIVE_WORD_RE: re.Pattern[str] = re.compile(
 )
 
 # PII regex patterns
-_EMAIL_RE: re.Pattern[str] = re.compile(
-    r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
-)
-_PHONE_RE: re.Pattern[str] = re.compile(
-    r"\+?\d[\d\s\-\.]{7,}\d"
-)
+_EMAIL_RE: re.Pattern[str] = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_PHONE_RE: re.Pattern[str] = re.compile(r"\+?\d[\d\s\-\.]{7,}\d")
 _ADDRESS_RE: re.Pattern[str] = re.compile(
     r"\d{1,5}\s+[a-zA-Z\s]{3,30}\s+"
     r"(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|blvd|boulevard|court|ct)\b",

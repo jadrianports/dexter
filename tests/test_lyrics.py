@@ -5,9 +5,9 @@ All tests are fully offline (no network). Network paths are mocked/patched.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Pure helper tests — these will fail until services/lyrics.py is created
@@ -61,9 +61,7 @@ class TestBuildGeniusSearchQuery:
         """The real bug: 'Billy Joel - Vienna (Audio) (Official Audio)' / channel name."""
         from services.lyrics import build_genius_search_query
 
-        title, artist = build_genius_search_query(
-            "Billy Joel - Vienna (Audio) (Official Audio)", "Trackateering Music"
-        )
+        title, artist = build_genius_search_query("Billy Joel - Vienna (Audio) (Official Audio)", "Trackateering Music")
         assert title == "Vienna"
         assert artist == "Billy Joel"
 
@@ -360,13 +358,14 @@ class TestLyricsServiceInit:
 
     def test_valid_token_creates_genius_instance(self):
         """With a token, _genius should be a Genius instance (not None)."""
-        from services.lyrics import LyricsService
         from lyricsgenius import Genius
+
+        from services.lyrics import LyricsService
 
         # We do NOT want to make real network calls, so patch the Genius constructor
         with patch("services.lyrics.Genius") as mock_genius_cls:
             mock_genius_cls.return_value = MagicMock()
-            service = LyricsService("fake-token-value")
+            LyricsService("fake-token-value")
             # Genius() was called once with the token
             mock_genius_cls.assert_called_once()
             call_args = mock_genius_cls.call_args

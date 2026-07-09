@@ -34,7 +34,6 @@ import pytest
 import config
 from cogs.memory import ForgetConfirmView, MemoryCog
 
-
 # ---------------------------------------------------------------------------
 # Helpers to build a minimal fake interaction + bot environment
 # ---------------------------------------------------------------------------
@@ -152,13 +151,13 @@ async def test_forget_empty_state_skips_confirm():
     cog = MemoryCog(bot)
 
     delete_mock = AsyncMock()
-    with patch("database.count_user_memories", new=AsyncMock(return_value=0)), \
-            patch("database.delete_all_user_memories", new=delete_mock):
+    with (
+        patch("database.count_user_memories", new=AsyncMock(return_value=0)),
+        patch("database.delete_all_user_memories", new=delete_mock),
+    ):
         await cog.memory_forget.callback(cog, interaction)
 
-    interaction.response.send_message.assert_awaited_once_with(
-        "already got nothing on you.", ephemeral=True
-    )
+    interaction.response.send_message.assert_awaited_once_with("already got nothing on you.", ephemeral=True)
     delete_mock.assert_not_awaited()
     kwargs = interaction.response.send_message.call_args.kwargs
     assert "view" not in kwargs
@@ -172,8 +171,10 @@ async def test_forget_confirm_deletes():
     cog = MemoryCog(bot)
 
     delete_mock = AsyncMock(return_value=3)
-    with patch("database.count_user_memories", new=AsyncMock(return_value=3)), \
-            patch("database.delete_all_user_memories", new=delete_mock):
+    with (
+        patch("database.count_user_memories", new=AsyncMock(return_value=3)),
+        patch("database.delete_all_user_memories", new=delete_mock),
+    ):
         await cog.memory_forget.callback(cog, interaction)
 
         kwargs = interaction.response.send_message.call_args.kwargs
@@ -195,8 +196,10 @@ async def test_forget_cancel_leaves_memories():
     cog = MemoryCog(bot)
 
     delete_mock = AsyncMock()
-    with patch("database.count_user_memories", new=AsyncMock(return_value=3)), \
-            patch("database.delete_all_user_memories", new=delete_mock):
+    with (
+        patch("database.count_user_memories", new=AsyncMock(return_value=3)),
+        patch("database.delete_all_user_memories", new=delete_mock),
+    ):
         await cog.memory_forget.callback(cog, interaction)
 
         kwargs = interaction.response.send_message.call_args.kwargs
@@ -217,9 +220,7 @@ def test_memory_subcommands_have_no_target_param():
     """No subcommand accepts a target/user parameter — self-scoped only."""
     view_params = list(inspect.signature(MemoryCog.memory_view.callback).parameters)
     forget_params = list(inspect.signature(MemoryCog.memory_forget.callback).parameters)
-    callbacks_params = list(
-        inspect.signature(MemoryCog.memory_callbacks.callback).parameters
-    )
+    callbacks_params = list(inspect.signature(MemoryCog.memory_callbacks.callback).parameters)
     assert view_params == ["self", "interaction"]
     assert forget_params == ["self", "interaction"]
     assert callbacks_params == ["self", "interaction", "setting"]
@@ -244,15 +245,11 @@ async def test_memory_callbacks_off_then_on():
     set_mock = AsyncMock()
     with patch("database.set_proactive_opt_out", new=set_mock):
         await cog.memory_callbacks.callback(cog, interaction, _make_choice("off"))
-        set_mock.assert_awaited_once_with(
-            bot.pool, user_id=str(interaction.user.id), opted_out=True
-        )
+        set_mock.assert_awaited_once_with(bot.pool, user_id=str(interaction.user.id), opted_out=True)
 
         set_mock.reset_mock()
         await cog.memory_callbacks.callback(cog, interaction, _make_choice("on"))
-        set_mock.assert_awaited_once_with(
-            bot.pool, user_id=str(interaction.user.id), opted_out=False
-        )
+        set_mock.assert_awaited_once_with(bot.pool, user_id=str(interaction.user.id), opted_out=False)
 
 
 @pytest.mark.asyncio

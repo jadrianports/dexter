@@ -6,7 +6,7 @@ These tests do NOT use asyncpg — build_seed_rows() is a pure function
 
 import pytest
 
-from scripts.seed_restore_test import build_seed_rows, SEED_USER_ID
+from scripts.seed_restore_test import SEED_USER_ID, build_seed_rows
 
 
 class TestSeedData:
@@ -99,11 +99,13 @@ class TestTzAwareHour:
     def test_tz_aware_hour_is_integer(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
+
         hour = datetime.now(tz=ZoneInfo("America/New_York")).hour
         assert isinstance(hour, int)
 
     def test_tz_aware_hour_in_valid_range(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
+
         hour = datetime.now(tz=ZoneInfo("America/New_York")).hour
         assert 0 <= hour <= 23

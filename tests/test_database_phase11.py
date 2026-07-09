@@ -28,7 +28,6 @@ import pytest
 
 import database
 
-
 # ---------------------------------------------------------------------------
 # Skip guard — mirrors test_database_phase4.py convention
 # ---------------------------------------------------------------------------
@@ -71,23 +70,17 @@ class TestWriteHelpersExist:
     def test_insert_memory_has_returning_id(self) -> None:
         """insert_memory must use RETURNING id so the caller gets the new row id."""
         src = inspect.getsource(database.insert_memory)
-        assert "RETURNING id" in src, (
-            "insert_memory must include RETURNING id in the INSERT statement"
-        )
+        assert "RETURNING id" in src, "insert_memory must include RETURNING id in the INSERT statement"
 
     def test_evict_lowest_salience_is_user_scoped(self) -> None:
         """evict_lowest_salience must include user_id = $1 guard (T-11-04c)."""
         src = inspect.getsource(database.evict_lowest_salience)
-        assert "user_id" in src, (
-            "evict_lowest_salience must filter by user_id (T-11-04c cross-user guard)"
-        )
+        assert "user_id" in src, "evict_lowest_salience must filter by user_id (T-11-04c cross-user guard)"
 
     def test_evict_lowest_salience_uses_any_binding(self) -> None:
         """ids must be bound via ANY($N) array binding — never string-interpolated."""
         src = inspect.getsource(database.evict_lowest_salience)
-        assert "ANY($" in src, (
-            "evict_lowest_salience must use ANY($N) for the ids list (T-11-04b)"
-        )
+        assert "ANY($" in src, "evict_lowest_salience must use ANY($N) for the ids list (T-11-04b)"
 
     def test_bump_memory_hit_updates_hit_count(self) -> None:
         """bump_memory_hit SQL must increment hit_count."""
@@ -114,23 +107,17 @@ class TestWriteHelpersExist:
     def test_delete_expired_memories_targets_user_memories(self) -> None:
         """delete_expired_memories must DELETE FROM user_memories."""
         src = inspect.getsource(database.delete_expired_memories)
-        assert "DELETE FROM user_memories" in src, (
-            "delete_expired_memories must DELETE FROM user_memories"
-        )
+        assert "DELETE FROM user_memories" in src, "delete_expired_memories must DELETE FROM user_memories"
 
     def test_delete_expired_memories_uses_expires_at(self) -> None:
         """delete_expired_memories must filter on expires_at (time-based decay)."""
         src = inspect.getsource(database.delete_expired_memories)
-        assert "expires_at" in src, (
-            "delete_expired_memories must include expires_at in the WHERE clause"
-        )
+        assert "expires_at" in src, "delete_expired_memories must include expires_at in the WHERE clause"
 
     def test_delete_expired_memories_is_parameterized(self) -> None:
         """delete_expired_memories must use $N params — no string interpolation (T-11-07b)."""
         src = inspect.getsource(database.delete_expired_memories)
-        assert "$1" in src, (
-            "delete_expired_memories must use $1 positional param (T-11-07b parameterization)"
-        )
+        assert "$1" in src, "delete_expired_memories must use $1 positional param (T-11-07b parameterization)"
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +134,7 @@ async def test_user_memories_table_exists(pool) -> None:
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-            " AND tablename = 'user_memories'"
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = 'user_memories'"
         )
     assert rows, "user_memories table not found — init_db may not have run the Phase 11 DDL"
 
@@ -162,9 +148,7 @@ async def test_vector_extension_active(pool) -> None:
     create_pool so this check confirms the ordering worked on a live DB.
     """
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT extname FROM pg_extension WHERE extname = 'vector'"
-        )
+        row = await conn.fetchrow("SELECT extname FROM pg_extension WHERE extname = 'vector'")
     assert row is not None, (
         "pgvector extension not active — run `CREATE EXTENSION IF NOT EXISTS vector;`"
         " in the target database or use a Neon DB (pgvector pre-installed)"
@@ -186,7 +170,8 @@ async def test_insert_and_search_memories(pool) -> None:
     - search_memories with the same embedding returns the row with similarity≈1.0
     - The returned row's fact field matches what was inserted
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     import config
 
     user_id = "test-phase11-insert-search"
@@ -206,9 +191,7 @@ async def test_insert_and_search_memories(pool) -> None:
     assert isinstance(memory_id, int) and memory_id > 0
 
     # Search with the same vector — should get similarity ≈ 1.0
-    rows = await database.search_memories(
-        pool, user_id=user_id, query_embedding=embedding, k=5
-    )
+    rows = await database.search_memories(pool, user_id=user_id, query_embedding=embedding, k=5)
     assert len(rows) == 1
     assert rows[0]["fact"] == "user likes lo-fi hip hop"
     assert float(rows[0]["similarity"]) > 0.99
@@ -222,7 +205,8 @@ async def test_bump_hit_and_surface(pool) -> None:
     - bump_memory_hit increments hit_count + salience nudge
     - bump_surfaced increments surface_count + sets last_surfaced_at
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     import config
 
     user_id = "test-phase11-bump"
@@ -273,7 +257,8 @@ async def test_evict_lowest_salience(pool) -> None:
     2. evict_lowest_salience deletes only the specified ids (user-scoped)
     3. Cross-user protection (T-11-04c): ids from another user are silently ignored
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     import config
 
     user_id = "test-phase11-evict-cap"
@@ -283,18 +268,36 @@ async def test_evict_lowest_salience(pool) -> None:
 
     # Insert two rows for user_id
     id_low = await database.insert_memory(
-        pool, user_id=user_id, guild_id=None, kind="daily_batch",
-        fact="low salience fact", embedding=embedding, salience=0.1, expires_at=expires_at,
+        pool,
+        user_id=user_id,
+        guild_id=None,
+        kind="daily_batch",
+        fact="low salience fact",
+        embedding=embedding,
+        salience=0.1,
+        expires_at=expires_at,
     )
-    id_high = await database.insert_memory(
-        pool, user_id=user_id, guild_id=None, kind="milestone",
-        fact="high salience fact", embedding=embedding, salience=0.9, expires_at=expires_at,
+    await database.insert_memory(
+        pool,
+        user_id=user_id,
+        guild_id=None,
+        kind="milestone",
+        fact="high salience fact",
+        embedding=embedding,
+        salience=0.9,
+        expires_at=expires_at,
     )
 
     # Insert one row for other_user
     id_other = await database.insert_memory(
-        pool, user_id=other_user, guild_id=None, kind="daily_batch",
-        fact="other user fact", embedding=embedding, salience=0.1, expires_at=expires_at,
+        pool,
+        user_id=other_user,
+        guild_id=None,
+        kind="daily_batch",
+        fact="other user fact",
+        embedding=embedding,
+        salience=0.1,
+        expires_at=expires_at,
     )
 
     count_before = await database.count_user_memories(pool, user_id)
@@ -320,11 +323,12 @@ async def test_delete_expired(pool) -> None:
     Also inserts one high-salience row with the same expired timestamp — it must
     survive (T-11-07b over-broad-delete guard).
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     import config
 
     now = datetime.now(timezone.utc)
-    past = now - timedelta(days=1)           # already expired
+    past = now - timedelta(days=1)  # already expired
     embedding = [0.4] * config.EMBED_DIM
 
     user_id = "test-phase11-sweep"
@@ -337,8 +341,8 @@ async def test_delete_expired(pool) -> None:
         kind="daily_batch",
         fact="low salience expired fact",
         embedding=embedding,
-        salience=0.2,          # below MEMORY_DECAY_SALIENCE_FLOOR (0.5)
-        expires_at=past,       # already past
+        salience=0.2,  # below MEMORY_DECAY_SALIENCE_FLOOR (0.5)
+        expires_at=past,  # already past
     )
     assert isinstance(id_low, int) and id_low > 0
 
@@ -350,8 +354,8 @@ async def test_delete_expired(pool) -> None:
         kind="milestone",
         fact="high salience expired fact",
         embedding=embedding,
-        salience=1.0,          # above floor — must survive
-        expires_at=past,       # also past, but salience guards it
+        salience=1.0,  # above floor — must survive
+        expires_at=past,  # also past, but salience guards it
     )
     assert isinstance(id_high, int) and id_high > 0
 
@@ -363,6 +367,4 @@ async def test_delete_expired(pool) -> None:
     count_after = await database.count_user_memories(pool, user_id)
 
     assert deleted >= 1, "At least one expired low-salience row should be swept"
-    assert count_after == 1, (
-        "High-salience expired row must survive sweep (T-11-07b); only low-salience swept"
-    )
+    assert count_after == 1, "High-salience expired row must survive sweep (T-11-07b); only low-salience swept"

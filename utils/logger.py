@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sys
 import logging
+import sys
 from logging.handlers import TimedRotatingFileHandler
 
 import discord
@@ -68,6 +68,7 @@ async def log_to_discord(bot, embed: discord.Embed) -> None:
         if pool is not None:
             try:
                 from database import increment_daily_stat
+
                 await increment_daily_stat(pool, "total_errors")
             except Exception:
                 pass  # never let total_errors tracking break the logger

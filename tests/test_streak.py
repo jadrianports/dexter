@@ -10,19 +10,20 @@ import pytest
 
 from database import compute_streak, get_local_date
 
-
 TZ = "America/New_York"
 
 
 class TestGetLocalDate:
     def test_returns_date_object(self):
         from datetime import date
+
         result = get_local_date(TZ)
         assert isinstance(result, date)
 
     def test_matches_datetime_now_tz(self):
-        from datetime import datetime, date
+        from datetime import date, datetime
         from zoneinfo import ZoneInfo
+
         expected = datetime.now(tz=ZoneInfo(TZ)).date()
         result = get_local_date(TZ)
         assert result == expected

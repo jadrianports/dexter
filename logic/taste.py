@@ -148,9 +148,7 @@ def summarize_taste(
     return phrases
 
 
-def select_positive_taste_context(
-    member_facts: list[list[str]], *, cap: int
-) -> list[str]:
+def select_positive_taste_context(member_facts: list[list[str]], *, cap: int) -> list[str]:
     """Flatten per-member recalled taste_episode facts into one capped, deduped list (D-03).
 
     Args:

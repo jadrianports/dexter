@@ -55,6 +55,7 @@ def update_ytdlp() -> bool:
         log.error(f"yt-dlp update failed: {e}")
         return False
 
+
 SEARCH_OPTS = {
     "quiet": True,
     "no_warnings": True,
@@ -82,12 +83,12 @@ DOWNLOAD_OPTS = {
         {
             "key": "SponsorBlock",
             "categories": config.SPONSORBLOCK_CATEGORIES,
-            "when": "after_filter",    # REQUIRED: populates chapters before ModifyChapters runs (Pitfall 1)
+            "when": "after_filter",  # REQUIRED: populates chapters before ModifyChapters runs (Pitfall 1)
         },
         {
             "key": "FFmpegExtractAudio",
             "preferredcodec": "opus",
-            "preferredquality": config.AUDIO_QUALITY,   # unchanged; no effect on copy path (D-01)
+            "preferredquality": config.AUDIO_QUALITY,  # unchanged; no effect on copy path (D-01)
         },
         {
             "key": "ModifyChapters",
@@ -149,9 +150,7 @@ class YouTubeService:
         if duration is None or data.get("is_live"):
             raise ValueError("Livestream URLs are not supported")
         if duration > config.MAX_SONG_DURATION_SECONDS:
-            raise ValueError(
-                f"Duration {duration}s exceeds max of {config.MAX_SONG_DURATION_SECONDS}s"
-            )
+            raise ValueError(f"Duration {duration}s exceeds max of {config.MAX_SONG_DURATION_SECONDS}s")
 
         artist = data.get("artist") or data.get("uploader") or None
         thumbnails = data.get("thumbnails") or []
@@ -181,7 +180,9 @@ class YouTubeService:
                 {
                     "video_id": video_id,
                     "title": entry.get("title", "Unknown"),
-                    "url": entry.get("webpage_url") or entry.get("url") or f"https://www.youtube.com/watch?v={video_id}",
+                    "url": entry.get("webpage_url")
+                    or entry.get("url")
+                    or f"https://www.youtube.com/watch?v={video_id}",
                     "duration": entry.get("duration"),
                     "thumbnail": thumbnail,
                 }
@@ -212,7 +213,9 @@ class YouTubeService:
             if cached.exists():
                 log.info(
                     "download complete video_id=%s codec_path=%s elapsed=%.2fs",
-                    video_id, _codec_path["value"], elapsed,
+                    video_id,
+                    _codec_path["value"],
+                    elapsed,
                 )
                 return cached
             return None
@@ -235,7 +238,9 @@ class YouTubeService:
                 if cached.exists():
                     log.info(
                         "download complete video_id=%s codec_path=%s elapsed=%.2fs",
-                        video_id, _codec_path["value"], elapsed,
+                        video_id,
+                        _codec_path["value"],
+                        elapsed,
                     )
                     return cached
             except Exception as retry_error:
@@ -255,9 +260,7 @@ class YouTubeService:
         last_exc: Exception | None = None
         for attempt in range(config.YTDLP_MAX_QUICK_RETRIES + 1):
             try:
-                return await loop.run_in_executor(
-                    None, functools.partial(self.search, query, count)
-                )
+                return await loop.run_in_executor(None, functools.partial(self.search, query, count))
             except Exception as exc:
                 last_exc = exc
                 if not _is_transient_ytdlp_error(exc):
@@ -265,7 +268,9 @@ class YouTubeService:
                 if attempt < config.YTDLP_MAX_QUICK_RETRIES:
                     log.warning(
                         "search attempt %d/%d failed (transient): %s",
-                        attempt + 1, config.YTDLP_MAX_QUICK_RETRIES + 1, exc,
+                        attempt + 1,
+                        config.YTDLP_MAX_QUICK_RETRIES + 1,
+                        exc,
                     )
                     await asyncio.sleep(config.YTDLP_RETRY_BACKOFF_SECONDS * (attempt + 1))
                 else:
@@ -276,9 +281,7 @@ class YouTubeService:
                         log.warning("search exhausted quick retries; attempting yt-dlp update")
                         await loop.run_in_executor(None, update_ytdlp)
                     try:
-                        return await loop.run_in_executor(
-                            None, functools.partial(self.search, query, count)
-                        )
+                        return await loop.run_in_executor(None, functools.partial(self.search, query, count))
                     except Exception as final_exc:
                         log.error("search failed after update: %s", final_exc)
                         raise
@@ -294,9 +297,7 @@ class YouTubeService:
         last_exc: Exception | None = None
         for attempt in range(config.YTDLP_MAX_QUICK_RETRIES + 1):
             try:
-                return await loop.run_in_executor(
-                    None, functools.partial(self.extract, url)
-                )
+                return await loop.run_in_executor(None, functools.partial(self.extract, url))
             except Exception as exc:
                 last_exc = exc
                 if not _is_transient_ytdlp_error(exc):
@@ -304,7 +305,9 @@ class YouTubeService:
                 if attempt < config.YTDLP_MAX_QUICK_RETRIES:
                     log.warning(
                         "extract attempt %d/%d failed (transient): %s",
-                        attempt + 1, config.YTDLP_MAX_QUICK_RETRIES + 1, exc,
+                        attempt + 1,
+                        config.YTDLP_MAX_QUICK_RETRIES + 1,
+                        exc,
                     )
                     await asyncio.sleep(config.YTDLP_RETRY_BACKOFF_SECONDS * (attempt + 1))
                 else:
@@ -315,9 +318,7 @@ class YouTubeService:
                         log.warning("extract exhausted quick retries; attempting yt-dlp update")
                         await loop.run_in_executor(None, update_ytdlp)
                     try:
-                        return await loop.run_in_executor(
-                            None, functools.partial(self.extract, url)
-                        )
+                        return await loop.run_in_executor(None, functools.partial(self.extract, url))
                     except Exception as final_exc:
                         log.error("extract failed after update: %s", final_exc)
                         raise

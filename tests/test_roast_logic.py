@@ -15,21 +15,21 @@ from logic.roasts import RoastScenario, cooldown_elapsed, decide_ambient_roast
 
 # Hours derived from config so tests track config, not magic numbers
 _LATE_NIGHT_LOW, _LATE_NIGHT_HIGH = config.LATE_NIGHT_HOURS  # (1, 5) inclusive
-HOUR_LATE_NIGHT = _LATE_NIGHT_LOW + 1      # 2 — safely inside the window
-HOUR_NORMAL = 12                           # noon — outside any late-night window
+HOUR_LATE_NIGHT = _LATE_NIGHT_LOW + 1  # 2 — safely inside the window
+HOUR_NORMAL = 12  # noon — outside any late-night window
 
 # Rolls that pass the respective gates
-CHANCE_PASS = config.UNPROMPTED_ROAST_CHANCE - 0.01   # just under the threshold
-CHANCE_FAIL = config.UNPROMPTED_ROAST_CHANCE           # exactly at threshold → NONE
+CHANCE_PASS = config.UNPROMPTED_ROAST_CHANCE - 0.01  # just under the threshold
+CHANCE_FAIL = config.UNPROMPTED_ROAST_CHANCE  # exactly at threshold → NONE
 
-LATE_NIGHT_PASS = config.LATE_NIGHT_ROAST_CHANCE - 0.01   # just under → LATE_NIGHT
-LATE_NIGHT_FAIL = config.LATE_NIGHT_ROAST_CHANCE           # exactly at → NONE
+LATE_NIGHT_PASS = config.LATE_NIGHT_ROAST_CHANCE - 0.01  # just under → LATE_NIGHT
+LATE_NIGHT_FAIL = config.LATE_NIGHT_ROAST_CHANCE  # exactly at → NONE
 
 # Cooldown deltas
-CEILING = config.AMBIENT_ROAST_CEILING_SECONDS   # 300
-DELTA_AT_CEILING = float(CEILING)               # exactly at ceiling → elapsed
-DELTA_ONE_UNDER = float(CEILING) - 1.0          # one second short → not elapsed
-DELTA_WELL_OVER = float(CEILING) + 60.0         # well over → elapsed
+CEILING = config.AMBIENT_ROAST_CEILING_SECONDS  # 300
+DELTA_AT_CEILING = float(CEILING)  # exactly at ceiling → elapsed
+DELTA_ONE_UNDER = float(CEILING) - 1.0  # one second short → not elapsed
+DELTA_WELL_OVER = float(CEILING) + 60.0  # well over → elapsed
 
 
 # ---------------------------------------------------------------------------

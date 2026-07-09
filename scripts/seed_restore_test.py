@@ -31,9 +31,7 @@ import asyncio
 import json
 import os
 import subprocess
-import sys
 import tempfile
-from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
@@ -43,7 +41,7 @@ import asyncpg
 # ---------------------------------------------------------------------------
 
 THROWAWAY_DB = "dexter_restore_test"  # target for all restore/createdb/dropdb ops
-SEED_USER_ID = "999999999999999999"   # obviously-fake Discord snowflake
+SEED_USER_ID = "999999999999999999"  # obviously-fake Discord snowflake
 
 MIN_DUMP_SIZE_BYTES = 1024  # guard: a valid pg_dump custom-format file is > 1 KB
 BUCKET = "dexter-backups"
@@ -162,8 +160,12 @@ async def _seed(pool: asyncpg.Pool, rows: dict) -> None:
                     "   current_streak = EXCLUDED.current_streak,"
                     "   longest_streak = EXCLUDED.longest_streak,"
                     "   last_streak_date = EXCLUDED.last_streak_date",
-                    p["user_id"], p["username"], p["total_songs_queued"],
-                    p["current_streak"], p["longest_streak"], p["last_streak_date"],
+                    p["user_id"],
+                    p["username"],
+                    p["total_songs_queued"],
+                    p["current_streak"],
+                    p["longest_streak"],
+                    p["last_streak_date"],
                 )
             # song_history
             for s in rows["song_history"]:
@@ -171,8 +173,12 @@ async def _seed(pool: asyncpg.Pool, rows: dict) -> None:
                     "INSERT INTO song_history"
                     " (guild_id, user_id, title, artist, url, duration_seconds)"
                     " VALUES ($1, $2, $3, $4, $5, $6)",
-                    s["guild_id"], s["user_id"], s["title"],
-                    s["artist"], s["url"], s["duration_seconds"],
+                    s["guild_id"],
+                    s["user_id"],
+                    s["title"],
+                    s["artist"],
+                    s["url"],
+                    s["duration_seconds"],
                 )
             # user_artist_counts
             for a in rows["user_artist_counts"]:
@@ -181,11 +187,15 @@ async def _seed(pool: asyncpg.Pool, rows: dict) -> None:
                     " VALUES ($1, $2, $3)"
                     " ON CONFLICT (user_id, artist)"
                     " DO UPDATE SET play_count = EXCLUDED.play_count",
-                    a["user_id"], a["artist"], a["play_count"],
+                    a["user_id"],
+                    a["artist"],
+                    a["play_count"],
                 )
-    print(f"[seed_restore_test] Seeded {len(rows['user_profiles'])} user_profiles, "
-          f"{len(rows['song_history'])} song_history, "
-          f"{len(rows['user_artist_counts'])} user_artist_counts rows into live DB.")
+    print(
+        f"[seed_restore_test] Seeded {len(rows['user_profiles'])} user_profiles, "
+        f"{len(rows['song_history'])} song_history, "
+        f"{len(rows['user_artist_counts'])} user_artist_counts rows into live DB."
+    )
 
 
 async def _cleanup_seed() -> None:
@@ -201,15 +211,9 @@ async def _cleanup_seed() -> None:
     try:
         async with pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute(
-                    "DELETE FROM song_history WHERE user_id = $1", SEED_USER_ID
-                )
-                await conn.execute(
-                    "DELETE FROM user_artist_counts WHERE user_id = $1", SEED_USER_ID
-                )
-                await conn.execute(
-                    "DELETE FROM user_profiles WHERE user_id = $1", SEED_USER_ID
-                )
+                await conn.execute("DELETE FROM song_history WHERE user_id = $1", SEED_USER_ID)
+                await conn.execute("DELETE FROM user_artist_counts WHERE user_id = $1", SEED_USER_ID)
+                await conn.execute("DELETE FROM user_profiles WHERE user_id = $1", SEED_USER_ID)
     finally:
         await pool.close()
     print(f"[seed_restore_test] Removed seed rows for user {SEED_USER_ID} from live DB.")
@@ -235,20 +239,14 @@ async def _verify(pool: asyncpg.Pool, expected: dict) -> None:
     expected_sh = len(expected["song_history"])
     expected_uac = len(expected["user_artist_counts"])
 
-    print(f"[seed_restore_test] Restore verification:")
+    print("[seed_restore_test] Restore verification:")
     print(f"  user_profiles  (seed user): expected={expected_up}, got={up_count}")
     print(f"  song_history   (seed user): expected={expected_sh}, got={sh_count}")
     print(f"  user_artist_counts (seed user): expected={expected_uac}, got={uac_count}")
 
-    assert up_count == expected_up, (
-        f"user_profiles mismatch: expected {expected_up}, got {up_count}"
-    )
-    assert sh_count == expected_sh, (
-        f"song_history mismatch: expected {expected_sh}, got {sh_count}"
-    )
-    assert uac_count == expected_uac, (
-        f"user_artist_counts mismatch: expected {expected_uac}, got {uac_count}"
-    )
+    assert up_count == expected_up, f"user_profiles mismatch: expected {expected_up}, got {up_count}"
+    assert sh_count == expected_sh, f"song_history mismatch: expected {expected_sh}, got {sh_count}"
+    assert uac_count == expected_uac, f"user_artist_counts mismatch: expected {expected_uac}, got {uac_count}"
     print("[seed_restore_test] All row counts match. Restore verified OK.")
 
 
@@ -261,7 +259,9 @@ def _get_oci_namespace() -> str:
     """Retrieve the OCI Object Storage namespace."""
     result = subprocess.run(
         ["oci", "os", "ns", "get", "--query", "data", "--raw-output"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
@@ -271,32 +271,46 @@ def _download_latest_dump(namespace: str, dest_path: str) -> None:
     # List objects sorted by name (timestamps embedded in name give chronological order)
     result = subprocess.run(
         [
-            "oci", "os", "object", "list",
-            "--namespace-name", namespace,
-            "--bucket-name", BUCKET,
-            "--prefix", "dexter_",
-            "--query", "data[*].name",
-            "--output", "json",
+            "oci",
+            "os",
+            "object",
+            "list",
+            "--namespace-name",
+            namespace,
+            "--bucket-name",
+            BUCKET,
+            "--prefix",
+            "dexter_",
+            "--query",
+            "data[*].name",
+            "--output",
+            "json",
         ],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     names = json.loads(result.stdout)
     if not names:
-        raise RuntimeError(
-            f"No objects with prefix 'dexter_' found in bucket '{BUCKET}'. "
-            "Has backup.sh been run yet?"
-        )
+        raise RuntimeError(f"No objects with prefix 'dexter_' found in bucket '{BUCKET}'. Has backup.sh been run yet?")
     # Names are ISO-timestamped — lexicographic sort gives chronological order
     latest = sorted(names)[-1]
     print(f"[seed_restore_test] Downloading latest dump: {latest}")
 
     subprocess.run(
         [
-            "oci", "os", "object", "get",
-            "--namespace-name", namespace,
-            "--bucket-name", BUCKET,
-            "--name", latest,
-            "--file", dest_path,
+            "oci",
+            "os",
+            "object",
+            "get",
+            "--namespace-name",
+            namespace,
+            "--bucket-name",
+            BUCKET,
+            "--name",
+            latest,
+            "--file",
+            dest_path,
         ],
         check=True,
     )
@@ -343,8 +357,10 @@ def _restore_into_throwaway(dump_path: str) -> None:
     _docker_exec_stdin(
         dump_bytes,
         "pg_restore",
-        "-U", "dexter",
-        "-d", THROWAWAY_DB,  # always the throwaway — never the live DB
+        "-U",
+        "dexter",
+        "-d",
+        THROWAWAY_DB,  # always the throwaway — never the live DB
         "--no-owner",
         "--no-acl",
     )
@@ -387,9 +403,7 @@ async def main() -> None:
         # 3. Download the newest dump from OCI
         print("[seed_restore_test] Step 3: Downloading latest dump from OCI...")
         namespace = _get_oci_namespace()
-        with tempfile.NamedTemporaryFile(
-            suffix=".dump", delete=False, prefix="dexter_restore_"
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".dump", delete=False, prefix="dexter_restore_") as tmp:
             dump_path = tmp.name
 
         try:

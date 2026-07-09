@@ -16,8 +16,7 @@ def get_seasonal_context() -> str:
 
     if month == 12:
         return (
-            "It's December. If someone queues Mariah Carey you should express "
-            "dread. Christmas music is your nemesis."
+            "It's December. If someone queues Mariah Carey you should express dread. Christmas music is your nemesis."
         )
     if month == 10:
         return "It's October / spooky season. Reluctantly tolerant of Halloween playlists."
@@ -46,9 +45,6 @@ def get_seasonal_context() -> str:
             "barbecue. The ones still in Discord are the interesting half. Don't tell them that."
         )
     if month in (6, 7, 8):
-        return (
-            "It's summer. Everyone's supposedly outside but here they are in Discord. "
-            "Note the irony when relevant."
-        )
+        return "It's summer. Everyone's supposedly outside but here they are in Discord. Note the irony when relevant."
 
     return ""

@@ -4,26 +4,26 @@ from __future__ import annotations
 
 import discord
 
-from models.queue import Track, LoopMode, MusicQueue
+from models.queue import MusicQueue, Track
 from personality.responses import (
-    pick_random,
+    LEADERBOARD_EMPTY,
+    LEADERBOARD_SKIPS_COMMENTARY,
     LEADERBOARD_SONGS_COMMENTARY,
     LEADERBOARD_STREAK_COMMENTARY,
-    LEADERBOARD_SKIPS_COMMENTARY,
-    LEADERBOARD_EMPTY,
-    SKIPS_RATE_ROASTS,
     SKIPS_NOT_ENOUGH_DATA,
+    SKIPS_RATE_ROASTS,
+    pick_random,
 )
 from utils.formatters import format_duration, progress_bar
 
 # Brand colors
-COLOR_NOW_PLAYING = 0x2C76DD   # blue
-COLOR_QUEUED = 0xDF1141        # red
-COLOR_SUCCESS = 0x0EAA51       # green
-COLOR_ERROR = 0x7D3243         # dark pink
-COLOR_QUEUE_LIST = 0x40EC88    # light green
-COLOR_LEADERBOARD = 0xFFD700   # gold — competitive/social
-COLOR_STATS = 0x7289DA         # discord blurple — ops/system
+COLOR_NOW_PLAYING = 0x2C76DD  # blue
+COLOR_QUEUED = 0xDF1141  # red
+COLOR_SUCCESS = 0x0EAA51  # green
+COLOR_ERROR = 0x7D3243  # dark pink
+COLOR_QUEUE_LIST = 0x40EC88  # light green
+COLOR_LEADERBOARD = 0xFFD700  # gold — competitive/social
+COLOR_STATS = 0x7289DA  # discord blurple — ops/system
 
 
 def now_playing(track: Track, queue: MusicQueue, elapsed: int | None = None) -> discord.Embed:
@@ -111,9 +111,7 @@ def queue_list(queue: MusicQueue, page: int = 0, per_page: int = 10) -> discord.
     for i in range(start, end):
         track = queue.tracks[i]
         marker = "▶ " if i == queue.current_index else ""
-        lines.append(
-            f"`{i + 1}.` {marker}**{track.title}** [{format_duration(track.duration_seconds)}]"
-        )
+        lines.append(f"`{i + 1}.` {marker}**{track.title}** [{format_duration(track.duration_seconds)}]")
 
     if lines:
         embed.add_field(name="Tracks", value="\n".join(lines), inline=False)
@@ -148,10 +146,7 @@ def leaderboard_embed(
 
     # Section 1: Most songs queued
     if songs_rows:
-        lines = [
-            f"{i + 1}. {r['username']} — {r['songs_queued']} songs"
-            for i, r in enumerate(songs_rows)
-        ]
+        lines = [f"{i + 1}. {r['username']} — {r['songs_queued']} songs" for i, r in enumerate(songs_rows)]
         commentary = pick_random(LEADERBOARD_SONGS_COMMENTARY)
         embed.add_field(
             name="most songs queued",
@@ -167,10 +162,7 @@ def leaderboard_embed(
 
     # Section 2: Longest streak (guild-active users by global streak, D-15)
     if streaks_rows:
-        lines = [
-            f"{i + 1}. {r['username']} — {r['longest_streak']} days"
-            for i, r in enumerate(streaks_rows)
-        ]
+        lines = [f"{i + 1}. {r['username']} — {r['longest_streak']} days" for i, r in enumerate(streaks_rows)]
         commentary = pick_random(LEADERBOARD_STREAK_COMMENTARY)
         embed.add_field(
             name="longest streak",
@@ -186,10 +178,7 @@ def leaderboard_embed(
 
     # Section 3: Most-skipped songs (titles, per-guild, D-12)
     if skips_rows:
-        lines = [
-            f"{i + 1}. {r['title']} — {r['skip_count']} skips"
-            for i, r in enumerate(skips_rows)
-        ]
+        lines = [f"{i + 1}. {r['title']} — {r['skip_count']} skips" for i, r in enumerate(skips_rows)]
         commentary = pick_random(LEADERBOARD_SKIPS_COMMENTARY)
         embed.add_field(
             name="most-skipped songs",
@@ -224,10 +213,7 @@ def skips_embed(
 
     # Server most-skipped songs
     if skips_rows:
-        lines = [
-            f"{i + 1}. {r['title']} — {r['skip_count']} skips"
-            for i, r in enumerate(skips_rows)
-        ]
+        lines = [f"{i + 1}. {r['title']} — {r['skip_count']} skips" for i, r in enumerate(skips_rows)]
         commentary = pick_random(LEADERBOARD_SKIPS_COMMENTARY)
         embed.add_field(
             name="most-skipped songs",

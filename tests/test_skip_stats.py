@@ -15,6 +15,7 @@ Coverage:
 from __future__ import annotations
 
 import pytest
+
 from logic.skip_stats import compute_skip_rate
 
 

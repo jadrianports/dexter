@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 import config
@@ -85,7 +85,7 @@ class MusicQueue:
         # Active audio filter preset (Phase 7). "off" = no filter.
         self.active_filter: str = "off"
         # Phase 6: prefetch state — cleared on queue clear (PERF-01, D-04)
-        self._prefetch_video_id: str | None = None   # video_id currently being prefetched
+        self._prefetch_video_id: str | None = None  # video_id currently being prefetched
         self._prefetch_task: asyncio.Task | None = None  # in-flight prefetch task
 
     def add(self, track: Track) -> int:
@@ -94,9 +94,7 @@ class MusicQueue:
         Raises QueueFullError if the queue has reached MAX_QUEUE_SIZE_PER_GUILD.
         """
         if len(self.tracks) >= config.MAX_QUEUE_SIZE_PER_GUILD:
-            raise QueueFullError(
-                f"Queue is at capacity ({config.MAX_QUEUE_SIZE_PER_GUILD} tracks)."
-            )
+            raise QueueFullError(f"Queue is at capacity ({config.MAX_QUEUE_SIZE_PER_GUILD} tracks).")
         self.tracks.append(track)
         return len(self.tracks) - 1
 
@@ -189,9 +187,7 @@ class MusicQueue:
         """
         if self.playback_started_at is None:
             return 0
-        ref = self.paused_at if self.paused_at is not None else (
-            now if now is not None else time.monotonic()
-        )
+        ref = self.paused_at if self.paused_at is not None else (now if now is not None else time.monotonic())
         elapsed = int(ref - self.playback_started_at)
         elapsed = max(0, elapsed)
         track = self.get_current()
@@ -238,7 +234,7 @@ class MusicQueue:
 
     def upcoming(self) -> list[Track]:
         """Return tracks after the current one."""
-        return self.tracks[self.current_index + 1:]
+        return self.tracks[self.current_index + 1 :]
 
     def __len__(self) -> int:
         return len(self.tracks)

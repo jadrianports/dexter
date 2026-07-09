@@ -17,18 +17,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import discord
 import pytest
 
-from services.gemini import GeminiRateLimitError
 from personality.roasts import (
-    ROAST_COMMAND_LINES,
-    ROAST_SELF_LINES,
     ROAST_BOT_LINES,
+    ROAST_COMMAND_LINES,
     ROAST_NO_HISTORY_LINES,
+    ROAST_SELF_LINES,
 )
-
+from services.gemini import GeminiRateLimitError
 
 # ---------------------------------------------------------------------------
 # Helpers to build a minimal fake interaction + bot environment
 # ---------------------------------------------------------------------------
+
 
 def _make_bot(bot_user_id: int = 999) -> MagicMock:
     """Return a minimal fake bot with a pool and a gemini_service."""
@@ -82,6 +82,7 @@ async def _invoke_roast(bot, interaction, target):
     passing cog as the first 'self' argument explicitly.
     """
     from cogs.ai import AICog
+
     cog = AICog(bot)
     # .callback is the raw coroutine; pass cog as self
     await cog.roast.callback(cog, interaction, target)
@@ -90,6 +91,7 @@ async def _invoke_roast(bot, interaction, target):
 # ---------------------------------------------------------------------------
 # test_roast_template_fallback
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_roast_template_fallback():
@@ -126,6 +128,7 @@ async def test_roast_template_fallback():
 # ---------------------------------------------------------------------------
 # test_roast_edge_cases
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_roast_edge_cases():
@@ -212,6 +215,7 @@ async def test_roast_edge_cases():
 # test_roast_uses_priority_1
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_roast_uses_priority_1():
     """gemini.chat must be called with priority=1 (D-05 / Pitfall 3)."""
@@ -237,14 +241,13 @@ async def test_roast_uses_priority_1():
     call_args = gemini_service.chat.call_args[0]
     # priority may be passed as positional or keyword
     priority_value = call_kwargs.get("priority") if "priority" in call_kwargs else call_args[2]
-    assert priority_value == 1, (
-        f"Expected priority=1 for /roast Gemini call, got priority={priority_value}"
-    )
+    assert priority_value == 1, f"Expected priority=1 for /roast Gemini call, got priority={priority_value}"
 
 
 # ---------------------------------------------------------------------------
 # test_roast_no_mass_mention
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_roast_no_mass_mention():
@@ -269,9 +272,7 @@ async def test_roast_no_mass_mention():
     interaction.followup.send.assert_called_once()
     call_kwargs = interaction.followup.send.call_args[1]
     allowed_mentions = call_kwargs.get("allowed_mentions")
-    assert allowed_mentions is not None, (
-        "followup.send must include allowed_mentions kwarg"
-    )
+    assert allowed_mentions is not None, "followup.send must include allowed_mentions kwarg"
     assert isinstance(allowed_mentions, discord.AllowedMentions), (
         f"allowed_mentions must be discord.AllowedMentions, got {type(allowed_mentions)}"
     )

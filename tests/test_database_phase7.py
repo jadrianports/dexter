@@ -18,17 +18,16 @@ import pytest
 from database import (
     add_favorite,
     count_favorites,
+    count_playlists,
+    delete_playlist,
     get_favorites,
+    get_playlist,
+    list_playlists,
     remove_favorite,
     # playlist helpers (Plan 04)
     save_playlist,
-    get_playlist,
-    list_playlists,
-    delete_playlist,
-    count_playlists,
 )
 from models.queue import Track
-
 
 # ---------------------------------------------------------------------------
 # TestUserFavoritesSchema — table exists after init_db
@@ -42,9 +41,7 @@ class TestUserFavoritesSchema:
     async def test_user_favorites_table_exists(self, pool):
         """init_db must create user_favorites table."""
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-            )
+            rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         tables = {r["tablename"] for r in rows}
         assert "user_favorites" in tables, "user_favorites table not found"
 
@@ -304,6 +301,7 @@ class TestRemoveFavorite:
 # Helper: build a minimal Track snapshot (list of dicts via to_dict)
 # ---------------------------------------------------------------------------
 
+
 def _make_snapshot(n: int, user_id: int = 999) -> list[dict]:
     """Return a list of n Track.to_dict() dicts for testing round-trips."""
     return [
@@ -332,9 +330,7 @@ class TestUserPlaylistsSchema:
     async def test_user_playlists_table_exists(self, pool):
         """init_db must create user_playlists table."""
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-            )
+            rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         tables = {r["tablename"] for r in rows}
         assert "user_playlists" in tables, "user_playlists table not found"
 
@@ -538,9 +534,7 @@ class TestCountPlaylists:
     async def test_count_playlists_increments(self, pool):
         """count_playlists increments with each new playlist."""
         for i in range(3):
-            await save_playlist(
-                pool, user_id="p16", name=f"list_{i}", snapshot=_make_snapshot(1)
-            )
+            await save_playlist(pool, user_id="p16", name=f"list_{i}", snapshot=_make_snapshot(1))
         assert await count_playlists(pool, user_id="p16") == 3
 
     @pytest.mark.asyncio

@@ -2,13 +2,13 @@
 
 from cogs.ai import parse_suggestions
 from personality.prompts import (
+    DEXTER_SYSTEM_PROMPT,
+    MOOD_CONTEXTS,
+    MUSIC_RECOMMENDATION_PROMPT,
     build_chat_prompt,
     build_discover_commentary_prompt,
     build_jam_suggestion_prompt,
     build_recommendation_prompt,
-    DEXTER_SYSTEM_PROMPT,
-    MOOD_CONTEXTS,
-    MUSIC_RECOMMENDATION_PROMPT,
 )
 
 
@@ -50,19 +50,18 @@ class TestDexterSystemPromptStructure:
     def test_contains_all_format_placeholders(self):
         """build_chat_prompt depends on all five placeholder tokens."""
         for token in [
-            "{max_length}", "{mood_context}", "{user_context}",
-            "{seasonal_context}", "{memory_context}",
+            "{max_length}",
+            "{mood_context}",
+            "{user_context}",
+            "{seasonal_context}",
+            "{memory_context}",
         ]:
-            assert token in DEXTER_SYSTEM_PROMPT, (
-                f"Missing placeholder {token!r} in DEXTER_SYSTEM_PROMPT"
-            )
+            assert token in DEXTER_SYSTEM_PROMPT, f"Missing placeholder {token!r} in DEXTER_SYSTEM_PROMPT"
 
     def test_contains_at_least_four_dexter_exemplar_markers(self):
         """D-06: few-shot section requires ≥4 DEXTER: exemplar markers."""
         count = DEXTER_SYSTEM_PROMPT.count("DEXTER:")
-        assert count >= 4, (
-            f"Expected ≥4 'DEXTER:' markers in system prompt; found {count}"
-        )
+        assert count >= 4, f"Expected ≥4 'DEXTER:' markers in system prompt; found {count}"
 
     def test_contains_canonical_formula_line(self):
         """The locked canonical exemplar from CONTEXT.md must be present."""
@@ -73,8 +72,7 @@ class TestDexterSystemPromptStructure:
         lower = DEXTER_SYSTEM_PROMPT.lower()
         # At least one of the banned-mode markers must appear
         assert any(
-            phrase in lower
-            for phrase in ["banned", "never reference", "do not", "fourth wall", "self-deprecat"]
+            phrase in lower for phrase in ["banned", "never reference", "do not", "fourth wall", "self-deprecat"]
         ), "Banned-mode rules not found in DEXTER_SYSTEM_PROMPT"
 
     def test_build_chat_prompt_no_unfilled_placeholders(self):
@@ -82,9 +80,7 @@ class TestDexterSystemPromptStructure:
         result = build_chat_prompt("normal", "top artist: drake", "It's December.")
         assert result, "build_chat_prompt returned empty string"
         for key in ["max_length", "mood_context", "user_context", "seasonal_context", "memory_context"]:
-            assert "{" + key + "}" not in result, (
-                f"Unfilled placeholder {{{key}}} in build_chat_prompt output"
-            )
+            assert "{" + key + "}" not in result, f"Unfilled placeholder {{{key}}} in build_chat_prompt output"
 
     def test_build_chat_prompt_no_key_error(self):
         """build_chat_prompt must not raise KeyError on valid inputs."""
@@ -105,22 +101,20 @@ class TestBuildChatPromptMemories:
         """memories=None must produce byte-identical output to omitting the arg entirely."""
         without_arg = build_chat_prompt("normal", "top: drake", "It is December.")
         with_none = build_chat_prompt("normal", "top: drake", "It is December.", memories=None)
-        assert without_arg == with_none, (
-            "memories=None changed the output — byte-identity broken (T-11-06d)"
-        )
+        assert without_arg == with_none, "memories=None changed the output — byte-identity broken (T-11-06d)"
 
     def test_memories_empty_list_byte_identical(self):
         """memories=[] (falsy) must also produce byte-identical output."""
         without_arg = build_chat_prompt("normal", "top: drake", "It is December.")
         with_empty = build_chat_prompt("normal", "top: drake", "It is December.", memories=[])
-        assert without_arg == with_empty, (
-            "memories=[] changed the output — byte-identity broken"
-        )
+        assert without_arg == with_empty, "memories=[] changed the output — byte-identity broken"
 
     def test_memory_block_rendered_fact_present(self):
         """memories=[...] must include the fact text in the rendered prompt."""
         result = build_chat_prompt(
-            "normal", "top: drake", "",
+            "normal",
+            "top: drake",
+            "",
             memories=["swore he was done with the killers"],
         )
         assert "killers" in result, "Memory fact not rendered in prompt"
@@ -128,22 +122,22 @@ class TestBuildChatPromptMemories:
     def test_memory_block_rendered_user_context_anchor(self):
         """Numbers-from-SQL instruction must reference USER CONTEXT (T-11-06b)."""
         result = build_chat_prompt(
-            "normal", "top: drake", "",
+            "normal",
+            "top: drake",
+            "",
             memories=["swore he was done with the killers"],
         )
-        assert "USER CONTEXT" in result, (
-            "USER CONTEXT accuracy anchor missing from memory block"
-        )
+        assert "USER CONTEXT" in result, "USER CONTEXT accuracy anchor missing from memory block"
 
     def test_memory_block_rendered_never_instruction(self):
         """The 'never from memories' accuracy firewall must be present (D-06)."""
         result = build_chat_prompt(
-            "normal", "top: drake", "",
+            "normal",
+            "top: drake",
+            "",
             memories=["swore he was done with the killers"],
         )
-        assert "never" in result.lower(), (
-            "'never from memories' accuracy instruction missing"
-        )
+        assert "never" in result.lower(), "'never from memories' accuracy instruction missing"
 
     def test_memories_none_no_triple_newline(self):
         """memories=None with non-empty seasonal must not produce triple-newlines."""
@@ -153,7 +147,9 @@ class TestBuildChatPromptMemories:
     def test_memories_block_no_triple_newline(self):
         """memories=[...] with non-empty seasonal must not produce triple-newlines."""
         result = build_chat_prompt(
-            "normal", None, "It is December.",
+            "normal",
+            None,
+            "It is December.",
             memories=["swore he was done with the killers"],
         )
         assert "\n\n\n" not in result, "Triple-newline artifact with memories block"
@@ -191,23 +187,17 @@ class TestBuildRecommendationPromptPhase14Kwargs:
     def test_byte_identical_when_both_kwargs_omitted(self):
         """Omitting both new kwargs must equal the pre-Phase-14 .format() output."""
         lines = [f"- {s['title']} by {s['artist']}" for s in self.RECENT]
-        pre_change_output = MUSIC_RECOMMENDATION_PROMPT.format(
-            recent_songs="\n".join(lines)
-        )
+        pre_change_output = MUSIC_RECOMMENDATION_PROMPT.format(recent_songs="\n".join(lines))
         assert build_recommendation_prompt(self.RECENT) == pre_change_output
 
     def test_byte_identical_when_both_kwargs_none(self):
         without_kwargs = build_recommendation_prompt(self.RECENT)
-        with_none_kwargs = build_recommendation_prompt(
-            self.RECENT, recently_skipped=None, positive_taste=None
-        )
+        with_none_kwargs = build_recommendation_prompt(self.RECENT, recently_skipped=None, positive_taste=None)
         assert without_kwargs == with_none_kwargs
 
     def test_byte_identical_when_both_kwargs_empty_list(self):
         without_kwargs = build_recommendation_prompt(self.RECENT)
-        with_empty_kwargs = build_recommendation_prompt(
-            self.RECENT, recently_skipped=[], positive_taste=[]
-        )
+        with_empty_kwargs = build_recommendation_prompt(self.RECENT, recently_skipped=[], positive_taste=[])
         assert without_kwargs == with_empty_kwargs
 
     def test_recently_skipped_appends_avoid_block(self):
@@ -272,8 +262,7 @@ class TestBuildJamSuggestionPrompt:
     def test_parse_suggestions_round_trip(self):
         """A well-formed model reply matching this prompt's contract parses non-empty."""
         model_reply = (
-            '[{"title": "Midnight City", "artist": "M83"}, '
-            '{"title": "Redbone", "artist": "Childish Gambino"}]'
+            '[{"title": "Midnight City", "artist": "M83"}, {"title": "Redbone", "artist": "Childish Gambino"}]'
         )
         # Sanity: build the prompt (contract compatibility, not literal reply generation).
         build_jam_suggestion_prompt([{"title": "Existing", "artist": "Someone"}], 2)

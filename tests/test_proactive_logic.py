@@ -15,12 +15,12 @@ from logic.proactive import should_fire_proactive_callback
 # ---------------------------------------------------------------------------
 
 # Rolls that pass/fail the chance gate — derived from config, not magic numbers
-CHANCE_PASS = config.PROACTIVE_CALLBACK_CHANCE - 0.01   # just under the threshold
-CHANCE_FAIL = config.PROACTIVE_CALLBACK_CHANCE          # exactly at threshold -> False
+CHANCE_PASS = config.PROACTIVE_CALLBACK_CHANCE - 0.01  # just under the threshold
+CHANCE_FAIL = config.PROACTIVE_CALLBACK_CHANCE  # exactly at threshold -> False
 
 # Daily-cap boundary values — derived from config
 DAILY_CAP = config.PROACTIVE_CALLBACK_DAILY_CAP
-COUNT_AT_CAP = DAILY_CAP            # exactly at cap -> False
+COUNT_AT_CAP = DAILY_CAP  # exactly at cap -> False
 COUNT_ONE_UNDER_CAP = DAILY_CAP - 1  # one under cap -> True
 
 

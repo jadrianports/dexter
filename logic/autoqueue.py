@@ -18,12 +18,31 @@ import re
 _PUNCT = re.compile(r"[^\w\s]")
 
 # Common YouTube title suffixes/decorators that carry no song-identity signal.
-_NOISE_TOKENS: frozenset[str] = frozenset({
-    "official", "audio", "video", "music", "lyrics", "lyric",
-    "hd", "hq", "4k", "8k", "remastered", "remaster", "explicit",
-    "clean", "live", "performance", "feat", "featuring", "ft",
-    "visualizer", "mv",
-})
+_NOISE_TOKENS: frozenset[str] = frozenset(
+    {
+        "official",
+        "audio",
+        "video",
+        "music",
+        "lyrics",
+        "lyric",
+        "hd",
+        "hq",
+        "4k",
+        "8k",
+        "remastered",
+        "remaster",
+        "explicit",
+        "clean",
+        "live",
+        "performance",
+        "feat",
+        "featuring",
+        "ft",
+        "visualizer",
+        "mv",
+    }
+)
 
 # Function words that appear in both YouTube titles and song names and carry
 # no discriminating signal (e.g. "The Beatles" vs "Never Give You Up").
@@ -50,10 +69,7 @@ def _normalize_for_match(text: str) -> set[str]:
     lowered = text.lower()
     no_punct = _PUNCT.sub(" ", lowered)
     tokens = no_punct.split()
-    return {
-        t for t in tokens
-        if len(t) >= 2 and t not in _NOISE_TOKENS and t not in _STOP_WORDS
-    }
+    return {t for t in tokens if len(t) >= 2 and t not in _NOISE_TOKENS and t not in _STOP_WORDS}
 
 
 # ---------------------------------------------------------------------------

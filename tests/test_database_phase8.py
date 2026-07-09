@@ -16,16 +16,15 @@ from __future__ import annotations
 import pytest
 
 from database import (
-    get_leaderboard_songs,
-    get_leaderboard_skips,
-    get_leaderboard_streaks,
     get_daily_stats_row,
     get_images_today_global,
+    get_leaderboard_skips,
+    get_leaderboard_songs,
+    get_leaderboard_streaks,
     increment_daily_stat,
     log_song,
     log_track_batch,
 )
-
 
 # ---------------------------------------------------------------------------
 # TestTotalErrorsColumn — D-23 (OPS-01)
@@ -45,9 +44,7 @@ class TestTotalErrorsColumn:
                 "   AND table_name = 'bot_daily_stats'"
                 "   AND column_name = 'total_errors'"
             )
-        assert len(rows) == 1, (
-            "total_errors column missing from bot_daily_stats"
-        )
+        assert len(rows) == 1, "total_errors column missing from bot_daily_stats"
 
     @pytest.mark.asyncio
     async def test_total_errors_increment(self, pool):
@@ -56,9 +53,7 @@ class TestTotalErrorsColumn:
         await increment_daily_stat(pool, "total_errors")
         await increment_daily_stat(pool, "total_errors")
         stats = await get_daily_stats_row(pool)
-        assert stats["total_errors"] == 2, (
-            f"Expected total_errors == 2, got {stats['total_errors']}"
-        )
+        assert stats["total_errors"] == 2, f"Expected total_errors == 2, got {stats['total_errors']}"
 
 
 # ---------------------------------------------------------------------------
@@ -84,9 +79,7 @@ class TestGetDailyStatsRow:
         }
         for key in expected_keys:
             assert key in stats, f"Missing key in get_daily_stats_row result: {key}"
-            assert stats[key] == 0, (
-                f"Expected {key} == 0 on empty DB, got {stats[key]}"
-            )
+            assert stats[key] == 0, f"Expected {key} == 0 on empty DB, got {stats[key]}"
 
 
 # ---------------------------------------------------------------------------
@@ -220,47 +213,68 @@ class TestLeaderboardSkips:
                 "INSERT INTO song_history"
                 " (guild_id, user_id, title, url, duration_seconds, was_skipped)"
                 " VALUES ($1, $2, $3, $4, $5, $6)",
-                "SK", "u_sk1", "Skippy Song", "https://yt.com/sk1", 200, True,
+                "SK",
+                "u_sk1",
+                "Skippy Song",
+                "https://yt.com/sk1",
+                200,
+                True,
             )
             await conn.execute(
                 "INSERT INTO song_history"
                 " (guild_id, user_id, title, url, duration_seconds, was_skipped)"
                 " VALUES ($1, $2, $3, $4, $5, $6)",
-                "SK", "u_sk1", "Skippy Song", "https://yt.com/sk2", 200, True,
+                "SK",
+                "u_sk1",
+                "Skippy Song",
+                "https://yt.com/sk2",
+                200,
+                True,
             )
             await conn.execute(
                 "INSERT INTO song_history"
                 " (guild_id, user_id, title, url, duration_seconds, was_skipped)"
                 " VALUES ($1, $2, $3, $4, $5, $6)",
-                "SK", "u_sk1", "Skippy Song", "https://yt.com/sk3", 200, False,
+                "SK",
+                "u_sk1",
+                "Skippy Song",
+                "https://yt.com/sk3",
+                200,
+                False,
             )
             # "Never Skipped" song — 2 plays, 0 skips; must be excluded (D-18)
             await conn.execute(
                 "INSERT INTO song_history"
                 " (guild_id, user_id, title, url, duration_seconds, was_skipped)"
                 " VALUES ($1, $2, $3, $4, $5, $6)",
-                "SK", "u_sk1", "Never Skipped", "https://yt.com/ns1", 200, False,
+                "SK",
+                "u_sk1",
+                "Never Skipped",
+                "https://yt.com/ns1",
+                200,
+                False,
             )
             await conn.execute(
                 "INSERT INTO song_history"
                 " (guild_id, user_id, title, url, duration_seconds, was_skipped)"
                 " VALUES ($1, $2, $3, $4, $5, $6)",
-                "SK", "u_sk1", "Never Skipped", "https://yt.com/ns2", 200, False,
+                "SK",
+                "u_sk1",
+                "Never Skipped",
+                "https://yt.com/ns2",
+                200,
+                False,
             )
 
         rows = await get_leaderboard_skips(pool, "SK")
         titles = [r["title"] for r in rows]
 
         assert "Skippy Song" in titles, "Skippy Song (2 skips) should appear in skips board"
-        assert "Never Skipped" not in titles, (
-            "Never Skipped (0 skips) must be excluded from skips board (D-18)"
-        )
+        assert "Never Skipped" not in titles, "Never Skipped (0 skips) must be excluded from skips board (D-18)"
 
         # Verify skip_count is correct — only the 2 skipped plays
         skippy_row = next(r for r in rows if r["title"] == "Skippy Song")
-        assert skippy_row["skip_count"] == 2, (
-            f"Expected skip_count=2 for Skippy Song, got {skippy_row['skip_count']}"
-        )
+        assert skippy_row["skip_count"] == 2, f"Expected skip_count=2 for Skippy Song, got {skippy_row['skip_count']}"
 
 
 # ---------------------------------------------------------------------------
@@ -282,26 +296,29 @@ class TestLeaderboardStreaks:
                 " VALUES ($1, $2, $3, $4)"
                 " ON CONFLICT (user_id) DO UPDATE SET"
                 "   longest_streak = EXCLUDED.longest_streak",
-                "u_streak_a", "StreakUserA", 5, 7,
+                "u_streak_a",
+                "StreakUserA",
+                5,
+                7,
             )
             # Insert history in guild A only
             await conn.execute(
                 "INSERT INTO song_history"
                 " (guild_id, user_id, title, url, duration_seconds)"
                 " VALUES ($1, $2, $3, $4, $5)",
-                "GA", "u_streak_a", "Streak Song", "https://yt.com/st1", 200,
+                "GA",
+                "u_streak_a",
+                "Streak Song",
+                "https://yt.com/st1",
+                200,
             )
 
         # User appears in guild A
         ga_rows = await get_leaderboard_streaks(pool, "GA")
         ga_user_ids = [r["user_id"] for r in ga_rows]
-        assert "u_streak_a" in ga_user_ids, (
-            "u_streak_a should appear in guild A streak board"
-        )
+        assert "u_streak_a" in ga_user_ids, "u_streak_a should appear in guild A streak board"
 
         # User does NOT appear in guild B (no history there)
         gb_rows = await get_leaderboard_streaks(pool, "GB")
         gb_user_ids = [r["user_id"] for r in gb_rows]
-        assert "u_streak_a" not in gb_user_ids, (
-            "u_streak_a must NOT appear in guild B streak board (no history in GB)"
-        )
+        assert "u_streak_a" not in gb_user_ids, "u_streak_a must NOT appear in guild B streak board (no history in GB)"

@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from services.gemini import _RateLimiter, GeminiRateLimitError
+from services.gemini import GeminiRateLimitError, _RateLimiter
 
 
 class TestRateLimiter:
@@ -44,9 +44,7 @@ class TestRateLimiter:
         await limiter.acquire(priority=1)
         await limiter.acquire(priority=1)
         await limiter.acquire(priority=1)
-        assert limiter.rpm_usage() == 3, (
-            f"Expected rpm_usage() == 3 after 3 acquires, got {limiter.rpm_usage()}"
-        )
+        assert limiter.rpm_usage() == 3, f"Expected rpm_usage() == 3 after 3 acquires, got {limiter.rpm_usage()}"
 
     @pytest.mark.asyncio
     async def test_rpm_headroom_getter(self):
@@ -57,6 +55,4 @@ class TestRateLimiter:
         await limiter.acquire(priority=1)
         usage = limiter.rpm_usage()
         headroom = limiter.rpm_headroom()
-        assert headroom == max_req - usage, (
-            f"Expected rpm_headroom() == {max_req - usage}, got {headroom}"
-        )
+        assert headroom == max_req - usage, f"Expected rpm_headroom() == {max_req - usage}, got {headroom}"

@@ -6,8 +6,8 @@ is a pure string function and must stay that way. (K-05)
 
 import pytest
 
-from config import sanitize_database_url
 import config
+from config import sanitize_database_url
 
 
 class TestSanitizeDatabaseUrl:
@@ -91,8 +91,10 @@ class TestPhase9Constants:
     def test_health_strict_status_env_override(self, monkeypatch):
         """HEALTH_STRICT_STATUS honors HEALTH_STRICT_STATUS=false env override."""
         import importlib
+
         monkeypatch.setenv("HEALTH_STRICT_STATUS", "false")
         import config as cfg_mod
+
         importlib.reload(cfg_mod)
         assert cfg_mod.HEALTH_STRICT_STATUS is False
         # Restore to default for other tests

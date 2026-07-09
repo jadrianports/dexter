@@ -26,7 +26,6 @@ from cogs.events import EventsCog, _first_valid_image_attachment
 from personality import roasts
 from services.gemini import GeminiAPIError, GeminiRateLimitError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -204,9 +203,7 @@ async def test_generate_vision_roast_none_on_safety_block():
     bot.gemini_service.chat = AsyncMock(return_value=None)
     cog = EventsCog(bot)
 
-    result = await cog._generate_vision_roast(
-        _make_message().author, b"bytes", "image/png"
-    )
+    result = await cog._generate_vision_roast(_make_message().author, b"bytes", "image/png")
     assert result is None
 
 
@@ -218,9 +215,7 @@ async def test_generate_vision_roast_empty_string_is_silent_skip():
     bot.gemini_service.chat = AsyncMock(return_value="")
     cog = EventsCog(bot)
 
-    result = await cog._generate_vision_roast(
-        _make_message().author, b"bytes", "image/png"
-    )
+    result = await cog._generate_vision_roast(_make_message().author, b"bytes", "image/png")
     assert result is None
 
 
@@ -233,9 +228,7 @@ async def test_generate_vision_roast_fallback_on_transport(exc):
     bot.gemini_service.chat = AsyncMock(side_effect=exc("boom"))
     cog = EventsCog(bot)
 
-    result = await cog._generate_vision_roast(
-        _make_message().author, b"bytes", "image/png"
-    )
+    result = await cog._generate_vision_roast(_make_message().author, b"bytes", "image/png")
     assert result in roasts.VISION_ROAST_FALLBACKS
 
 
@@ -247,9 +240,7 @@ async def test_generate_vision_roast_success_normalizes():
     bot.gemini_service.chat = AsyncMock(return_value="  Nice cat i guess  ")
     cog = EventsCog(bot)
 
-    result = await cog._generate_vision_roast(
-        _make_message().author, b"bytes", "image/png"
-    )
+    result = await cog._generate_vision_roast(_make_message().author, b"bytes", "image/png")
     assert result == "nice cat i guess"
 
 
@@ -260,9 +251,7 @@ async def test_generate_vision_roast_none_without_gemini():
     bot.gemini_service = None  # getattr(self.bot, "gemini_service", None) -> None
     cog = EventsCog(bot)
 
-    result = await cog._generate_vision_roast(
-        _make_message().author, b"bytes", "image/png"
-    )
+    result = await cog._generate_vision_roast(_make_message().author, b"bytes", "image/png")
     assert result is None
 
 

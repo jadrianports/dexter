@@ -197,15 +197,11 @@ def _build_idle_discover_view() -> tuple[DiscoverQueueView, dict]:
     bot = Mock()
     bot.get_cog.return_value = music_cog
     bot.get_guild.return_value = guild
-    bot.youtube_service.async_search = AsyncMock(
-        return_value=[{"url": "https://youtube.com/watch?v=vid123"}]
-    )
+    bot.youtube_service.async_search = AsyncMock(return_value=[{"url": "https://youtube.com/watch?v=vid123"}])
     bot.youtube_service.async_extract = AsyncMock(return_value=_make_extract_data())
     bot.queue_persistence.persist = AsyncMock()
 
-    view = DiscoverQueueView(
-        bot=bot, guild_id=guild_id, artist_name="Some Artist", requested_by=42
-    )
+    view = DiscoverQueueView(bot=bot, guild_id=guild_id, artist_name="Some Artist", requested_by=42)
     view.message = None  # skip the trailing message.edit path
 
     interaction = Mock()

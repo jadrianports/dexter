@@ -13,7 +13,6 @@ from logic.autoqueue import (
     validate_youtube_match,
 )
 
-
 # ---------------------------------------------------------------------------
 # TestNormalizeForMatch — internal helper coverage
 # ---------------------------------------------------------------------------
@@ -62,67 +61,91 @@ class TestNormalizeForMatch:
 class TestValidateYoutubeMatch:
     def test_accept_noise_stripped_title_and_artist(self):
         """Noise tokens ignored; both title+artist tokens present in YouTube title."""
-        assert validate_youtube_match(
-            "Taylor Swift - Shake It Off (Official Music Video)",
-            "Shake It Off",
-            "Taylor Swift",
-        ) is True
+        assert (
+            validate_youtube_match(
+                "Taylor Swift - Shake It Off (Official Music Video)",
+                "Shake It Off",
+                "Taylor Swift",
+            )
+            is True
+        )
 
     def test_reject_clear_mismatch(self):
         """Clear song+artist mismatch is rejected."""
-        assert validate_youtube_match(
-            "Rick Astley - Never Gonna Give You Up",
-            "Bohemian Rhapsody",
-            "Queen",
-        ) is False
+        assert (
+            validate_youtube_match(
+                "Rick Astley - Never Gonna Give You Up",
+                "Bohemian Rhapsody",
+                "Queen",
+            )
+            is False
+        )
 
     def test_accept_with_noise_and_punct(self):
         """Noise tokens, punctuation, and brackets tolerated."""
-        assert validate_youtube_match(
-            "Arctic Monkeys - Do I Wanna Know? (Official Video) [HD]",
-            "Do I Wanna Know",
-            "Arctic Monkeys",
-        ) is True
+        assert (
+            validate_youtube_match(
+                "Arctic Monkeys - Do I Wanna Know? (Official Video) [HD]",
+                "Do I Wanna Know",
+                "Arctic Monkeys",
+            )
+            is True
+        )
 
     def test_accept_short_artist(self):
         """2-char minimum keeps short artists like 'SZA'."""
-        assert validate_youtube_match(
-            "SZA - Kill Bill",
-            "Kill Bill",
-            "SZA",
-        ) is True
+        assert (
+            validate_youtube_match(
+                "SZA - Kill Bill",
+                "Kill Bill",
+                "SZA",
+            )
+            is True
+        )
 
     def test_empty_artist_does_not_force_false(self):
         """Empty suggested_artist: artist check is optional — no false negative."""
-        assert validate_youtube_match(
-            "Kendrick Lamar - HUMBLE.",
-            "HUMBLE",
-            "",
-        ) is True
+        assert (
+            validate_youtube_match(
+                "Kendrick Lamar - HUMBLE.",
+                "HUMBLE",
+                "",
+            )
+            is True
+        )
 
     def test_partial_title_mismatch_rejects(self):
         """Title tokens not found in YouTube title — rejected."""
-        assert validate_youtube_match(
-            "Rick Astley - Never Gonna Give You Up",
-            "Stairway to Heaven",
-            "Led Zeppelin",
-        ) is False
+        assert (
+            validate_youtube_match(
+                "Rick Astley - Never Gonna Give You Up",
+                "Stairway to Heaven",
+                "Led Zeppelin",
+            )
+            is False
+        )
 
     def test_remastered_noise_ignored(self):
         """'Remastered' is a noise token and should be ignored."""
-        assert validate_youtube_match(
-            "Pink Floyd - Comfortably Numb (Remastered)",
-            "Comfortably Numb",
-            "Pink Floyd",
-        ) is True
+        assert (
+            validate_youtube_match(
+                "Pink Floyd - Comfortably Numb (Remastered)",
+                "Comfortably Numb",
+                "Pink Floyd",
+            )
+            is True
+        )
 
     def test_feat_noise_ignored(self):
         """'feat' and 'featuring' are noise tokens."""
-        assert validate_youtube_match(
-            "Drake - God's Plan (feat. Future) (Official)",
-            "God's Plan",
-            "Drake",
-        ) is True
+        assert (
+            validate_youtube_match(
+                "Drake - God's Plan (feat. Future) (Official)",
+                "God's Plan",
+                "Drake",
+            )
+            is True
+        )
 
     def test_both_empty_inputs_return_true(self):
         """Empty title and artist — both checks pass vacuously."""
@@ -136,20 +159,26 @@ class TestValidateYoutubeMatch:
 
 def test_validate_youtube_match_accepts_valid():
     """Sanity: accept a well-formed title+artist match."""
-    assert validate_youtube_match(
-        "Taylor Swift - Shake It Off (Official Music Video)",
-        "Shake It Off",
-        "Taylor Swift",
-    ) is True
+    assert (
+        validate_youtube_match(
+            "Taylor Swift - Shake It Off (Official Music Video)",
+            "Shake It Off",
+            "Taylor Swift",
+        )
+        is True
+    )
 
 
 def test_validate_youtube_match_rejects_mismatch():
     """Sanity: reject a clear title+artist mismatch."""
-    assert validate_youtube_match(
-        "Rick Astley - Never Gonna Give You Up",
-        "Bohemian Rhapsody",
-        "Queen",
-    ) is False
+    assert (
+        validate_youtube_match(
+            "Rick Astley - Never Gonna Give You Up",
+            "Bohemian Rhapsody",
+            "Queen",
+        )
+        is False
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -160,9 +189,7 @@ def test_validate_youtube_match_rejects_mismatch():
 class TestIsRecentlySkippedArtist:
     def test_subset_match_returns_true(self):
         """Normalized token subset match is a positive hit."""
-        assert is_recently_skipped_artist(
-            "Phoebe Bridgers", ["phoebe bridgers"]
-        ) is True
+        assert is_recently_skipped_artist("Phoebe Bridgers", ["phoebe bridgers"]) is True
 
     def test_no_overlap_returns_false(self):
         """No token overlap between candidate and skip list."""
@@ -179,9 +206,7 @@ class TestIsRecentlySkippedArtist:
     def test_noise_and_stop_word_tokens_ignored(self):
         """Noise/stop-word tokens (official, video, the) are ignored via
         _normalize_for_match, same as validate_youtube_match."""
-        assert is_recently_skipped_artist(
-            "The Official Drake Video", ["drake"]
-        ) is True
+        assert is_recently_skipped_artist("The Official Drake Video", ["drake"]) is True
 
 
 # ---------------------------------------------------------------------------
@@ -248,8 +273,8 @@ class TestAutoQueueFallThroughLoop:
     def test_fall_through_when_first_suggestion_all_candidates_fail(self):
         """When all candidates for suggestion #1 fail, loop falls to suggestion #2."""
         suggestions = [
-            {"title": "Bohemian Rhapsody", "artist": "Queen"},   # will be rejected
-            {"title": "Kill Bill", "artist": "SZA"},              # will be accepted
+            {"title": "Bohemian Rhapsody", "artist": "Queen"},  # will be rejected
+            {"title": "Kill Bill", "artist": "SZA"},  # will be accepted
         ]
         search_map = {
             # Candidates for suggestion #1 are Rick Astley — all will fail validate
@@ -288,8 +313,8 @@ class TestAutoQueueFallThroughLoop:
     def test_no_results_continues_to_next_suggestion(self):
         """Empty search results for a suggestion are skipped; later suggestion fills the round."""
         suggestions = [
-            {"title": "Ghost Song", "artist": "Nobody"},   # no results
-            {"title": "Kill Bill", "artist": "SZA"},        # has results
+            {"title": "Ghost Song", "artist": "Nobody"},  # no results
+            {"title": "Kill Bill", "artist": "SZA"},  # has results
         ]
         search_map = {
             "Ghost Song": [],
@@ -306,7 +331,8 @@ class TestAutoQueueFallThroughLoop:
             "Never Gonna Give You Up": [
                 {"title": "Someone Else - Wrong Song", "url": "u_wrong"},  # fails
                 {"title": "Rick Astley - Never Gonna Give You Up", "url": "u_right"},  # passes
-                {"title": "Rick Astley - Never Gonna Give You Up (Live)", "url": "u_third"},  # also passes but not first
+                # also passes but not first
+                {"title": "Rick Astley - Never Gonna Give You Up (Live)", "url": "u_third"},
             ],
         }
         result = self._run_loop(suggestions, search_map, songs_per_round=1)

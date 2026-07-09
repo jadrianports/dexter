@@ -72,22 +72,10 @@ class PerfMetrics:
         All averages return 0.0 when the corresponding deque is empty (no
         ZeroDivisionError).
         """
-        hit_rate = (
-            sum(self.cache_hits) / len(self.cache_hits) * 100
-            if self.cache_hits else 0.0
-        )
-        avg_dl = (
-            sum(self.download_times) / len(self.download_times)
-            if self.download_times else 0.0
-        )
-        avg_ttfa = (
-            sum(self.ttfa_times) / len(self.ttfa_times)
-            if self.ttfa_times else 0.0
-        )
-        avg_search = (
-            sum(self.search_times) / len(self.search_times)
-            if self.search_times else 0.0
-        )
+        hit_rate = sum(self.cache_hits) / len(self.cache_hits) * 100 if self.cache_hits else 0.0
+        avg_dl = sum(self.download_times) / len(self.download_times) if self.download_times else 0.0
+        avg_ttfa = sum(self.ttfa_times) / len(self.ttfa_times) if self.ttfa_times else 0.0
+        avg_search = sum(self.search_times) / len(self.search_times) if self.search_times else 0.0
         return {
             "cache_hit_rate": hit_rate,
             "avg_download_s": avg_dl,

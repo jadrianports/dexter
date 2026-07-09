@@ -16,26 +16,26 @@ from logic.autoqueue import is_recently_skipped_artist, validate_youtube_match
 from logic.playback import should_start_playback
 from logic.taste import select_positive_taste_context
 from models.queue import Track
-from models.server_state import get_server_state, get_mood
+from models.server_state import get_mood, get_server_state
 from models.user_profile import get_user_summary
 from personality.prompts import build_chat_prompt, build_recommendation_prompt
 from personality.responses import (
-    pick_random,
-    RATE_LIMIT_MESSAGES,
-    ERROR_MESSAGES,
     AI_EMPTY_RESPONSE,
     AUTO_QUEUE_ANNOUNCE,
     AUTO_QUEUE_CAP_REACHED,
     AUTO_QUEUE_IGNORED,
+    ERROR_MESSAGES,
+    RATE_LIMIT_MESSAGES,
+    pick_random,
 )
 from personality.roasts import (
-    ROAST_COMMAND_LINES,
-    ROAST_SELF_LINES,
     ROAST_BOT_LINES,
+    ROAST_COMMAND_LINES,
     ROAST_NO_HISTORY_LINES,
+    ROAST_SELF_LINES,
 )
 from personality.seasonal import get_seasonal_context
-from services.gemini import GeminiRateLimitError, GeminiAPIError
+from services.gemini import GeminiAPIError, GeminiRateLimitError
 from services.lyrics import build_genius_search_query
 from utils.logger import log
 from utils.tasks import make_task
@@ -78,10 +78,7 @@ def parse_suggestions(response: str) -> list[dict] | None:
         if not isinstance(data, list):
             continue
 
-        valid = [
-            item for item in data
-            if isinstance(item, dict) and item.get("title") and item.get("artist")
-        ]
+        valid = [item for item in data if isinstance(item, dict) and item.get("title") and item.get("artist")]
         if valid:
             return valid
 
@@ -119,10 +116,12 @@ class AICog(commands.Cog):
             conversation = self.bot.message_buffer.get_gemini_history(interaction.channel.id)
 
             # Add the current question to conversation
-            conversation.append({
-                "role": "user",
-                "content": f"{interaction.user.display_name}: {question}",
-            })
+            conversation.append(
+                {
+                    "role": "user",
+                    "content": f"{interaction.user.display_name}: {question}",
+                }
+            )
 
             # Phase 11 / MEM-06, Phase 15 / D-01: /ask always attempts recall — an
             # explicit, opted-in command should ground its answer in memory every
@@ -135,7 +134,7 @@ class AICog(commands.Cog):
                     memories = await _memory_svc.recall(
                         str(interaction.user.id),
                         str(interaction.guild_id),
-                        question,   # /ask question text is the recall anchor
+                        question,  # /ask question text is the recall anchor
                     )
                 except Exception as _mem_err:
                     log.debug("memory.recall failed (non-fatal): %s", _mem_err)
@@ -214,7 +213,7 @@ class AICog(commands.Cog):
                 roast_memories = await _memory_svc.recall(
                     str(target.id),
                     str(interaction.guild_id),
-                    scenario,   # roast scenario string is the recall anchor
+                    scenario,  # roast scenario string is the recall anchor
                 )
             except Exception as _mem_err:
                 log.debug("memory.recall failed (non-fatal): %s", _mem_err)
@@ -240,18 +239,12 @@ class AICog(commands.Cog):
                     result = result[:497] + "..."
                 if result and result[0].isupper():
                     result = result[0].lower() + result[1:]
-                await interaction.followup.send(
-                    result, allowed_mentions=discord.AllowedMentions.none()
-                )
+                await interaction.followup.send(result, allowed_mentions=discord.AllowedMentions.none())
             else:
-                await interaction.followup.send(
-                    fallback_line, allowed_mentions=discord.AllowedMentions.none()
-                )
+                await interaction.followup.send(fallback_line, allowed_mentions=discord.AllowedMentions.none())
         except (GeminiRateLimitError, GeminiAPIError):
             # Guaranteed template fallback (D-05) — roast never fails
-            await interaction.followup.send(
-                fallback_line, allowed_mentions=discord.AllowedMentions.none()
-            )
+            await interaction.followup.send(fallback_line, allowed_mentions=discord.AllowedMentions.none())
 
         # 5. Update daily stats
         await increment_daily_stat(self.bot.pool, "total_commands")
@@ -262,12 +255,19 @@ class AICog(commands.Cog):
     async def try_auto_queue(self, guild: discord.Guild) -> None:
         """Attempt to auto-queue songs. Called by music cog when queue empties."""
         server_state = get_server_state(self.bot.server_states, guild.id)
-        log.info("auto-queue: invoked for guild %d (round %d/%d)",
-                 guild.id, server_state.auto_queue_rounds, config.AUTO_QUEUE_MAX_ROUNDS)
+        log.info(
+            "auto-queue: invoked for guild %d (round %d/%d)",
+            guild.id,
+            server_state.auto_queue_rounds,
+            config.AUTO_QUEUE_MAX_ROUNDS,
+        )
 
         if server_state.auto_queue_rounds >= config.AUTO_QUEUE_MAX_ROUNDS:
-            log.info("auto-queue: bail — round cap %d reached; resets on next /play (guild %d)",
-                     config.AUTO_QUEUE_MAX_ROUNDS, guild.id)
+            log.info(
+                "auto-queue: bail — round cap %d reached; resets on next /play (guild %d)",
+                config.AUTO_QUEUE_MAX_ROUNDS,
+                guild.id,
+            )
             channel = self._get_text_channel(guild)
             if channel:
                 await channel.send(pick_random(AUTO_QUEUE_CAP_REACHED))
@@ -284,31 +284,27 @@ class AICog(commands.Cog):
             # "LatinHype" -> "Glimpse Of Us" / "Joji") instead of a re-uploader name.
             cleaned = []
             for song in recent:
-                c_title, c_artist = build_genius_search_query(
-                    song.get("title", ""), song.get("artist")
+                c_title, c_artist = build_genius_search_query(song.get("title", ""), song.get("artist"))
+                cleaned.append(
+                    {
+                        "title": c_title or song.get("title", ""),
+                        "artist": c_artist or song.get("artist"),
+                    }
                 )
-                cleaned.append({
-                    "title": c_title or song.get("title", ""),
-                    "artist": c_artist or song.get("artist"),
-                })
 
             # Phase 14 / D-01: guild-scoped "recently skipped" negative hint.
             # Degrades to [] on any failure — never blocks the recommendation call.
             skipped_artists: list[str] = []
             recently_skipped: list[dict] = []
             try:
-                since = datetime.now(timezone.utc) - timedelta(
-                    days=config.AUTO_QUEUE_SKIP_LOOKBACK_DAYS
-                )
+                since = datetime.now(timezone.utc) - timedelta(days=config.AUTO_QUEUE_SKIP_LOOKBACK_DAYS)
                 skip_rows = await get_recently_skipped(
                     self.bot.pool,
                     guild_id=str(guild.id),
                     since=since,
                     limit=config.AUTO_QUEUE_SKIP_HINT_CAP,
                 )
-                recently_skipped = [
-                    {"title": r["title"], "artist": r["artist"]} for r in skip_rows
-                ]
+                recently_skipped = [{"title": r["title"], "artist": r["artist"]} for r in skip_rows]
                 skipped_artists = [r["artist"] for r in skip_rows if r["artist"]]
             except Exception as e:
                 log.debug("auto-queue: get_recently_skipped failed, degrading to [] (%s)", e)
@@ -318,10 +314,7 @@ class AICog(commands.Cog):
             # memory. This enumeration is REUSED below for the auto_queue_ignored
             # write (D-03 — do not compute a second, different member set).
             vc = guild.voice_client
-            voice_members = (
-                [m for m in vc.channel.members if not m.bot]
-                if vc and vc.channel else []
-            )
+            voice_members = [m for m in vc.channel.members if not m.bot] if vc and vc.channel else []
             positive_taste: list[str] = []
             _memory_svc = getattr(self.bot, "memory_service", None)
             if _memory_svc is not None and voice_members:
@@ -337,13 +330,12 @@ class AICog(commands.Cog):
                     except Exception as e:
                         log.debug(
                             "auto-queue: recall failed for member %s, degrading to [] (%s)",
-                            _member.id, e,
+                            _member.id,
+                            e,
                         )
                         facts = []
                     member_facts.append(facts)
-                positive_taste = select_positive_taste_context(
-                    member_facts, cap=config.AUTO_QUEUE_POSITIVE_TASTE_CAP
-                )
+                positive_taste = select_positive_taste_context(member_facts, cap=config.AUTO_QUEUE_POSITIVE_TASTE_CAP)
 
             prompt = build_recommendation_prompt(
                 cleaned,
@@ -353,8 +345,11 @@ class AICog(commands.Cog):
             response = await self.gemini.chat(prompt, [], priority=2)
 
             if not response:
-                log.info("auto-queue: bail — Gemini returned nothing "
-                         "(priority-2 rejected when limiter wait >10s, e.g. near 15 RPM) (guild %d)", guild.id)
+                log.info(
+                    "auto-queue: bail — Gemini returned nothing "
+                    "(priority-2 rejected when limiter wait >10s, e.g. near 15 RPM) (guild %d)",
+                    guild.id,
+                )
                 return
 
             suggestions = parse_suggestions(response)
@@ -400,7 +395,8 @@ class AICog(commands.Cog):
                     # D-14: no candidate matched — fall through to next suggestion.
                     log.info(
                         "auto-queue: all %d candidate(s) rejected for '%s' — trying next suggestion",
-                        len(results), suggestion["title"],
+                        len(results),
+                        suggestion["title"],
                     )
                     continue
 
@@ -410,7 +406,8 @@ class AICog(commands.Cog):
                 if is_recently_skipped_artist(suggestion["artist"], skipped_artists):
                     log.info(
                         "auto-queue: dropping '%s' by '%s' — recently-skipped artist",
-                        suggestion["title"], suggestion["artist"],
+                        suggestion["title"],
+                        suggestion["artist"],
                     )
                     continue
 
@@ -438,9 +435,13 @@ class AICog(commands.Cog):
                 tracks_added.append(track)
 
             if not tracks_added:
-                log.info("auto-queue: bail — %d Gemini suggestion(s) yielded no playable track "
-                         "(no YouTube result or all >%ds) (guild %d)",
-                         len(suggestions), config.MAX_SONG_DURATION_SECONDS, guild.id)
+                log.info(
+                    "auto-queue: bail — %d Gemini suggestion(s) yielded no playable track "
+                    "(no YouTube result or all >%ds) (guild %d)",
+                    len(suggestions),
+                    config.MAX_SONG_DURATION_SECONDS,
+                    guild.id,
+                )
                 return
 
             # Start playback if no audio is actually flowing. Gate on the live voice
@@ -498,16 +499,18 @@ class AICog(commands.Cog):
                                     guild_id=str(guild.id),
                                     raw_text=scenario,
                                     kind="auto_queue_ignored",
-                                    base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS[
-                                        "auto_queue_ignored"
-                                    ],
+                                    base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["auto_queue_ignored"],
                                 ),
                                 name="auto-queue-memory",
                                 bot=self.bot,
                             )
 
-            log.info("auto-queue: queued %d track(s) for guild %d (round %d)",
-                     len(tracks_added), guild.id, server_state.auto_queue_rounds + 1)
+            log.info(
+                "auto-queue: queued %d track(s) for guild %d (round %d)",
+                len(tracks_added),
+                guild.id,
+                server_state.auto_queue_rounds + 1,
+            )
             server_state.auto_queue_rounds += 1
             server_state.auto_queue_results = {"played": 0, "skipped": 0}
 

@@ -1,12 +1,12 @@
 """Tests for GeminiService with mocked API calls."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from google.genai import errors
 
 import config
-from services.gemini import GeminiService, GeminiAPIError, GeminiRateLimitError
+from services.gemini import GeminiAPIError, GeminiRateLimitError, GeminiService
 
 
 class TestGeminiChat:

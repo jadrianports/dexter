@@ -29,21 +29,17 @@ import cogs.ai
 import cogs.events
 import cogs.music
 
-
 # ---------------------------------------------------------------------------
 # (A) Source-inspection lock — the primary, non-flaky guarantee
 # ---------------------------------------------------------------------------
+
 
 def test_ambient_surfaces_retain_gate():
     """cogs/events.py and cogs/music.py ambient roast surfaces KEEP the 0.35 gate."""
     events_src = inspect.getsource(cogs.events.EventsCog._generate_ambient_roast)
     music_src = inspect.getsource(cogs.music.MusicCog._build_roast_line)
-    assert "MEMORY_CALLBACK_CHANCE" in events_src, (
-        "cogs/events.py._generate_ambient_roast must retain the cadence gate"
-    )
-    assert "MEMORY_CALLBACK_CHANCE" in music_src, (
-        "cogs/music.py._build_roast_line must retain the cadence gate"
-    )
+    assert "MEMORY_CALLBACK_CHANCE" in events_src, "cogs/events.py._generate_ambient_roast must retain the cadence gate"
+    assert "MEMORY_CALLBACK_CHANCE" in music_src, "cogs/music.py._build_roast_line must retain the cadence gate"
 
 
 def test_explicit_surfaces_lost_gate():
@@ -60,14 +56,13 @@ def test_explicit_surfaces_lost_gate():
 
 def test_cogs_ai_has_no_random_import():
     """`import random` was removed from cogs/ai.py — its only uses were the two gates."""
-    assert not hasattr(cogs.ai, "random"), (
-        "cogs.ai.random should not exist after the D-01 gate removal"
-    )
+    assert not hasattr(cogs.ai, "random"), "cogs.ai.random should not exist after the D-01 gate removal"
 
 
 # ---------------------------------------------------------------------------
 # Helpers — mirrors tests/test_roast_command.py conventions
 # ---------------------------------------------------------------------------
+
 
 def _make_bot(bot_user_id: int = 999) -> MagicMock:
     """Return a minimal fake bot with a pool, gemini_service slot, and memory_service."""
@@ -82,9 +77,7 @@ def _make_bot(bot_user_id: int = 999) -> MagicMock:
     return bot
 
 
-def _make_interaction(
-    user_id: int = 1, guild_id: int = 100, channel_id: int = 500
-) -> MagicMock:
+def _make_interaction(user_id: int = 1, guild_id: int = 100, channel_id: int = 500) -> MagicMock:
     """Return a minimal fake discord.Interaction."""
     interaction = MagicMock(spec=discord.Interaction)
 
@@ -125,6 +118,7 @@ def _make_target(
 # (B) Behavioral lock — explicit surfaces always recall, correctly scoped
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_roast_always_recalls_target_scoped():
     """/roast calls recall() exactly once, first arg == str(target.id) (RAG-01).
@@ -148,17 +142,14 @@ async def test_roast_always_recalls_target_scoped():
         patch("cogs.ai.increment_daily_stat", new=AsyncMock()),
     ):
         from cogs.ai import AICog
+
         cog = AICog(bot)
         await cog.roast.callback(cog, interaction, target)
 
     bot.memory_service.recall.assert_awaited_once()
     call_args = bot.memory_service.recall.call_args[0]
-    assert call_args[0] == str(target.id), (
-        f"Expected recall scoped to target id {target.id}, got {call_args[0]}"
-    )
-    assert call_args[0] != str(interaction.user.id), (
-        "recall must never be scoped to the invoker for /roast (RAG-01)"
-    )
+    assert call_args[0] == str(target.id), f"Expected recall scoped to target id {target.id}, got {call_args[0]}"
+    assert call_args[0] != str(interaction.user.id), "recall must never be scoped to the invoker for /roast (RAG-01)"
 
 
 @pytest.mark.asyncio
@@ -183,6 +174,7 @@ async def test_ask_always_recalls_invoker_scoped():
         patch("cogs.ai.increment_daily_stat", new=AsyncMock()),
     ):
         from cogs.ai import AICog
+
         cog = AICog(bot)
         await cog.ask.callback(cog, interaction, "what is the meaning of life")
 
@@ -196,6 +188,7 @@ async def test_ask_always_recalls_invoker_scoped():
 # ---------------------------------------------------------------------------
 # (C) Phase 16 / Pitfall 1 regression lock — pre_recalled_memories bypass
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_pre_recalled_bypasses_internal_recall():
@@ -220,7 +213,10 @@ async def test_pre_recalled_bypasses_internal_recall():
     ):
         cog = cogs.events.EventsCog(bot)
         result = await cog._generate_ambient_roast(
-            member, "scenario text", ["fallback line"], pre_recalled_memories=["fact"],
+            member,
+            "scenario text",
+            ["fallback line"],
+            pre_recalled_memories=["fact"],
         )
 
     bot.memory_service.recall.assert_not_awaited()

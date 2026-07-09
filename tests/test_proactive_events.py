@@ -21,7 +21,6 @@ import pytest
 import cogs.events
 from cogs.events import EventsCog
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -36,9 +35,7 @@ def _make_bot() -> MagicMock:
     return bot
 
 
-def _make_message(
-    user_id: int = 1, guild_id: int = 100, channel_id: int = 500
-) -> MagicMock:
+def _make_message(user_id: int = 1, guild_id: int = 100, channel_id: int = 500) -> MagicMock:
     """Return a minimal fake discord.Message with a spec'd Member author."""
     message = MagicMock(spec=discord.Message)
 

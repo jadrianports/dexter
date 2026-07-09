@@ -24,9 +24,7 @@ class ServerState:
         self.auto_queue_results = {"played": 0, "skipped": 0}
 
 
-def get_server_state(
-    states: dict[int, ServerState], guild_id: int
-) -> ServerState:
+def get_server_state(states: dict[int, ServerState], guild_id: int) -> ServerState:
     """Get or create the ServerState for a guild. Create-on-access pattern."""
     if guild_id not in states:
         states[guild_id] = ServerState(guild_id=guild_id)

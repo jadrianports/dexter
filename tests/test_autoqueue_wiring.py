@@ -66,9 +66,7 @@ class TestNegativeAndPositiveHintWiring:
         up as two occurrences of this comprehension shape."""
         src = _try_auto_queue_source()
         occurrences = src.count("for m in vc.channel.members if not m.bot")
-        assert occurrences == 1, (
-            f"expected exactly one voice-member comprehension (reused), found {occurrences}"
-        )
+        assert occurrences == 1, f"expected exactly one voice-member comprehension (reused), found {occurrences}"
 
 
 # ---------------------------------------------------------------------------

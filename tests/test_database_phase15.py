@@ -25,7 +25,6 @@ import pytest
 
 import database
 
-
 # ---------------------------------------------------------------------------
 # Skip guard — mirrors test_database_phase11.py convention
 # ---------------------------------------------------------------------------
@@ -49,9 +48,7 @@ class TestPhase15HelpersExist:
     """Verify the two new /memory-surface helpers exist with locked-down shapes."""
 
     def test_list_user_memories_exists(self) -> None:
-        assert hasattr(database, "list_user_memories"), (
-            "list_user_memories must exist in database.py (RAG-03)"
-        )
+        assert hasattr(database, "list_user_memories"), "list_user_memories must exist in database.py (RAG-03)"
 
     def test_delete_all_user_memories_exists(self) -> None:
         assert hasattr(database, "delete_all_user_memories"), (
@@ -61,9 +58,7 @@ class TestPhase15HelpersExist:
     def test_list_user_memories_is_user_scoped(self) -> None:
         """list_user_memories must filter WHERE user_id = $1 (T-11-04c pattern)."""
         src = inspect.getsource(database.list_user_memories)
-        assert "user_id" in src and "$1" in src, (
-            "list_user_memories must filter by user_id = $1 (cross-user guard)"
-        )
+        assert "user_id" in src and "$1" in src, "list_user_memories must filter by user_id = $1 (cross-user guard)"
 
     def test_list_user_memories_uses_display_ordering(self) -> None:
         """list_user_memories must order salience DESC — display order, not eviction order."""
@@ -77,19 +72,14 @@ class TestPhase15HelpersExist:
     def test_delete_all_user_memories_is_user_scoped(self) -> None:
         """delete_all_user_memories must DELETE ... WHERE user_id = $1."""
         src = inspect.getsource(database.delete_all_user_memories)
-        assert "user_id = $1" in src, (
-            "delete_all_user_memories must scope the DELETE to user_id = $1"
-        )
-        assert "DELETE FROM user_memories" in src, (
-            "delete_all_user_memories must DELETE FROM user_memories"
-        )
+        assert "user_id = $1" in src, "delete_all_user_memories must scope the DELETE to user_id = $1"
+        assert "DELETE FROM user_memories" in src, "delete_all_user_memories must DELETE FROM user_memories"
 
     def test_delete_all_user_memories_is_hard_delete(self) -> None:
         """No tombstone/soft-delete column — a real DELETE only (T-15-03)."""
         src = inspect.getsource(database.delete_all_user_memories)
         assert "deleted_at" not in src, (
-            "delete_all_user_memories must be a hard DELETE — no deleted_at "
-            "tombstone column (Pitfall 3 / T-15-03)"
+            "delete_all_user_memories must be a hard DELETE — no deleted_at tombstone column (Pitfall 3 / T-15-03)"
         )
 
     def test_delete_all_user_memories_has_single_identity_param(self) -> None:
@@ -122,7 +112,8 @@ async def test_remember_forget_recall_empty(pool) -> None:
     count) both before and after delete_all_user_memories, proving the row
     AND its embedding are genuinely gone — not merely filtered.
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     import config
 
     user_id = "test-phase15-forget"
@@ -141,18 +132,14 @@ async def test_remember_forget_recall_empty(pool) -> None:
     )
 
     # Sanity: the row is really there BEFORE forget.
-    before = await database.search_memories(
-        pool, user_id=user_id, query_embedding=embedding, k=5
-    )
+    before = await database.search_memories(pool, user_id=user_id, query_embedding=embedding, k=5)
     assert len(before) == 1
 
     deleted = await database.delete_all_user_memories(pool, user_id)
     assert deleted == 1
 
     # Re-query through the REAL ANN search path — must be empty.
-    after = await database.search_memories(
-        pool, user_id=user_id, query_embedding=embedding, k=5
-    )
+    after = await database.search_memories(pool, user_id=user_id, query_embedding=embedding, k=5)
     assert after == [], (
         "search_memories must return [] after delete_all_user_memories — "
         "rows AND embeddings must be verifiably gone (RAG-04 Success Criterion 4)"

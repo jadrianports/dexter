@@ -115,9 +115,7 @@ class MemoryPageView(discord.ui.View):
         return embed
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
-    async def prev_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.page = max(0, self.page - 1)
         await interaction.response.edit_message(
             embed=self._build_embed(),
@@ -126,9 +124,7 @@ class MemoryPageView(discord.ui.View):
         )
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
-    async def next_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.page = min(len(self.pages) - 1, self.page + 1)
         await interaction.response.edit_message(
             embed=self._build_embed(),
@@ -172,9 +168,7 @@ class ForgetConfirmView(discord.ui.View):
         self._used = False
 
     @discord.ui.button(label="wipe it all", style=discord.ButtonStyle.danger)
-    async def confirm_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self._used:
             await interaction.response.send_message("already handled that.", ephemeral=True)
             return
@@ -196,9 +190,7 @@ class ForgetConfirmView(discord.ui.View):
                 ephemeral=True,
             )
         except Exception as exc:
-            log.error(
-                "Memory forget failed for user %s: %s", self.user_id, exc, exc_info=True
-            )
+            log.error("Memory forget failed for user %s: %s", self.user_id, exc, exc_info=True)
             await interaction.followup.send(
                 "something broke wiping that. try again in a bit — nothing was confirmed deleted.",
                 ephemeral=True,
@@ -211,18 +203,14 @@ class ForgetConfirmView(discord.ui.View):
                 pass
 
     @discord.ui.button(label="never mind", style=discord.ButtonStyle.secondary)
-    async def cancel_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self._used:
             await interaction.response.send_message("already handled that.", ephemeral=True)
             return
         self._used = True
         for child in self.children:
             child.disabled = True
-        await interaction.response.send_message(
-            "cancelled — nothing was touched.", ephemeral=True
-        )
+        await interaction.response.send_message("cancelled — nothing was touched.", ephemeral=True)
         if self.message is not None:
             try:
                 await self.message.edit(view=self)
@@ -262,13 +250,9 @@ class MemoryCog(commands.Cog):
         # MUST use MEMORY_MAX_PER_USER, NEVER the smaller prompt-injection cap
         # constant (Pitfall 2 / T-15-12) — the view must never truncate below
         # what forget erases.
-        rows = await database.list_user_memories(
-            self.bot.pool, user_id=user_id, limit=config.MEMORY_MAX_PER_USER
-        )
+        rows = await database.list_user_memories(self.bot.pool, user_id=user_id, limit=config.MEMORY_MAX_PER_USER)
         if not rows:
-            await interaction.response.send_message(
-                "i don't remember anything about you yet.", ephemeral=True
-            )
+            await interaction.response.send_message("i don't remember anything about you yet.", ephemeral=True)
             return
 
         facts = [row["fact"] for row in rows]  # VERBATIM — no paraphrase (D-02)
@@ -293,9 +277,7 @@ class MemoryCog(commands.Cog):
         user_id = str(interaction.user.id)
         count = await database.count_user_memories(self.bot.pool, user_id)
         if count == 0:
-            await interaction.response.send_message(
-                "already got nothing on you.", ephemeral=True
-            )
+            await interaction.response.send_message("already got nothing on you.", ephemeral=True)
             return
 
         view = ForgetConfirmView(self.bot, user_id, count)
@@ -317,9 +299,7 @@ class MemoryCog(commands.Cog):
             app_commands.Choice(name="off", value="off"),
         ]
     )
-    async def memory_callbacks(
-        self, interaction: discord.Interaction, setting: app_commands.Choice[str]
-    ) -> None:
+    async def memory_callbacks(self, interaction: discord.Interaction, setting: app_commands.Choice[str]) -> None:
         """/memory callbacks on|off — pause/resume proactive callbacks (PROACT-02).
 
         Self-scoped only (str(interaction.user.id)); no target param (V4,
@@ -329,9 +309,7 @@ class MemoryCog(commands.Cog):
         """
         user_id = str(interaction.user.id)
         opted_out = setting.value == "off"
-        await database.set_proactive_opt_out(
-            self.bot.pool, user_id=user_id, opted_out=opted_out
-        )
+        await database.set_proactive_opt_out(self.bot.pool, user_id=user_id, opted_out=opted_out)
         if opted_out:
             msg = "fine, i'll keep my mouth shut. your memories are still here though."
         else:

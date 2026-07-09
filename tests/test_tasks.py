@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -43,9 +42,7 @@ def _make_task(
     task.cancelled.return_value = cancelled
     task.get_name.return_value = name
     if cancelled:
-        task.exception.side_effect = asyncio.CancelledError(
-            "exception() must not be called on a cancelled task"
-        )
+        task.exception.side_effect = asyncio.CancelledError("exception() must not be called on a cancelled task")
     else:
         task.exception.return_value = exc
     return task
@@ -55,8 +52,7 @@ def _make_task(
 # Import target (will fail at collection time until utils/tasks.py is created)
 # ---------------------------------------------------------------------------
 
-from utils.tasks import _on_task_done, _post_task_error, _last_task_error_post  # noqa: E402
-
+from utils.tasks import _last_task_error_post, _on_task_done, _post_task_error  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # _on_task_done — cancelled path
@@ -92,17 +88,17 @@ class TestExceptionTask:
         exc = ValueError("something broke")
         task = _make_task(exc=exc, name="prefetch")
 
-        with patch("utils.tasks.log") as mock_log, \
-             patch("utils.tasks._post_task_error", return_value=None), \
-             patch("asyncio.ensure_future"):
+        with (
+            patch("utils.tasks.log") as mock_log,
+            patch("utils.tasks._post_task_error", return_value=None),
+            patch("asyncio.ensure_future"),
+        ):
             _on_task_done(task, bot=None)
 
         mock_log.error.assert_called_once()
         call_args = mock_log.error.call_args
         # exc_info must be passed as a keyword argument and match the exception
-        assert call_args.kwargs.get("exc_info") is exc, (
-            f"Expected exc_info={exc!r}, got {call_args.kwargs}"
-        )
+        assert call_args.kwargs.get("exc_info") is exc, f"Expected exc_info={exc!r}, got {call_args.kwargs}"
 
     def test_success_task_not_logged(self):
         """A task that completed successfully (exception() returns None) must not log."""
@@ -118,8 +114,7 @@ class TestExceptionTask:
         exc = RuntimeError("crash")
         task = _make_task(exc=exc)
 
-        with patch("utils.tasks.log"), \
-             patch("asyncio.ensure_future") as mock_ensure:
+        with patch("utils.tasks.log"), patch("asyncio.ensure_future") as mock_ensure:
             _on_task_done(task, bot=None)
 
         mock_ensure.assert_not_called()
@@ -133,10 +128,12 @@ class TestExceptionTask:
 class TestDedupThrottle:
     def _run_on_task_done(self, task, bot, monotonic_value: float):
         """Helper: run _on_task_done with a mocked monotonic time and patched helpers."""
-        with patch("utils.tasks.log"), \
-             patch("utils.tasks._post_task_error", return_value=None) as mock_post, \
-             patch("asyncio.ensure_future") as mock_ensure, \
-             patch("time.monotonic", return_value=monotonic_value):
+        with (
+            patch("utils.tasks.log"),
+            patch("utils.tasks._post_task_error", return_value=None),
+            patch("asyncio.ensure_future") as mock_ensure,
+            patch("time.monotonic", return_value=monotonic_value),
+        ):
             _on_task_done(task, bot=bot)
         return mock_ensure
 
@@ -161,8 +158,8 @@ class TestDedupThrottle:
 
     def test_dedup_allows_post_after_window(self):
         """Same error key after TASK_ERROR_CHANNEL_COOLDOWN_SECONDS → second post allowed."""
-        import utils.tasks as tasks_mod
         import config
+        import utils.tasks as tasks_mod
 
         exc = TypeError("type error")
         task = _make_task(exc=exc, name="auto-queue")

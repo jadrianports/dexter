@@ -24,11 +24,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from models.memory import MemoryFact, apply_floor, novelty_score, rerank, recency_score
+from models.memory import MemoryFact, apply_floor, novelty_score, recency_score, rerank
 
 # 11-07: guard so the file collects cleanly at the RED commit boundary
 try:
     from models.memory import decay_predicate as decay_predicate  # type: ignore[assignment]
+
     _DECAY_PREDICATE_AVAILABLE = True
 except ImportError:
     decay_predicate = None  # type: ignore[assignment]
@@ -40,7 +41,8 @@ _SERVICES_MEMORY_AVAILABLE = importlib.util.find_spec("services.memory") is not 
 # Skip write-logic test classes until models/memory.py exports them (11-04 Task 1).
 _WRITE_LOGIC_AVAILABLE = False
 try:
-    from models.memory import dedup_decision, compute_salience, choose_eviction
+    from models.memory import choose_eviction, compute_salience, dedup_decision
+
     _WRITE_LOGIC_AVAILABLE = True
 except ImportError:
     pass
@@ -49,6 +51,7 @@ except ImportError:
 _REMEMBER_AVAILABLE = False
 try:
     from services.memory import MemoryService as _MemoryServiceCheck
+
     _REMEMBER_AVAILABLE = hasattr(_MemoryServiceCheck, "remember")
 except ImportError:
     pass
@@ -56,7 +59,8 @@ except ImportError:
 # Skip 11-05 gate tests until is_sensitive / contains_number are added (11-05 Task 1).
 _DISTILL_GATE_AVAILABLE = False
 try:
-    from models.memory import is_sensitive, contains_number  # noqa: F401
+    from models.memory import contains_number, is_sensitive  # noqa: F401
+
     _DISTILL_GATE_AVAILABLE = True
 except ImportError:
     pass
@@ -65,6 +69,7 @@ except ImportError:
 _DISTILL_SVC_AVAILABLE = False
 try:
     from services.memory import MemoryService as _MemSvc2
+
     _DISTILL_SVC_AVAILABLE = hasattr(_MemSvc2, "distill")
 except ImportError:
     pass
@@ -74,7 +79,7 @@ except ImportError:
 # Shared test fixtures
 # ---------------------------------------------------------------------------
 
-_EPOCH = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)   # fixed "now" for all tests
+_EPOCH = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)  # fixed "now" for all tests
 
 
 def _fact(
@@ -131,7 +136,7 @@ class TestApplyFloor:
     def test_mixed_above_and_below(self) -> None:
         facts = [
             _fact(id=1, similarity=0.80),
-            _fact(id=2, similarity=0.65),   # below the 0.70 floor
+            _fact(id=2, similarity=0.65),  # below the 0.70 floor
             _fact(id=3, similarity=0.72),
         ]
         result = apply_floor(facts, 0.70)
@@ -267,10 +272,10 @@ class TestRerank:
         result = rerank(
             [fact_a, fact_b],
             now=now,
-            relevance_weight=0.1,   # tiny weight: A gets 0.1*0.95=0.095, B gets 0.1*0.75=0.075
+            relevance_weight=0.1,  # tiny weight: A gets 0.1*0.95=0.095, B gets 0.1*0.75=0.075
             recency_weight=0.0,
             salience_weight=0.0,
-            novelty_weight=1.0,     # large weight: A gets 1.0*0=0, B gets 1.0*1.0=1.0
+            novelty_weight=1.0,  # large weight: A gets 1.0*0=0, B gets 1.0*1.0=1.0
         )
         # composite(A) = 0.095 + 0 = 0.095
         # composite(B) = 0.075 + 1.0 = 1.075  → B wins
@@ -284,7 +289,7 @@ class TestRerank:
         now = _EPOCH
         f_high = _fact(id=1, similarity=0.9, salience=0.9, last_surfaced_at=None)
         f_low = _fact(id=2, similarity=0.5, salience=0.5, last_surfaced_at=now)
-        result = rerank([f_low, f_high], now=now)   # f_low first in input
+        result = rerank([f_low, f_high], now=now)  # f_low first in input
         assert result[0].id == f_high.id
 
     def test_now_is_clock_injectable(self) -> None:
@@ -308,7 +313,13 @@ class TestRerank:
         """Default weights (from PATTERNS.md) produce a deterministic ordering."""
         now = _EPOCH
         f1 = _fact(id=1, similarity=0.9, salience=0.9, last_surfaced_at=None, created_at=now)
-        f2 = _fact(id=2, similarity=0.6, salience=0.3, last_surfaced_at=now - timedelta(hours=1), created_at=now - timedelta(days=1))
+        f2 = _fact(
+            id=2,
+            similarity=0.6,
+            salience=0.3,
+            last_surfaced_at=now - timedelta(hours=1),
+            created_at=now - timedelta(days=1),
+        )
         result1 = rerank([f1, f2], now=now)
         result2 = rerank([f2, f1], now=now)
         # Same order regardless of input order
@@ -331,6 +342,7 @@ class TestEmbedLimiter:
     def test_embed_acquires_embed_limiter_not_rate_limiter(self) -> None:
         """embed() must call self._embed_limiter.acquire, never self._rate_limiter.acquire."""
         import inspect
+
         import services.gemini as g
 
         src = inspect.getsource(g.GeminiService.embed)
@@ -342,8 +354,9 @@ class TestEmbedLimiter:
     def test_embed_uses_configured_embedding_model(self) -> None:
         """embed() must use config.EMBEDDING_MODEL (gemini-embedding-001), not GEMINI_MODEL."""
         import inspect
-        import services.gemini as g
+
         import config
+        import services.gemini as g
 
         src = inspect.getsource(g.GeminiService.embed)
         assert "EMBEDDING_MODEL" in src, "embed() must reference config.EMBEDDING_MODEL"
@@ -353,8 +366,9 @@ class TestEmbedLimiter:
     def test_embed_uses_correct_output_dimensionality(self) -> None:
         """embed() must pass output_dimensionality=config.EMBED_DIM (768)."""
         import inspect
-        import services.gemini as g
+
         import config
+        import services.gemini as g
 
         src = inspect.getsource(g.GeminiService.embed)
         assert "output_dimensionality" in src
@@ -382,9 +396,10 @@ class TestRecallService:
     def _make_service(self, embed_return=None, search_rows=None, embed_raises=None):
         """Build a MemoryService with mocked dependencies."""
         import asyncio
+
         import database
+        from services.gemini import GeminiAPIError, GeminiRateLimitError
         from services.memory import MemoryService
-        from services.gemini import GeminiRateLimitError, GeminiAPIError
 
         # Mock GeminiService.embed
         mock_gemini = MagicMock()
@@ -404,6 +419,7 @@ class TestRecallService:
     def test_returns_empty_on_rate_limit_error(self) -> None:
         """GeminiRateLimitError from embed → recall returns [] (no memory beats wrong memory)."""
         import asyncio
+
         from services.gemini import GeminiRateLimitError
 
         svc, _, _ = self._make_service(embed_raises=GeminiRateLimitError("rate limited"))
@@ -417,6 +433,7 @@ class TestRecallService:
     def test_returns_empty_on_gemini_api_error(self) -> None:
         """GeminiAPIError from embed → recall returns [] (graceful degrade)."""
         import asyncio
+
         from services.gemini import GeminiAPIError
 
         svc, _, _ = self._make_service(embed_raises=GeminiAPIError("api error"))
@@ -430,6 +447,7 @@ class TestRecallService:
     def test_returns_empty_when_nothing_clears_floor(self) -> None:
         """When all search results are below the similarity floor, returns []."""
         import asyncio
+
         import database
 
         svc, _, _ = self._make_service()
@@ -438,10 +456,15 @@ class TestRecallService:
         now = datetime.now(timezone.utc)
         below_floor_rows = [
             {
-                "id": 1, "fact": "likes hip hop", "salience": 0.5,
-                "hit_count": 1, "created_at": now, "last_seen_at": now,
-                "last_surfaced_at": None, "surface_count": 0,
-                "similarity": 0.50,   # below 0.70 floor
+                "id": 1,
+                "fact": "likes hip hop",
+                "salience": 0.5,
+                "hit_count": 1,
+                "created_at": now,
+                "last_seen_at": now,
+                "last_surfaced_at": None,
+                "surface_count": 0,
+                "similarity": 0.50,  # below 0.70 floor
             }
         ]
 
@@ -466,6 +489,7 @@ class TestRecallService:
     def test_returns_capped_facts_when_some_clear_floor(self) -> None:
         """Returns at most MEMORY_INJECT_CAP facts when some clear the floor."""
         import asyncio
+
         import config
         import database
 
@@ -476,10 +500,15 @@ class TestRecallService:
         cap = config.MEMORY_INJECT_CAP
         above_floor_rows = [
             {
-                "id": i, "fact": f"fact {i}", "salience": 0.5,
-                "hit_count": 1, "created_at": now, "last_seen_at": now,
-                "last_surfaced_at": None, "surface_count": 0,
-                "similarity": 0.80,   # above 0.70 floor
+                "id": i,
+                "fact": f"fact {i}",
+                "salience": 0.5,
+                "hit_count": 1,
+                "created_at": now,
+                "last_seen_at": now,
+                "last_surfaced_at": None,
+                "surface_count": 0,
+                "similarity": 0.80,  # above 0.70 floor
             }
             for i in range(1, cap + 3)  # cap+2 rows
         ]
@@ -503,8 +532,8 @@ class TestRecallService:
             database.bump_surfaced = orig_bump
 
         assert len(result) <= cap
-        assert len(bumped_ids) == len(result)   # bump called for each returned fact
-        assert all(isinstance(s, str) for s in result)   # returns strings
+        assert len(bumped_ids) == len(result)  # bump called for each returned fact
+        assert all(isinstance(s, str) for s in result)  # returns strings
 
 
 # ---------------------------------------------------------------------------
@@ -552,14 +581,13 @@ class TestSearchMemoriesKindFilter:
     def test_kind_none_omits_clause_and_keeps_original_params(self) -> None:
         """Byte-identical regression: omitting kind must not emit any kind clause (Pitfall 1)."""
         import asyncio
+
         import database
 
         pool = _FakePool()
         embedding = [0.1] * 768
 
-        asyncio.run(
-            database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5)
-        )
+        asyncio.run(database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5))
 
         assert "kind =" not in pool.conn.last_sql
         assert "kind IS NULL" not in pool.conn.last_sql
@@ -568,16 +596,13 @@ class TestSearchMemoriesKindFilter:
     def test_kind_taste_episode_appends_clause_and_binds_positionally(self) -> None:
         """kind='taste_episode' appends 'AND kind = $3' and binds kind before k."""
         import asyncio
+
         import database
 
         pool = _FakePool()
         embedding = [0.1] * 768
 
-        asyncio.run(
-            database.search_memories(
-                pool, user_id="u1", query_embedding=embedding, k=5, kind="taste_episode"
-            )
-        )
+        asyncio.run(database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5, kind="taste_episode"))
 
         assert "AND kind = $3" in pool.conn.last_sql
         assert pool.conn.last_params == ("u1", embedding, "taste_episode", 5)
@@ -597,6 +622,7 @@ class TestRecallKindParam:
     def test_recall_omits_kind_by_default(self) -> None:
         """recall() without a kind arg forwards kind=None (byte-identical regression)."""
         import asyncio
+
         import database
 
         svc = self._make_service()
@@ -619,6 +645,7 @@ class TestRecallKindParam:
     def test_recall_forwards_kind_to_search_memories(self) -> None:
         """recall(..., kind='taste_episode') forwards kind straight through."""
         import asyncio
+
         import database
 
         svc = self._make_service()
@@ -631,9 +658,7 @@ class TestRecallKindParam:
         orig_search = database.search_memories
         database.search_memories = fake_search
         try:
-            asyncio.run(
-                svc.recall("user1", "guild1", "test query", kind="taste_episode")
-            )
+            asyncio.run(svc.recall("user1", "guild1", "test query", kind="taste_episode"))
         finally:
             database.search_memories = orig_search
 
@@ -642,6 +667,7 @@ class TestRecallKindParam:
     def test_recall_signature_accepts_kind_defaulting_to_none(self) -> None:
         """recall's signature must accept kind as keyword, defaulting to None."""
         import inspect
+
         from services.memory import MemoryService
 
         sig = inspect.signature(MemoryService.recall)
@@ -729,6 +755,7 @@ class TestComputeSalience:
     def test_ordinal_ladder_from_config(self) -> None:
         """MEMORY_SALIENCE_BASE_WEIGHTS is ordinally monotone: milestone > auto_queue_ignored >= daily_batch."""
         import config
+
         w = config.MEMORY_SALIENCE_BASE_WEIGHTS
         assert w["milestone"] > w["late_night"], "milestone must outrank late_night"
         assert w["late_night"] > w["repeat_song"], "late_night must outrank repeat_song"
@@ -738,12 +765,14 @@ class TestComputeSalience:
     def test_milestone_kind_has_highest_base(self) -> None:
         """milestone base weight is the highest among all defined event kinds."""
         import config
+
         w = config.MEMORY_SALIENCE_BASE_WEIGHTS
         assert w["milestone"] == max(w.values()), "milestone must be the highest base weight"
 
     def test_milestone_salience_above_auto_queue(self) -> None:
         """compute_salience with milestone base beats auto_queue_ignored base (no bump)."""
         import config
+
         w = config.MEMORY_SALIENCE_BASE_WEIGHTS
         assert compute_salience(w["milestone"]) > compute_salience(w["auto_queue_ignored"])
 
@@ -830,6 +859,7 @@ class TestRememberService:
     ):
         """Build a MemoryService with mocked gemini and DB helpers."""
         import asyncio
+
         from services.memory import MemoryService
 
         mock_gemini = MagicMock()
@@ -845,6 +875,7 @@ class TestRememberService:
     def test_rate_limited_embed_returns_without_inserting(self) -> None:
         """GeminiRateLimitError on embed → return silently, never call insert_memory."""
         import asyncio
+
         import database
         from services.gemini import GeminiRateLimitError
 
@@ -859,10 +890,15 @@ class TestRememberService:
         orig_insert = database.insert_memory
         database.insert_memory = fake_insert
         try:
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="likes lofi hip hop", kind="daily_batch", salience=0.3,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="likes lofi hip hop",
+                    kind="daily_batch",
+                    salience=0.3,
+                )
+            )
         finally:
             database.insert_memory = orig_insert
 
@@ -871,17 +907,22 @@ class TestRememberService:
     def test_near_duplicate_bumps_existing_row(self) -> None:
         """When nearest existing memory has similarity > threshold → bump, not insert."""
         import asyncio
-        import database
         from datetime import timezone
+
+        import database
 
         now = datetime.now(timezone.utc)
         near_dup_row = {
-            "id": 42, "fact": "likes lofi hip hop",
+            "id": 42,
+            "fact": "likes lofi hip hop",
             "kind": "daily_batch",  # search_memories now returns kind (CR-13-01)
             "salience": 0.5,
-            "hit_count": 1, "created_at": now, "last_seen_at": now,
-            "last_surfaced_at": None, "surface_count": 0,
-            "similarity": 0.95,   # above MEMORY_DEDUP_THRESHOLD=0.92
+            "hit_count": 1,
+            "created_at": now,
+            "last_seen_at": now,
+            "last_surfaced_at": None,
+            "surface_count": 0,
+            "similarity": 0.95,  # above MEMORY_DEDUP_THRESHOLD=0.92
         }
 
         svc, _, _ = self._make_service()
@@ -906,10 +947,15 @@ class TestRememberService:
         database.bump_memory_hit = fake_bump_hit
         database.insert_memory = fake_insert
         try:
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="likes lofi hip hop", kind="daily_batch", salience=0.3,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="likes lofi hip hop",
+                    kind="daily_batch",
+                    salience=0.3,
+                )
+            )
         finally:
             database.search_memories = orig_search
             database.bump_memory_hit = orig_bump
@@ -921,17 +967,22 @@ class TestRememberService:
     def test_distinct_fact_inserts_new_row(self) -> None:
         """When nearest memory is below threshold → insert new row, no bump."""
         import asyncio
-        import database
         from datetime import timezone
+
+        import database
 
         now = datetime.now(timezone.utc)
         distinct_row = {
-            "id": 99, "fact": "different fact entirely",
+            "id": 99,
+            "fact": "different fact entirely",
             "kind": "daily_batch",  # search_memories now returns kind (CR-13-01)
             "salience": 0.5,
-            "hit_count": 1, "created_at": now, "last_seen_at": now,
-            "last_surfaced_at": None, "surface_count": 0,
-            "similarity": 0.55,   # below MEMORY_DEDUP_THRESHOLD=0.92
+            "hit_count": 1,
+            "created_at": now,
+            "last_seen_at": now,
+            "last_surfaced_at": None,
+            "surface_count": 0,
+            "similarity": 0.55,  # below MEMORY_DEDUP_THRESHOLD=0.92
         }
 
         svc, _, _ = self._make_service()
@@ -961,10 +1012,15 @@ class TestRememberService:
         database.insert_memory = fake_insert
         database.count_user_memories = fake_count
         try:
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="likes synthwave",  kind="repeat_song", salience=0.5,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="likes synthwave",
+                    kind="repeat_song",
+                    salience=0.5,
+                )
+            )
         finally:
             database.search_memories = orig_search
             database.bump_memory_hit = orig_bump
@@ -977,6 +1033,7 @@ class TestRememberService:
     def test_no_existing_memories_inserts_new_row(self) -> None:
         """When search_memories returns [] → no dedup check, just insert."""
         import asyncio
+
         import database
 
         svc, _, _ = self._make_service()
@@ -1000,10 +1057,15 @@ class TestRememberService:
         database.insert_memory = fake_insert
         database.count_user_memories = fake_count
         try:
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="first memory ever", kind="milestone", salience=1.0,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="first memory ever",
+                    kind="milestone",
+                    salience=1.0,
+                )
+            )
         finally:
             database.search_memories = orig_search
             database.insert_memory = orig_insert
@@ -1014,6 +1076,7 @@ class TestRememberService:
     def test_remember_never_raises(self) -> None:
         """Any unexpected error inside remember() must not propagate to callers."""
         import asyncio
+
         import database
 
         svc, _, _ = self._make_service()
@@ -1025,10 +1088,15 @@ class TestRememberService:
         database.search_memories = fake_search
         try:
             # Must not raise
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="test", kind="daily_batch", salience=0.2,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="test",
+                    kind="daily_batch",
+                    salience=0.2,
+                )
+            )
         except Exception as e:
             pytest.fail(f"remember() raised an unexpected exception: {e!r}")
         finally:
@@ -1153,9 +1221,7 @@ class TestDistillService:
         """A fact with a digit is dropped by the contains_number backstop."""
         import asyncio
 
-        svc = self._make_service(
-            chat_return='["only listens to drake", "queued it 14 times"]'
-        )
+        svc = self._make_service(chat_return='["only listens to drake", "queued it 14 times"]')
         result = asyncio.run(svc.distill("some banter context"))
         # Digit-bearing fact must be dropped
         assert not any("14" in f for f in result)
@@ -1166,9 +1232,7 @@ class TestDistillService:
         """A fact matching a blocked D-01 category is dropped by the is_sensitive backstop."""
         import asyncio
 
-        svc = self._make_service(
-            chat_return='["has been really depressed lately", "likes indie pop"]'
-        )
+        svc = self._make_service(chat_return='["has been really depressed lately", "likes indie pop"]')
         result = asyncio.run(svc.distill("some banter context"))
         # Sensitive fact dropped
         assert not any("depress" in f.lower() for f in result)
@@ -1186,6 +1250,7 @@ class TestDistillService:
     def test_distill_returns_empty_on_rate_limit(self) -> None:
         """GeminiRateLimitError from chat → distill returns [] (priority-2 degrade)."""
         import asyncio
+
         from services.gemini import GeminiRateLimitError
 
         svc = self._make_service(chat_raises=GeminiRateLimitError("rate limited"))
@@ -1196,9 +1261,7 @@ class TestDistillService:
         """Model output with 5 safe facts is capped to at most 3."""
         import asyncio
 
-        svc = self._make_service(
-            chat_return='["fact one", "fact two", "fact three", "fact four", "fact five"]'
-        )
+        svc = self._make_service(chat_return='["fact one", "fact two", "fact three", "fact four", "fact five"]')
         result = asyncio.run(svc.distill("some context"))
         assert len(result) <= 3
 
@@ -1221,43 +1284,40 @@ class TestDistillService:
 def test_per_message_write_absent_from_on_message() -> None:
     """on_message in EventsCog must NOT call distill_and_remember (D-09 guarantee)."""
     import inspect
+
     import cogs.events as e
 
     src = inspect.getsource(e.EventsCog.on_message)
     assert "distill_and_remember" not in src, (
         "on_message must NEVER call distill_and_remember (D-09: no per-message write)"
     )
-    assert "memory_service" not in src, (
-        "on_message must NEVER reference memory_service (D-09: no per-message write)"
-    )
+    assert "memory_service" not in src, "on_message must NEVER reference memory_service (D-09: no per-message write)"
 
 
 def test_trigger_write_hook_uses_create_task_in_events_cog() -> None:
     """Events cog notable-event hooks must use asyncio.create_task (3-second rule)."""
     import inspect
+
     import cogs.events as e
 
     src = inspect.getsource(e)
     assert "distill_and_remember" in src, (
         "cogs/events.py must wire distill_and_remember at notable-event sites (D-09 path 1)"
     )
-    assert "create_task" in src, (
-        "cogs/events.py must use asyncio.create_task for memory hooks (3s rule / T-11-05e)"
-    )
+    assert "create_task" in src, "cogs/events.py must use asyncio.create_task for memory hooks (3s rule / T-11-05e)"
 
 
 def test_trigger_write_hook_uses_create_task_in_music_cog() -> None:
     """Music cog notable-event hooks must use asyncio.create_task (3-second rule)."""
     import inspect
+
     import cogs.music as m
 
     src = inspect.getsource(m)
     assert "distill_and_remember" in src, (
         "cogs/music.py must wire distill_and_remember at notable-event sites (D-09 path 1)"
     )
-    assert "create_task" in src, (
-        "cogs/music.py must use asyncio.create_task for memory hooks (3s rule / T-11-05e)"
-    )
+    assert "create_task" in src, "cogs/music.py must use asyncio.create_task for memory hooks (3s rule / T-11-05e)"
 
 
 # ---------------------------------------------------------------------------
@@ -1269,17 +1329,13 @@ def test_memory_sweep_task_defined_in_bot() -> None:
     """memory_sweep must be a module-level @tasks.loop defined in bot.py (MEM-07)."""
     import bot as b
 
-    assert hasattr(b, "memory_sweep"), (
-        "bot.py must define memory_sweep as a module-level @tasks.loop (11-07 Task 3)"
-    )
+    assert hasattr(b, "memory_sweep"), "bot.py must define memory_sweep as a module-level @tasks.loop (11-07 Task 3)"
 
 
 def test_memory_sweep_started_in_initialize_once() -> None:
     """_initialize_once must call memory_sweep.start() behind is_running() guard (MEM-07)."""
     src = open("bot.py", encoding="utf-8").read()
-    assert "memory_sweep.start()" in src, (
-        "bot.py _initialize_once must call memory_sweep.start() (MEM-07 / REL-02)"
-    )
+    assert "memory_sweep.start()" in src, "bot.py _initialize_once must call memory_sweep.start() (MEM-07 / REL-02)"
 
 
 def test_memory_sweep_in_cleanup_partial_init() -> None:
@@ -1287,9 +1343,7 @@ def test_memory_sweep_in_cleanup_partial_init() -> None:
     src = open("bot.py", encoding="utf-8").read()
     # The cleanup loop list appears after _cleanup_partial_init definition
     tail = src.split("_cleanup_partial_init")[1][:900]
-    assert "memory_sweep" in tail, (
-        "memory_sweep must appear in the _cleanup_partial_init loop-cancel list (T-11-07c)"
-    )
+    assert "memory_sweep" in tail, "memory_sweep must appear in the _cleanup_partial_init loop-cancel list (T-11-07c)"
 
 
 # ---------------------------------------------------------------------------
@@ -1336,33 +1390,25 @@ class TestDecayPredicate:
         """Fact older than decay window + below salience floor → selected for sweep."""
         fact = _make_decay_fact(salience=0.2, age_days=100.0)
         result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
-        assert result is True, (
-            "An expired (100 days > 90) low-salience (0.2) fact must be selected for sweep"
-        )
+        assert result is True, "An expired (100 days > 90) low-salience (0.2) fact must be selected for sweep"
 
     def test_old_high_salience_retained(self) -> None:
         """Fact past decay window but high-salience → retained (D-08 guarantee)."""
         fact = _make_decay_fact(salience=0.7, age_days=100.0)
         result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
-        assert result is False, (
-            "An expired high-salience (0.7) fact must be retained regardless of age (D-08)"
-        )
+        assert result is False, "An expired high-salience (0.7) fact must be retained regardless of age (D-08)"
 
     def test_recent_low_salience_retained(self) -> None:
         """Fact below salience floor but still within decay window → retained."""
         fact = _make_decay_fact(salience=0.2, age_days=5.0)
         result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
-        assert result is False, (
-            "A recent (5 days < 90) low-salience fact must be retained — too new to sweep"
-        )
+        assert result is False, "A recent (5 days < 90) low-salience fact must be retained — too new to sweep"
 
     def test_salience_at_floor_boundary_retained(self) -> None:
         """Fact with salience exactly at the default floor (0.5) is retained (inclusive >= check)."""
         fact = _make_decay_fact(salience=0.5, age_days=100.0)
         result = decay_predicate(fact, _DECAY_NOW, decay_days=90)
-        assert result is False, (
-            "Salience exactly at the floor (0.5 >= 0.5) must be retained (boundary test)"
-        )
+        assert result is False, "Salience exactly at the floor (0.5 >= 0.5) must be retained (boundary test)"
 
     def test_age_exactly_at_decay_boundary_retained(self) -> None:
         """Fact aged exactly decay_days is retained (boundary — strictly > decay_days needed)."""

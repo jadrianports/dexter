@@ -1,8 +1,9 @@
 """Tests for the MusicQueue model."""
 
 import pytest
+
 import config
-from models.queue import Track, LoopMode, MusicQueue, QueueFullError
+from models.queue import LoopMode, MusicQueue, QueueFullError, Track
 
 
 def make_track(video_id: str = "abc123", title: str = "Test Song", **kwargs) -> Track:
@@ -82,7 +83,7 @@ class TestMusicQueueSkip:
         q.add(make_track(video_id="b"))
         q.current_index = 0
         q.loop_mode = LoopMode.SINGLE
-        result = q.skip()
+        q.skip()
         assert q.current_index == 1
 
 
@@ -103,7 +104,7 @@ class TestMusicQueueAdvance:
         q.add(make_track(video_id="a"))
         q.add(make_track(video_id="b"))
         q.current_index = 0
-        result = q.advance()
+        q.advance()
         assert q.current_index == 1
 
     def test_advance_wraps_on_loop_queue(self):
@@ -112,7 +113,7 @@ class TestMusicQueueAdvance:
         q.add(make_track(video_id="b"))
         q.current_index = 1
         q.loop_mode = LoopMode.QUEUE
-        result = q.advance()
+        q.advance()
         assert q.current_index == 0
 
 
@@ -245,7 +246,7 @@ class TestElapsedTracking:
     def test_resumed_excludes_pause_gap(self):
         q = MusicQueue(guild_id=1)
         q.mark_started(offset_seconds=0, now=100.0)
-        q.mark_paused(now=130.0)   # 30 s elapsed, then paused for 70 s
+        q.mark_paused(now=130.0)  # 30 s elapsed, then paused for 70 s
         q.mark_resumed(now=200.0)
         # 10 more seconds pass after resume → elapsed = 30 + 10 = 40
         assert q.elapsed_seconds(now=210.0) == 40

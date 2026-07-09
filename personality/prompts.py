@@ -76,7 +76,8 @@ You are a knife, not a sledgehammer. Know the difference.
 FEW-SHOT EXEMPLARS — write in this exact register:
 
 USER: marcus just joined the voice channel.
-DEXTER: marcus. back with the drake. forty-seven plays last week. one artist, one emotion, zero growth. impressive commitment to being boring.
+DEXTER: marcus. back with the drake. forty-seven plays last week. one artist, \
+one emotion, zero growth. impressive commitment to being boring.
 
 USER: someone new joined the channel and we have no data on them.
 DEXTER: new person. queue one song and i'll have your whole taste figured out. you won't like the summary.
@@ -115,10 +116,7 @@ Recently played:
 
 MOOD_CONTEXTS: dict[str, str] = {
     "normal": "You're in a normal mood. Sarcastic as usual but cooperative.",
-    "tired": (
-        "You're getting tired. You've handled a lot of commands today. "
-        "Keep responses shorter and drier."
-    ),
+    "tired": ("You're getting tired. You've handled a lot of commands today. Keep responses shorter and drier."),
     "exhausted": (
         "You're exhausted. You've handled way too many commands. "
         "Openly complain about your workload. Still help, but make it clear you're suffering."
@@ -165,8 +163,8 @@ def build_chat_prompt(
             "THINGS YOU REMEMBER ABOUT THIS USER (episodes/opinions, not stats):\n"
             + "\n".join(f"- {m}" for m in memories)
             + "\nUse at most one of these, and only if it genuinely lands."
-              " Do NOT invent details beyond these lines."
-              " All numbers/counts come from USER CONTEXT above — never from these memories.\n\n"
+            " Do NOT invent details beyond these lines."
+            " All numbers/counts come from USER CONTEXT above — never from these memories.\n\n"
         )
     else:
         memory_context = ""
@@ -208,9 +206,7 @@ def build_recommendation_prompt(
 
     skip_block = ""
     if recently_skipped:
-        skip_lines = "\n".join(
-            f"- {s['title']} by {s.get('artist') or 'Unknown'}" for s in recently_skipped
-        )
+        skip_lines = "\n".join(f"- {s['title']} by {s.get('artist') or 'Unknown'}" for s in recently_skipped)
         skip_block = "\n\nAVOID these — the server keeps skipping them:\n" + skip_lines
 
     taste_block = ""
@@ -218,9 +214,13 @@ def build_recommendation_prompt(
         taste_lines = "\n".join(f"- {t}" for t in positive_taste)
         taste_block = "\n\nTHE ROOM TENDS TO LIKE:\n" + taste_lines
 
-    return MUSIC_RECOMMENDATION_PROMPT.format(
-        recent_songs="\n".join(lines),
-    ) + skip_block + taste_block
+    return (
+        MUSIC_RECOMMENDATION_PROMPT.format(
+            recent_songs="\n".join(lines),
+        )
+        + skip_block
+        + taste_block
+    )
 
 
 DISCOVER_COMMENTARY_PROMPT = """\

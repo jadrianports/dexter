@@ -15,8 +15,8 @@ from logic.vision import should_fire_vision_roast
 # ---------------------------------------------------------------------------
 
 # Rolls that pass/fail the chance gate — derived from config, not magic numbers
-CHANCE_PASS = config.VISION_ROAST_CHANCE - 0.01   # just under the threshold
-CHANCE_FAIL = config.VISION_ROAST_CHANCE          # exactly at threshold -> False
+CHANCE_PASS = config.VISION_ROAST_CHANCE - 0.01  # just under the threshold
+CHANCE_FAIL = config.VISION_ROAST_CHANCE  # exactly at threshold -> False
 
 
 # ---------------------------------------------------------------------------

@@ -8,10 +8,10 @@ Guards enforced here:
 import personality.roasts as roasts
 from personality.responses import pick_random
 
-
 # ---------------------------------------------------------------------------
 # Pool structure assertions
 # ---------------------------------------------------------------------------
+
 
 class TestPoolsExistAndNonEmpty:
     """Every named pool must be a non-empty list[str]."""
@@ -60,6 +60,7 @@ class TestPoolsExistAndNonEmpty:
 # pick_random behavior
 # ---------------------------------------------------------------------------
 
+
 class TestPickRandom:
     def test_returns_member_of_pool(self):
         result = pick_random(roasts.VOICE_JOIN_ROASTS)
@@ -87,6 +88,7 @@ class TestPickRandom:
 # ---------------------------------------------------------------------------
 # is_late_night unit tests (PERS-03 seam)
 # ---------------------------------------------------------------------------
+
 
 class TestIsLateNight:
     def test_hour_3_is_late_night(self):
@@ -118,6 +120,7 @@ class TestIsLateNight:
 # Covers the four-letter root and common censored variants
 _FBOMB_PATTERNS = ["fuck", "f*ck", "f**k", "fck", "f u c k"]
 
+
 class TestNoProfanityViolations:
     def _all_lines(self) -> list[str]:
         all_pools = [
@@ -139,21 +142,18 @@ class TestNoProfanityViolations:
         for line in self._all_lines():
             lower = line.lower()
             for pattern in _FBOMB_PATTERNS:
-                assert pattern not in lower, (
-                    f"D-03 violation: found '{pattern}' in line: {line!r}"
-                )
+                assert pattern not in lower, f"D-03 violation: found '{pattern}' in line: {line!r}"
 
 
 # ---------------------------------------------------------------------------
 # D-02 guard: STARTUP_MESSAGES must be arrogant, not self-deprecating
 # ---------------------------------------------------------------------------
 
+
 class TestStartupMessagesAreArrogant:
     def test_no_miss_me_in_startup(self):
         for line in roasts.STARTUP_MESSAGES:
-            assert "miss me" not in line.lower(), (
-                f"D-02 violation: self-deprecating startup line: {line!r}"
-            )
+            assert "miss me" not in line.lower(), f"D-02 violation: self-deprecating startup line: {line!r}"
 
     def test_startup_has_arrogant_seed_line(self):
         """Canonical arrogant seed line must be present per CONTEXT.md."""

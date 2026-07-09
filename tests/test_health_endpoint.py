@@ -24,7 +24,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers to build a fake bot for gather_bot_metrics
 # ---------------------------------------------------------------------------
@@ -173,9 +172,7 @@ async def test_health_always_200():
     parsed = json.loads(body)
     assert "status" in parsed, "Health body must have a 'status' key"
     # Status must be a known value (ok or degraded) — never a bare exception
-    assert parsed["status"] in ("ok", "degraded"), (
-        f"Unexpected status value: {parsed['status']}"
-    )
+    assert parsed["status"] in ("ok", "degraded"), f"Unexpected status value: {parsed['status']}"
     # HTTP 200 is enforced by bot.py returning Response(...) unconditionally —
     # validated here by confirming the handler logic path never raises
 
@@ -227,8 +224,8 @@ async def test_status_503_strict_mode():
 
     Simulates the bot.py inline handler logic: HEALTH_STRICT_STATUS=True + reasons → 503.
     """
-    from cogs.ops import gather_bot_metrics
     import config
+    from cogs.ops import gather_bot_metrics
 
     # Bot with MusicCog missing post-init → guarantees a degraded reason
     bot = _make_fake_bot(db_ok=True, gateway_ready=True, ready_done=True, music_cog_loaded=False)
@@ -262,6 +259,7 @@ async def test_status_200_legacy_mode(monkeypatch):
     Simulates the legacy escape hatch: flag false → always-200 (D-28 preserved).
     """
     import importlib
+
     import config as cfg_mod
     from cogs.ops import gather_bot_metrics
 
@@ -276,10 +274,8 @@ async def test_status_200_legacy_mode(monkeypatch):
 
     # Inline handler logic (mirrors bot.py health() handler)
     if reasons:
-        body = json.dumps({"status": "degraded", "reasons": reasons})
         status = 503 if getattr(cfg_mod, "HEALTH_STRICT_STATUS", True) else 200
     else:
-        body = '{"status":"ok"}'
         status = 200
 
     # HEALTH_STRICT_STATUS=False → expect 200 (legacy escape hatch)

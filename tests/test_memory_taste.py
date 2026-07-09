@@ -25,7 +25,6 @@ from unittest.mock import AsyncMock, MagicMock
 import config
 from logic.taste import resolve_decay_days
 
-
 # ---------------------------------------------------------------------------
 # TestResolveDecayDaysOverRealConfig — D-03: distinct tier, Phase 11 unchanged
 # ---------------------------------------------------------------------------
@@ -64,8 +63,11 @@ class TestResolveDecayDaysOverRealConfig:
 
     def test_all_phase11_kinds_resolve_to_general_memory_decay_days(self) -> None:
         phase11_kinds = [
-            "milestone", "late_night", "repeat_song",
-            "auto_queue_ignored", "daily_batch",
+            "milestone",
+            "late_night",
+            "repeat_song",
+            "auto_queue_ignored",
+            "daily_batch",
         ]
         for kind in phase11_kinds:
             result = resolve_decay_days(
@@ -73,9 +75,7 @@ class TestResolveDecayDaysOverRealConfig:
                 default_days=config.MEMORY_DECAY_DAYS,
                 kind_overrides=config.MEMORY_DECAY_DAYS_BY_KIND,
             )
-            assert result == config.MEMORY_DECAY_DAYS, (
-                f"Phase 11 kind {kind!r} must keep the 90-day horizon unchanged"
-            )
+            assert result == config.MEMORY_DECAY_DAYS, f"Phase 11 kind {kind!r} must keep the 90-day horizon unchanged"
 
 
 # ---------------------------------------------------------------------------
@@ -91,8 +91,11 @@ class TestDecayDaysByKindMapGuard:
 
     def test_no_phase11_kind_is_in_the_override_map(self) -> None:
         phase11_kinds = {
-            "milestone", "late_night", "repeat_song",
-            "auto_queue_ignored", "daily_batch",
+            "milestone",
+            "late_night",
+            "repeat_song",
+            "auto_queue_ignored",
+            "daily_batch",
         }
         overlap = phase11_kinds & set(config.MEMORY_DECAY_DAYS_BY_KIND)
         assert overlap == set(), (
@@ -134,11 +137,15 @@ class TestRememberDedupRefreshWiring:
 
         now = datetime.now(timezone.utc)
         near_dup_row = {
-            "id": 42, "fact": "keeps coming back to Radiohead",
+            "id": 42,
+            "fact": "keeps coming back to Radiohead",
             "kind": "taste_episode",  # matched row is itself a taste row → refresh fires
             "salience": 0.4,
-            "hit_count": 1, "created_at": now, "last_seen_at": now,
-            "last_surfaced_at": None, "surface_count": 0,
+            "hit_count": 1,
+            "created_at": now,
+            "last_seen_at": now,
+            "last_surfaced_at": None,
+            "surface_count": 0,
             "similarity": 0.95,  # above MEMORY_DEDUP_THRESHOLD
         }
 
@@ -162,11 +169,15 @@ class TestRememberDedupRefreshWiring:
         database.bump_memory_hit = fake_bump_hit
         database.refresh_memory_expiry = fake_refresh
         try:
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="keeps coming back to Radiohead",
-                kind="taste_episode", salience=0.4,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="keeps coming back to Radiohead",
+                    kind="taste_episode",
+                    salience=0.4,
+                )
+            )
         finally:
             database.search_memories = orig_search
             database.bump_memory_hit = orig_bump
@@ -181,11 +192,15 @@ class TestRememberDedupRefreshWiring:
 
         now = datetime.now(timezone.utc)
         near_dup_row = {
-            "id": 7, "fact": "hit a songs milestone",
+            "id": 7,
+            "fact": "hit a songs milestone",
             "kind": "milestone",  # matched row is a Phase 11 kind → must NOT refresh
             "salience": 1.0,
-            "hit_count": 1, "created_at": now, "last_seen_at": now,
-            "last_surfaced_at": None, "surface_count": 0,
+            "hit_count": 1,
+            "created_at": now,
+            "last_seen_at": now,
+            "last_surfaced_at": None,
+            "surface_count": 0,
             "similarity": 0.95,
         }
 
@@ -209,11 +224,15 @@ class TestRememberDedupRefreshWiring:
         database.bump_memory_hit = fake_bump_hit
         database.refresh_memory_expiry = fake_refresh
         try:
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="hit a songs milestone",
-                kind="milestone", salience=1.0,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="hit a songs milestone",
+                    kind="milestone",
+                    salience=1.0,
+                )
+            )
         finally:
             database.search_memories = orig_search
             database.bump_memory_hit = orig_bump
@@ -238,11 +257,15 @@ class TestRememberDedupRefreshWiring:
 
         now = datetime.now(timezone.utc)
         near_dup_row = {
-            "id": 99, "fact": "they keep replaying radiohead",
+            "id": 99,
+            "fact": "they keep replaying radiohead",
             "kind": "daily_batch",  # a Phase 11 row — the leak target
             "salience": 0.2,
-            "hit_count": 1, "created_at": now, "last_seen_at": now,
-            "last_surfaced_at": None, "surface_count": 0,
+            "hit_count": 1,
+            "created_at": now,
+            "last_seen_at": now,
+            "last_surfaced_at": None,
+            "surface_count": 0,
             "similarity": 0.95,  # above MEMORY_DEDUP_THRESHOLD
         }
 
@@ -266,11 +289,15 @@ class TestRememberDedupRefreshWiring:
         database.bump_memory_hit = fake_bump_hit
         database.refresh_memory_expiry = fake_refresh
         try:
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="keeps coming back to radiohead",
-                kind="taste_episode", salience=0.4,  # INCOMING kind is short-decay...
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="keeps coming back to radiohead",
+                    kind="taste_episode",
+                    salience=0.4,  # INCOMING kind is short-decay...
+                )
+            )
         finally:
             database.search_memories = orig_search
             database.bump_memory_hit = orig_bump
@@ -307,11 +334,15 @@ class TestRememberDedupRefreshWiring:
         database.count_user_memories = fake_count
         try:
             before = datetime.now(timezone.utc)
-            asyncio.run(svc.remember(
-                user_id="u1", guild_id="g1",
-                fact_text="new taste episode fact",
-                kind="taste_episode", salience=0.4,
-            ))
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="new taste episode fact",
+                    kind="taste_episode",
+                    salience=0.4,
+                )
+            )
         finally:
             database.search_memories = orig_search
             database.insert_memory = orig_insert
@@ -322,6 +353,5 @@ class TestRememberDedupRefreshWiring:
         delta_days = (expires_at - before).days
         # Allow +/-1 day slack for wall-clock execution time around the boundary.
         assert config.TASTE_DECAY_DAYS - 1 <= delta_days <= config.TASTE_DECAY_DAYS, (
-            f"taste_episode insert must use the {config.TASTE_DECAY_DAYS}-day horizon, "
-            f"got a delta of {delta_days} days"
+            f"taste_episode insert must use the {config.TASTE_DECAY_DAYS}-day horizon, got a delta of {delta_days} days"
         )

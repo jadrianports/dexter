@@ -82,7 +82,7 @@ class TestJamSuggestNonExistentJamGuard:
         src = _jam_suggest_source()
         assert "save_jam(" not in src
         guard_idx = src.index("if existing is None:")
-        guard_block = src[guard_idx:src.index("\n\n", guard_idx)]
+        guard_block = src[guard_idx : src.index("\n\n", guard_idx)]
         assert "return" in guard_block
 
 
@@ -97,7 +97,7 @@ class TestJamSuggestNoneSurviveGuard:
         src = _jam_suggest_source()
         assert "save_jam(" not in src
         guard_idx = src.index("if not validated_candidates:")
-        guard_block = src[guard_idx:src.index("\n\n", guard_idx)]
+        guard_block = src[guard_idx : src.index("\n\n", guard_idx)]
         assert "return" in guard_block
 
     def test_none_survive_guard_comes_after_validation_loop(self):
@@ -122,7 +122,7 @@ class TestJamSuggestValidationLoop:
         src = _jam_suggest_source()
         assert "if validated is None:" in src
         idx = src.index("if validated is None:")
-        block = src[idx:src.index("\n\n", idx)]
+        block = src[idx : src.index("\n\n", idx)]
         assert "continue" in block
 
 
@@ -133,8 +133,8 @@ class TestJamSuggestImports:
         assert library_module.validate_youtube_match is not None
 
     def test_imports_parse_suggestions_from_cogs_ai(self):
-        import cogs.library as library_module
         import cogs.ai as ai_module
+        import cogs.library as library_module
 
         assert library_module.parse_suggestions is ai_module.parse_suggestions
 

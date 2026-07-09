@@ -29,7 +29,6 @@ import pytest_asyncio
 import config
 import database
 
-
 # ---------------------------------------------------------------------------
 # Static source-assertion checks — always run, no live DB needed
 # ---------------------------------------------------------------------------
@@ -39,19 +38,13 @@ class TestTasteHelpersExist:
     """Verify all Task 1/2 artifacts exist with the right scoping (T-13-02/T-13-04/T-13-05)."""
 
     def test_get_active_taste_users_exists(self) -> None:
-        assert hasattr(database, "get_active_taste_users"), (
-            "get_active_taste_users must exist in database.py"
-        )
+        assert hasattr(database, "get_active_taste_users"), "get_active_taste_users must exist in database.py"
 
     def test_get_user_artist_activity_exists(self) -> None:
-        assert hasattr(database, "get_user_artist_activity"), (
-            "get_user_artist_activity must exist in database.py"
-        )
+        assert hasattr(database, "get_user_artist_activity"), "get_user_artist_activity must exist in database.py"
 
     def test_refresh_memory_expiry_exists(self) -> None:
-        assert hasattr(database, "refresh_memory_expiry"), (
-            "refresh_memory_expiry must exist in database.py"
-        )
+        assert hasattr(database, "refresh_memory_expiry"), "refresh_memory_expiry must exist in database.py"
 
     def test_get_user_artist_activity_is_scoped(self) -> None:
         """get_user_artist_activity must scope by guild_id=$1 AND user_id=$2 (T-13-02)."""
@@ -63,15 +56,12 @@ class TestTasteHelpersExist:
     def test_refresh_memory_expiry_touches_only_expires_at(self) -> None:
         """refresh_memory_expiry must SET expires_at = $2 and touch nothing else (T-13-04)."""
         src = inspect.getsource(database.refresh_memory_expiry)
-        assert "SET expires_at = $2" in src, (
-            "refresh_memory_expiry must SET expires_at = $2"
-        )
+        assert "SET expires_at = $2" in src, "refresh_memory_expiry must SET expires_at = $2"
         # Check the SQL-assignment form (`column =`), not mere docstring mentions of
         # the column names (the docstring explicitly names them as NOT touched).
         for forbidden in ("hit_count =", "salience =", "last_seen_at ="):
             assert forbidden not in src, (
-                f"refresh_memory_expiry must not touch {forbidden!r} —"
-                " that is bump_memory_hit's job"
+                f"refresh_memory_expiry must not touch {forbidden!r} — that is bump_memory_hit's job"
             )
 
     def test_no_string_interpolation(self) -> None:
@@ -82,9 +72,7 @@ class TestTasteHelpersExist:
             database.refresh_memory_expiry,
         ):
             src = inspect.getsource(fn)
-            assert 'f"' not in src and "f'" not in src, (
-                f"{fn.__name__} must not use f-string SQL (T-13-05)"
-            )
+            assert 'f"' not in src and "f'" not in src, f"{fn.__name__} must not use f-string SQL (T-13-05)"
             assert "%s" not in src, f"{fn.__name__} must not use %-interpolated SQL (T-13-05)"
 
 
@@ -124,8 +112,14 @@ async def _insert_history_row(
             "INSERT INTO song_history"
             " (guild_id, user_id, title, artist, url, duration_seconds, queued_at, was_skipped)"
             " VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-            guild_id, user_id, "Test Song", artist,
-            f"https://youtube.com/watch?v=test{url_suffix}", 200, queued_at, was_skipped,
+            guild_id,
+            user_id,
+            "Test Song",
+            artist,
+            f"https://youtube.com/watch?v=test{url_suffix}",
+            200,
+            queued_at,
+            was_skipped,
         )
 
 
@@ -143,8 +137,12 @@ class TestGetActiveTasteUsers:
         now = datetime.now(timezone.utc)
         since = now - timedelta(days=3)
         await _insert_history_row(
-            pool, guild_id="gtaste1", user_id="u-recent", artist="Radiohead",
-            queued_at=now - timedelta(hours=1), url_suffix="recent1",
+            pool,
+            guild_id="gtaste1",
+            user_id="u-recent",
+            artist="Radiohead",
+            queued_at=now - timedelta(hours=1),
+            url_suffix="recent1",
         )
 
         rows = await database.get_active_taste_users(pool, since=since)
@@ -159,8 +157,12 @@ class TestGetActiveTasteUsers:
         now = datetime.now(timezone.utc)
         since = now - timedelta(days=3)
         await _insert_history_row(
-            pool, guild_id="gtaste2", user_id="u-stale", artist="Old Band",
-            queued_at=now - timedelta(days=10), url_suffix="stale1",
+            pool,
+            guild_id="gtaste2",
+            user_id="u-stale",
+            artist="Old Band",
+            queued_at=now - timedelta(days=10),
+            url_suffix="stale1",
         )
 
         rows = await database.get_active_taste_users(pool, since=since)
@@ -188,25 +190,40 @@ class TestGetUserArtistActivity:
         # 3 plays in-window (queued_at > since), one of them skipped
         for i in range(3):
             await _insert_history_row(
-                pool, guild_id=guild_id, user_id=user_id, artist=artist,
+                pool,
+                guild_id=guild_id,
+                user_id=user_id,
+                artist=artist,
                 queued_at=now - timedelta(days=1, hours=i),
-                was_skipped=(i == 0), url_suffix=f"win{i}",
+                was_skipped=(i == 0),
+                url_suffix=f"win{i}",
             )
         # 2 plays before-window but within baseline (since >= queued_at > baseline_since)
         for i in range(2):
             await _insert_history_row(
-                pool, guild_id=guild_id, user_id=user_id, artist=artist,
-                queued_at=now - timedelta(days=20, hours=i), url_suffix=f"base{i}",
+                pool,
+                guild_id=guild_id,
+                user_id=user_id,
+                artist=artist,
+                queued_at=now - timedelta(days=20, hours=i),
+                url_suffix=f"base{i}",
             )
         # 1 play beyond baseline_since — must be excluded entirely from all counts
         await _insert_history_row(
-            pool, guild_id=guild_id, user_id=user_id, artist=artist,
-            queued_at=now - timedelta(days=100), url_suffix="ancient",
+            pool,
+            guild_id=guild_id,
+            user_id=user_id,
+            artist=artist,
+            queued_at=now - timedelta(days=100),
+            url_suffix="ancient",
         )
 
         rows = await database.get_user_artist_activity(
-            pool, guild_id=guild_id, user_id=user_id,
-            since=since, baseline_since=baseline_since,
+            pool,
+            guild_id=guild_id,
+            user_id=user_id,
+            since=since,
+            baseline_since=baseline_since,
         )
 
         assert len(rows) == 1, "Only one artist was seeded; exactly one row expected"
@@ -224,13 +241,20 @@ class TestGetUserArtistActivity:
         baseline_since = now - timedelta(days=60)
 
         await _insert_history_row(
-            pool, guild_id="gartist-A", user_id="u-shared", artist="Mac DeMarco",
-            queued_at=now - timedelta(hours=1), url_suffix="crossA",
+            pool,
+            guild_id="gartist-A",
+            user_id="u-shared",
+            artist="Mac DeMarco",
+            queued_at=now - timedelta(hours=1),
+            url_suffix="crossA",
         )
 
         rows_b = await database.get_user_artist_activity(
-            pool, guild_id="gartist-B", user_id="u-shared",
-            since=since, baseline_since=baseline_since,
+            pool,
+            guild_id="gartist-B",
+            user_id="u-shared",
+            since=since,
+            baseline_since=baseline_since,
         )
 
         assert rows_b == [], "guild-B query must not see guild-A's artist activity"
@@ -245,9 +269,7 @@ class TestRefreshMemoryExpiry:
     """Tests for refresh_memory_expiry — D-05 expires_at-only self-refresh."""
 
     @pytest.mark.asyncio
-    async def test_refresh_advances_expiry_without_touching_other_columns(
-        self, pool, memory_cleanup
-    ) -> None:
+    async def test_refresh_advances_expiry_without_touching_other_columns(self, pool, memory_cleanup) -> None:
         """expires_at advances; hit_count/salience/last_seen_at stay byte-identical."""
         embedding = [0.5] * config.EMBED_DIM
         original_expires = datetime.now(timezone.utc) + timedelta(days=5)
@@ -266,8 +288,7 @@ class TestRefreshMemoryExpiry:
 
         async with pool.acquire() as conn:
             before = await conn.fetchrow(
-                "SELECT hit_count, salience, last_seen_at, expires_at"
-                " FROM user_memories WHERE id = $1",
+                "SELECT hit_count, salience, last_seen_at, expires_at FROM user_memories WHERE id = $1",
                 memory_id,
             )
 
@@ -276,16 +297,11 @@ class TestRefreshMemoryExpiry:
 
         async with pool.acquire() as conn:
             after = await conn.fetchrow(
-                "SELECT hit_count, salience, last_seen_at, expires_at"
-                " FROM user_memories WHERE id = $1",
+                "SELECT hit_count, salience, last_seen_at, expires_at FROM user_memories WHERE id = $1",
                 memory_id,
             )
 
         assert after["expires_at"] > before["expires_at"], "expires_at must advance"
         assert after["hit_count"] == before["hit_count"], "hit_count must be untouched"
-        assert float(after["salience"]) == float(before["salience"]), (
-            "salience must be untouched"
-        )
-        assert after["last_seen_at"] == before["last_seen_at"], (
-            "last_seen_at must be untouched"
-        )
+        assert float(after["salience"]) == float(before["salience"]), "salience must be untouched"
+        assert after["last_seen_at"] == before["last_seen_at"], "last_seen_at must be untouched"

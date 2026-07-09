@@ -10,6 +10,7 @@ Named scar regression tests (D-05):
 """
 
 import pytest
+
 import config
 from logic.playback import (
     TrackEndAction,
@@ -19,7 +20,6 @@ from logic.playback import (
     should_smart_rejoin,
     should_start_playback,
 )
-
 
 # ---------------------------------------------------------------------------
 # TestDecideOnTrackEnd
@@ -217,9 +217,9 @@ class TestShouldStartPlayback:
         # - auto-queue just added new tracks → has_track=True
         result = should_start_playback(
             connected=True,
-            voice_is_playing=False,   # ground truth: audio not flowing
-            voice_is_paused=False,    # not paused
-            has_track=True,           # freshly queued track waiting
+            voice_is_playing=False,  # ground truth: audio not flowing
+            voice_is_paused=False,  # not paused
+            has_track=True,  # freshly queued track waiting
         )
         assert result is True
 

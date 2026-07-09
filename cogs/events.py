@@ -17,10 +17,8 @@ from models.user_profile import get_user_summary
 from personality import roasts
 from personality.prompts import build_chat_prompt, build_vision_prompt
 from personality.roasts import pick_random
-from personality.seasonal import get_seasonal_context
 from services.gemini import GeminiAPIError, GeminiRateLimitError
 from utils.logger import log
-
 
 # ---------------------------------------------------------------------------
 # Ambient roasts reuse the locked few-shot DEXTER voice (DEXTER_SYSTEM_PROMPT via
@@ -95,9 +93,7 @@ class EventsCog(commands.Cog):
 
     # ──────────────────────────── CHANNEL RESOLVER ────────────────────────────
 
-    async def _get_ambient_channel(
-        self, guild: discord.Guild
-    ) -> discord.TextChannel | None:
+    async def _get_ambient_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
         """Resolve the channel for ambient posts via the D-09/D-10 fallback chain.
 
         Order:
@@ -207,7 +203,7 @@ class EventsCog(commands.Cog):
                             amb_memories = await _memory_svc.recall(
                                 str(member.id),
                                 str(member.guild.id),
-                                scenario,   # formatted scenario is the recall anchor
+                                scenario,  # formatted scenario is the recall anchor
                             )
                         except Exception as _mem_err:
                             log.debug("memory.recall failed (non-fatal): %s", _mem_err)
@@ -280,16 +276,14 @@ class EventsCog(commands.Cog):
         # Use the member's local guild time via Python's datetime (TZ-explicit via STREAK_TIMEZONE)
         import datetime as _dt
         from zoneinfo import ZoneInfo as _ZoneInfo
+
         local_hour = _dt.datetime.now(tz=_ZoneInfo(config.STREAK_TIMEZONE)).hour
 
         # JOIN: before.channel is None, after.channel is not None
         if before.channel is None and after.channel is not None:
             chance_roll = random.random()
             late_night_roll = random.random()
-            seconds_since_last_roast = (
-                asyncio.get_event_loop().time()
-                - self._ambient_roast_times.get(member.id, 0.0)
-            )
+            seconds_since_last_roast = asyncio.get_event_loop().time() - self._ambient_roast_times.get(member.id, 0.0)
             scenario_result = decide_ambient_roast(
                 event="join",
                 chance_roll=chance_roll,
@@ -336,10 +330,7 @@ class EventsCog(commands.Cog):
         # LEAVE: before.channel is not None, after.channel is None
         if before.channel is not None and after.channel is None:
             chance_roll = random.random()
-            seconds_since_last_roast = (
-                asyncio.get_event_loop().time()
-                - self._ambient_roast_times.get(member.id, 0.0)
-            )
+            seconds_since_last_roast = asyncio.get_event_loop().time() - self._ambient_roast_times.get(member.id, 0.0)
             scenario_result = decide_ambient_roast(
                 event="leave",
                 chance_roll=chance_roll,
@@ -389,6 +380,7 @@ class EventsCog(commands.Cog):
         # "goodnight" or "gn" at start or as standalone — salute reaction
         # Word-boundary check: "gn" must not be part of a larger word
         import re
+
         if re.search(r"(?:^|\s)(?:goodnight|gn)(?:\s|$|[!.,?])", content_lower):
             try:
                 await message.add_reaction("\N{SALUTING FACE}")
@@ -440,11 +432,7 @@ class EventsCog(commands.Cog):
 
         # Phase 16 / PROACT-01: proactive callback gate — designated channel only,
         # never a DM (Pitfall 2). message.author.bot already returned above.
-        if (
-            message.guild is not None
-            and config.DEXTER_CHANNEL_ID
-            and message.channel.id == config.DEXTER_CHANNEL_ID
-        ):
+        if message.guild is not None and config.DEXTER_CHANNEL_ID and message.channel.id == config.DEXTER_CHANNEL_ID:
             await self._maybe_fire_proactive_callback(message)
 
         # Phase 17 / VIS-01: vision-roast gate — a FOURTH independent cadence
@@ -493,6 +481,7 @@ class EventsCog(commands.Cog):
         # datetime.now(), see on_voice_state_update above).
         import datetime as _dt
         from zoneinfo import ZoneInfo as _ZoneInfo
+
         today = _dt.datetime.now(tz=_ZoneInfo(config.STREAK_TIMEZONE)).date().isoformat()
 
         last_date, count = self._proactive_daily_counts.get(user_id, (today, 0))
@@ -536,9 +525,7 @@ class EventsCog(commands.Cog):
         # live-SQL number — accuracy firewall unaffected).
         anchor = message.content.strip() or "this user's music taste and history"
         try:
-            memories = await memory_service.recall(
-                user_id, str(message.guild.id), anchor
-            )
+            memories = await memory_service.recall(user_id, str(message.guild.id), anchor)
         except Exception as _mem_err:
             log.debug("proactive callback: memory.recall failed (non-fatal): %s", _mem_err)
             memories = []
@@ -572,9 +559,7 @@ class EventsCog(commands.Cog):
 
     # ──────────────────────────── VISION ROAST ────────────────────────────
 
-    async def _generate_vision_roast(
-        self, member: discord.Member, image_bytes: bytes, mime_type: str
-    ) -> str | None:
+    async def _generate_vision_roast(self, member: discord.Member, image_bytes: bytes, mime_type: str) -> str | None:
         """Generate a vision-roast line: str on success/transport-fallback, None on skip.
 
         Phase 17 / VIS-02 / D-04 — a DEDICATED generator (NOT a reuse of
@@ -647,24 +632,16 @@ class EventsCog(commands.Cog):
 
         # 2. Shared opt-out (fail closed on error, matching the proactive path).
         try:
-            opted_out = await database.get_proactive_opt_out(
-                self.bot.pool, str(message.author.id)
-            )
+            opted_out = await database.get_proactive_opt_out(self.bot.pool, str(message.author.id))
         except Exception as _opt_out_err:
-            log.debug(
-                "vision roast: opt-out lookup failed (non-fatal): %s", _opt_out_err
-            )
+            log.debug("vision roast: opt-out lookup failed (non-fatal): %s", _opt_out_err)
             return
 
         # 3. Pure cadence gate — opt-out / cooldown / chance. No I/O, no mark on fail.
-        seconds_since_last = asyncio.get_event_loop().time() - self._vision_roast_cooldowns.get(
-            message.author.id, 0.0
-        )
+        seconds_since_last = asyncio.get_event_loop().time() - self._vision_roast_cooldowns.get(message.author.id, 0.0)
         if not should_fire_vision_roast(
             opted_out=opted_out,
-            cooldown_elapsed=cooldown_elapsed(
-                seconds_since_last, config.VISION_ROAST_COOLDOWN_SECONDS
-            ),
+            cooldown_elapsed=cooldown_elapsed(seconds_since_last, config.VISION_ROAST_COOLDOWN_SECONDS),
             chance_roll=random.random(),
         ):
             return
@@ -680,13 +657,9 @@ class EventsCog(commands.Cog):
         try:
             image_bytes = await attachment.read()
         except discord.HTTPException as read_err:
-            log.debug(
-                "vision roast: attachment read failed (non-fatal): %s", read_err
-            )
+            log.debug("vision roast: attachment read failed (non-fatal): %s", read_err)
             return
-        line = await self._generate_vision_roast(
-            message.author, image_bytes, _normalize_image_mime(attachment)
-        )
+        line = await self._generate_vision_roast(message.author, image_bytes, _normalize_image_mime(attachment))
         if line is None:
             # VIS-02 silent skip (safety-blocked/empty) — no send, no cooldown mark.
             return

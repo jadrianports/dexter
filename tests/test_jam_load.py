@@ -17,7 +17,6 @@ import pytest
 
 from models.queue import QueueFullError
 
-
 # ---------------------------------------------------------------------------
 # Helpers — stub queue that raises QueueFullError after N adds
 # ---------------------------------------------------------------------------
@@ -182,6 +181,4 @@ class TestQueueFullErrorIsTheTruncationTrigger:
         for cap in [0, 1, 5, 10, 50]:
             rows = _make_track_dicts(10)
             added, truncated = _simulate_jam_load(rows, cap=cap)
-            assert added + truncated == len(rows), (
-                f"cap={cap}: added={added} + truncated={truncated} != {len(rows)}"
-            )
+            assert added + truncated == len(rows), f"cap={cap}: added={added} + truncated={truncated} != {len(rows)}"

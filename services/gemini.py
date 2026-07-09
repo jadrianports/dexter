@@ -7,11 +7,10 @@ import time
 from collections import deque
 
 from google import genai
-from google.genai import types, errors
+from google.genai import errors, types
 
 import config
 from utils.logger import log
-
 
 # ──────────────────────────── EXCEPTIONS ────────────────────────────
 
@@ -55,10 +54,7 @@ def _build_safety_settings(threshold: str) -> list[types.SafetySetting]:
     non-image chat(), permissive-but-explicit so edgy personality output is not
     newly blocked).
     """
-    return [
-        types.SafetySetting(category=cat, threshold=threshold)
-        for cat in _SAFETY_CATEGORIES
-    ]
+    return [types.SafetySetting(category=cat, threshold=threshold) for cat in _SAFETY_CATEGORIES]
 
 
 # ──────────────────────────── RATE LIMITER ────────────────────────────
@@ -121,9 +117,7 @@ class _RateLimiter:
             wait_time = self._window - (time.monotonic() - oldest)
 
             if priority >= 2 and wait_time > 10:
-                raise GeminiRateLimitError(
-                    f"Rate limit full, wait would be {wait_time:.0f}s"
-                )
+                raise GeminiRateLimitError(f"Rate limit full, wait would be {wait_time:.0f}s")
 
         # Wait outside the lock so other requests can proceed
         if wait_time > 0:
@@ -229,9 +223,7 @@ class GeminiService:
         # Phase 17 / VIS-01: compose the image onto the final user turn (before the
         # empty-contents fallback, since an image call always supplies a user turn).
         if image_bytes is not None and contents:
-            contents[-1].parts.append(
-                types.Part.from_bytes(data=image_bytes, mime_type=image_mime_type)
-            )
+            contents[-1].parts.append(types.Part.from_bytes(data=image_bytes, mime_type=image_mime_type))
 
         # Gemini requires at least one user message
         if not contents:
@@ -240,11 +232,7 @@ class GeminiService:
         # Vision path uses the real-block threshold; every text path stays
         # permissive-but-explicit so existing edgy /ask + ambient output is not
         # newly blocked (D-01 / VIS-03).
-        threshold = (
-            config.VISION_SAFETY_THRESHOLD
-            if image_bytes is not None
-            else config.TEXT_SAFETY_THRESHOLD
-        )
+        threshold = config.VISION_SAFETY_THRESHOLD if image_bytes is not None else config.TEXT_SAFETY_THRESHOLD
 
         try:
             response = await self._client.aio.models.generate_content(
@@ -267,9 +255,7 @@ class GeminiService:
         log.info(f"Gemini chat response: {len(response.text or '')} chars")
         return response.text if response.text else None
 
-    async def generate_image(
-        self, prompt: str, priority: int = 1
-    ) -> bytes | None:
+    async def generate_image(self, prompt: str, priority: int = 1) -> bytes | None:
         """Generate an image using Gemini native image generation.
 
         Returns:
@@ -338,10 +324,7 @@ class GeminiService:
         """
         await self._embed_limiter.acquire(priority)
 
-        log.info(
-            f"── Gemini embed request (priority={priority}, task_type={task_type},"
-            f" texts={len(texts)}) ──"
-        )
+        log.info(f"── Gemini embed request (priority={priority}, task_type={task_type}, texts={len(texts)}) ──")
 
         try:
             resp = await self._client.aio.models.embed_content(

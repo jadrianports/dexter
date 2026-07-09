@@ -31,9 +31,7 @@ from utils.logger import log
 
 # Browser User-Agent to avoid AZLyrics bot detection (Pitfall 6)
 _BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
 # Regex to strip feat / remix / version suffixes from track titles (Pattern 9)
@@ -248,8 +246,8 @@ class LyricsService:
             self._genius = Genius(
                 genius_token,
                 remove_section_headers=True,  # strip [Verse] / [Chorus] (Pitfall 2)
-                retries=1,                    # limit retry amplification (T-03-08)
-                timeout=5,                    # Genius() timeout in seconds (T-03-08)
+                retries=1,  # limit retry amplification (T-03-08)
+                timeout=5,  # Genius() timeout in seconds (T-03-08)
             )
         else:
             self._genius = None
@@ -286,9 +284,7 @@ class LyricsService:
             return None
         try:
             query_title, query_artist = build_genius_search_query(title, artist)
-            song = await asyncio.to_thread(
-                self._genius.search_song, query_title, query_artist
-            )
+            song = await asyncio.to_thread(self._genius.search_song, query_title, query_artist)
             if not song or not song.lyrics:
                 return None
             # Safety net: Genius can return a confidently-wrong song for a title it

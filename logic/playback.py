@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import enum
 
-
 # ---------------------------------------------------------------------------
 # Enum: possible outcomes from _on_track_end decision
 # ---------------------------------------------------------------------------

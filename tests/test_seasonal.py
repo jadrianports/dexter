@@ -51,7 +51,13 @@ class TestSeasonalContext:
             mock_dt.now.return_value = datetime(2026, 11, 26)  # Nov 26
             result = get_seasonal_context()
             assert result != ""
-            assert "thanksgiving" in result.lower() or "november" in result.lower() or "holiday" in result.lower() or "relative" in result.lower() or "pandora" in result.lower()
+            assert (
+                "thanksgiving" in result.lower()
+                or "november" in result.lower()
+                or "holiday" in result.lower()
+                or "relative" in result.lower()
+                or "pandora" in result.lower()
+            )
 
     def test_thanksgiving_week_boundary_day_22(self):
         with patch("personality.seasonal.datetime") as mock_dt:
@@ -64,11 +70,7 @@ class TestSeasonalContext:
             mock_dt.now.return_value = datetime(2026, 3, 17)
             result = get_seasonal_context()
             assert result != ""
-            assert (
-                "patrick" in result.lower()
-                or "irish" in result.lower()
-                or "st." in result.lower()
-            )
+            assert "patrick" in result.lower() or "irish" in result.lower() or "st." in result.lower()
 
     def test_fourth_of_july(self):
         with patch("personality.seasonal.datetime") as mock_dt:

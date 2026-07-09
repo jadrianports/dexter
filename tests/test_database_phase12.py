@@ -20,14 +20,13 @@ from __future__ import annotations
 import pytest
 
 from database import (
-    save_jam,
+    count_jams,
+    delete_jam,
     get_jam,
     list_jams,
-    delete_jam,
-    count_jams,
+    save_jam,
 )
 from models.queue import Track
-
 
 # ---------------------------------------------------------------------------
 # Helper: build a minimal Track snapshot (list of dicts via to_dict)
@@ -62,9 +61,7 @@ class TestGuildJamsSchema:
     async def test_guild_jams_table_exists(self, pool):
         """init_db must create guild_jams table."""
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-            )
+            rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         tables = {r["tablename"] for r in rows}
         assert "guild_jams" in tables, "guild_jams table not found after init_db"
 
@@ -86,8 +83,7 @@ class TestGuildJamsSchema:
         """idx_jams_guild index must exist on guild_jams."""
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT indexname FROM pg_indexes"
-                " WHERE tablename = 'guild_jams' AND schemaname = 'public'"
+                "SELECT indexname FROM pg_indexes WHERE tablename = 'guild_jams' AND schemaname = 'public'"
             )
         indexes = {r["indexname"] for r in rows}
         assert "idx_jams_guild" in indexes, "idx_jams_guild index not found"
@@ -298,9 +294,7 @@ class TestCountJams:
     async def test_count_jams_increments_with_distinct_names(self, pool):
         """count_jams increments with each new distinct jam name."""
         for i in range(3):
-            await save_jam(
-                pool, guild_id="g12", name=f"jam_{i}", snapshot=_make_jam_snapshot(1)
-            )
+            await save_jam(pool, guild_id="g12", name=f"jam_{i}", snapshot=_make_jam_snapshot(1))
         assert await count_jams(pool, guild_id="g12") == 3
 
     @pytest.mark.asyncio

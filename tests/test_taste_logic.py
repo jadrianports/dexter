@@ -122,11 +122,16 @@ class TestSummarizeTaste:
 
     def test_all_patterns_fixture_produces_four_phrases(self):
         rows = [
-            {"artist": "the killers", "plays_in_window": 6, "plays_before_window": 1, "skips_in_window": 0},   # OBSESSION
-            {"artist": "phonk artist", "plays_in_window": 3, "plays_before_window": 0, "skips_in_window": 0},   # NEW_ARRIVAL
-            {"artist": "mac demarco", "plays_in_window": 2, "plays_before_window": 8, "skips_in_window": 1},    # STEADY
-            {"artist": "old band", "plays_in_window": 0, "plays_before_window": 6, "skips_in_window": 0},       # DROPPED_OFF
-            {"artist": "meh band", "plays_in_window": 1, "plays_before_window": 2, "skips_in_window": 0},       # NONE (omitted)
+            # OBSESSION
+            {"artist": "the killers", "plays_in_window": 6, "plays_before_window": 1, "skips_in_window": 0},
+            # NEW_ARRIVAL
+            {"artist": "phonk artist", "plays_in_window": 3, "plays_before_window": 0, "skips_in_window": 0},
+            # STEADY
+            {"artist": "mac demarco", "plays_in_window": 2, "plays_before_window": 8, "skips_in_window": 1},
+            # DROPPED_OFF
+            {"artist": "old band", "plays_in_window": 0, "plays_before_window": 6, "skips_in_window": 0},
+            # NONE (omitted)
+            {"artist": "meh band", "plays_in_window": 1, "plays_before_window": 2, "skips_in_window": 0},
         ]
         phrases = summarize_taste(rows, **THRESHOLDS)
         assert len(phrases) == 4
@@ -169,9 +174,7 @@ class TestSelectPositiveTasteContext:
 
     def test_positive_taste_dedup_across_members(self):
         # "shared" appears in both members' lists — emitted once.
-        result = select_positive_taste_context(
-            [["shared", "a"], ["shared", "b"]], cap=10
-        )
+        result = select_positive_taste_context([["shared", "a"], ["shared", "b"]], cap=10)
         assert result.count("shared") == 1
 
     def test_positive_taste_cap_zero_returns_empty_list(self):

@@ -32,19 +32,18 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
-from logic.health import assemble_degraded_reasons
 from database import (
-    get_leaderboard_songs,
-    get_leaderboard_skips,
-    get_leaderboard_streaks,
     get_daily_stats_row,
     get_images_today_global,
+    get_leaderboard_skips,
+    get_leaderboard_songs,
+    get_leaderboard_streaks,
     get_user_skip_rate,
 )
+from logic.health import assemble_degraded_reasons
 from logic.skip_stats import compute_skip_rate
 from utils import embeds
 from utils.logger import log
-
 
 # ---------------------------------------------------------------------------
 # Shared bot-state metrics helper (D-31)
@@ -159,9 +158,7 @@ class OpsCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         # Defer publicly — leaderboard is public (D-19), DB call may exceed 3s
@@ -176,9 +173,7 @@ class OpsCog(commands.Cog):
         except asyncio.TimeoutError:
             # REL-05 / T-09-02: static message — never interpolate exc, SQL, or DSN
             log.warning("/leaderboard DB timeout")
-            await interaction.followup.send(
-                "database is being slow. try again in a bit.", ephemeral=True
-            )
+            await interaction.followup.send("database is being slow. try again in a bit.", ephemeral=True)
             return
         except Exception as exc:
             log.error("/leaderboard DB error: %s", exc)
@@ -206,9 +201,7 @@ class OpsCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         # Defer publicly — skips embed is public like /leaderboard (D-07)
@@ -219,15 +212,11 @@ class OpsCog(commands.Cog):
 
         try:
             skips_rows = await get_leaderboard_skips(self.pool, guild_id=guild_id)
-            rate_row = await get_user_skip_rate(
-                self.pool, guild_id=guild_id, user_id=user_id
-            )
+            rate_row = await get_user_skip_rate(self.pool, guild_id=guild_id, user_id=user_id)
         except asyncio.TimeoutError:
             # REL-05 / T-09-02: static message — never interpolate exc, SQL, or DSN
             log.warning("/skips DB timeout")
-            await interaction.followup.send(
-                "database is being slow. try again in a bit.", ephemeral=True
-            )
+            await interaction.followup.send("database is being slow. try again in a bit.", ephemeral=True)
             return
         except Exception as exc:
             log.error("/skips DB error: %s", exc)
@@ -275,24 +264,16 @@ class OpsCog(commands.Cog):
         except asyncio.TimeoutError:
             # REL-05 / T-09-02: static message — never interpolate exc, SQL, or DSN
             log.warning("/stats DB timeout")
-            await interaction.followup.send(
-                "stats are taking too long. try again in a bit.", ephemeral=True
-            )
+            await interaction.followup.send("stats are taking too long. try again in a bit.", ephemeral=True)
             return
         except Exception as exc:
             log.error("/stats data gather error: %s", exc)
-            await interaction.followup.send(
-                "couldn't load stats right now.", ephemeral=True
-            )
+            await interaction.followup.send("couldn't load stats right now.", ephemeral=True)
             return
 
         # Phase 6: surface rolling perf metrics in /stats (PERF-06 / D-18).
         # getattr guard: bot booted without perf_metrics (e.g. tests) never crashes.
-        perf_summary = (
-            self.bot.perf_metrics.summary()
-            if getattr(self.bot, "perf_metrics", None) is not None
-            else None
-        )
+        perf_summary = self.bot.perf_metrics.summary() if getattr(self.bot, "perf_metrics", None) is not None else None
         embed = embeds.stats_embed(daily, rpm, config.GEMINI_RPM_LIMIT, images, metrics, perf_metrics=perf_summary)
         await interaction.followup.send(embed=embed, ephemeral=True)
 

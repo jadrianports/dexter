@@ -22,7 +22,6 @@ import enum
 import config
 from personality.roasts import is_late_night
 
-
 # ---------------------------------------------------------------------------
 # Enum: possible outcomes of decide_ambient_roast
 # ---------------------------------------------------------------------------

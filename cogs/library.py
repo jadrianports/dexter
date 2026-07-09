@@ -47,37 +47,36 @@ from cogs.ai import parse_suggestions
 from database import (
     add_favorite,
     count_favorites,
-    get_favorites,
-    remove_favorite,
-    save_playlist,
-    get_playlist,
-    list_playlists,
-    delete_playlist,
-    count_playlists,
-    save_jam,
-    get_jam,
-    list_jams,
-    delete_jam,
     count_jams,
+    count_playlists,
+    delete_jam,
+    delete_playlist,
+    get_favorites,
+    get_jam,
+    get_playlist,
+    list_jams,
+    list_playlists,
+    remove_favorite,
+    save_jam,
+    save_playlist,
 )
 from logic.autoqueue import validate_youtube_match
-from models.queue import Track, QueueFullError
+from models.queue import QueueFullError, Track
 from personality.prompts import build_jam_suggestion_prompt
 from personality.responses import (
-    pick_random,
-    FAVORITE_SAVED,
-    FAVORITE_DUPLICATE,
     FAVORITE_CAP_HIT,
+    FAVORITE_DUPLICATE,
+    FAVORITE_SAVED,
     FAVORITES_EMPTY,
     NOTHING_PLAYING,
-    PLAYLIST_SAVED,
+    PLAYLIST_CAP_HIT,
     PLAYLIST_LOADED,
     PLAYLIST_NOT_FOUND,
-    PLAYLIST_CAP_HIT,
+    PLAYLIST_SAVED,
+    pick_random,
 )
-from utils.logger import log
 from utils import embeds
-
+from utils.logger import log
 
 # ---------------------------------------------------------------------------
 # FavoritesView — ephemeral select menu for /favorites
@@ -124,17 +123,13 @@ class FavoritesSelect(discord.ui.Select):
         """Store the selected video_id on the parent view and acknowledge."""
         # Ownership guard (T-07-03-02)
         if interaction.user.id != self._user_id:
-            await interaction.response.send_message(
-                "that's not your favorites list.", ephemeral=True
-            )
+            await interaction.response.send_message("that's not your favorites list.", ephemeral=True)
             return
 
         selected_video_id = self.values[0]
         row = next((r for r in self._rows if r["video_id"] == selected_video_id), None)
         if row is None:
-            await interaction.response.send_message(
-                "couldn't find that track. try /favorites again.", ephemeral=True
-            )
+            await interaction.response.send_message("couldn't find that track. try /favorites again.", ephemeral=True)
             return
 
         # Store selection on the parent view so Queue/Remove buttons can act on it
@@ -164,16 +159,12 @@ class QueueButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         """Queue the selected favorite via MusicCog."""
         if interaction.user.id != self._user_id:
-            await interaction.response.send_message(
-                "that's not your favorites list.", ephemeral=True
-            )
+            await interaction.response.send_message("that's not your favorites list.", ephemeral=True)
             return
 
         view: FavoritesView = self.view  # type: ignore[assignment]
         if view.selected_row is None:
-            await interaction.response.send_message(
-                "pick a track from the menu first.", ephemeral=True
-            )
+            await interaction.response.send_message("pick a track from the menu first.", ephemeral=True)
             return
 
         await self._cog._queue_favorite(interaction, view.selected_row)
@@ -195,9 +186,7 @@ class RemoveButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         """Delete the selected favorite from the database."""
         if interaction.user.id != self._user_id:
-            await interaction.response.send_message(
-                "that's not your favorites list.", ephemeral=True
-            )
+            await interaction.response.send_message("that's not your favorites list.", ephemeral=True)
             return
 
         view: FavoritesView = self.view  # type: ignore[assignment]
@@ -258,9 +247,7 @@ class LibraryCog(commands.Cog):
 
     # ---- internal helpers ------------------------------------------------
 
-    async def _queue_favorite(
-        self, interaction: discord.Interaction, row: dict
-    ) -> None:
+    async def _queue_favorite(self, interaction: discord.Interaction, row: dict) -> None:
         """Queue a favorite track via MusicCog's existing add+play path.
 
         Mirrors what _queue_from_selection does after the user picks from the
@@ -269,16 +256,12 @@ class LibraryCog(commands.Cog):
         """
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                "music isn't loaded right now. can't queue that.", ephemeral=True
-            )
+            await interaction.response.send_message("music isn't loaded right now. can't queue that.", ephemeral=True)
             return
 
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         # Rebuild a Track from the stored favorite row
@@ -296,9 +279,7 @@ class LibraryCog(commands.Cog):
 
         # Ensure bot is in voice (same guard as _ensure_voice in MusicCog)
         if not interaction.user.voice or not interaction.user.voice.channel:  # type: ignore[union-attr]
-            await interaction.response.send_message(
-                "you're not in a voice channel.", ephemeral=True
-            )
+            await interaction.response.send_message("you're not in a voice channel.", ephemeral=True)
             return
 
         # Defer the response to allow async operations (if not already done)
@@ -315,9 +296,7 @@ class LibraryCog(commands.Cog):
                 # failure) so the deferred-ephemeral interaction gets a real error
                 # rather than a permanent "thinking…" (WR-03).
                 log.warning("favorites: connect failed: %s", exc)
-                await interaction.followup.send(
-                    "couldn't join your voice channel. try again.", ephemeral=True
-                )
+                await interaction.followup.send("couldn't join your voice channel. try again.", ephemeral=True)
                 return
 
         # Add to queue (cap enforced in MusicQueue.add)
@@ -333,9 +312,7 @@ class LibraryCog(commands.Cog):
         # Persist queue state
         if hasattr(self.bot, "queue_persistence"):
             try:
-                await self.bot.queue_persistence.persist(
-                    guild, queue, user_channel.id
-                )
+                await self.bot.queue_persistence.persist(guild, queue, user_channel.id)
             except Exception as exc:
                 log.debug("favorites: queue persist failed: %s", exc)
 
@@ -349,9 +326,7 @@ class LibraryCog(commands.Cog):
             # restart, and the music cog's player manager cannot fetch/delete an
             # ephemeral message id on the next song change (WR-02).
             await music_cog._refresh_now_playing(guild, queue)  # type: ignore[attr-defined]
-            await interaction.followup.send(
-                f"playing **{track.title}** now.", ephemeral=True
-            )
+            await interaction.followup.send(f"playing **{track.title}** now.", ephemeral=True)
         else:
             embed = embeds.song_queued(track, position)
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -367,25 +342,19 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                pick_random(NOTHING_PLAYING), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(NOTHING_PLAYING), ephemeral=True)
             return
 
         queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
         track = queue.get_current()
 
         if track is None or not queue.is_playing:
-            await interaction.response.send_message(
-                pick_random(NOTHING_PLAYING), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(NOTHING_PLAYING), ephemeral=True)
             return
 
         user_id = str(interaction.user.id)
@@ -393,9 +362,7 @@ class LibraryCog(commands.Cog):
         # Cap check (D-21, T-07-03-03) — checked BEFORE insert attempt
         current_count = await count_favorites(self.bot.pool, user_id=user_id)
         if current_count >= config.FAVORITES_MAX_PER_USER:
-            await interaction.response.send_message(
-                pick_random(FAVORITE_CAP_HIT), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(FAVORITE_CAP_HIT), ephemeral=True)
             return
 
         # Dedupe: ON CONFLICT DO NOTHING means add_favorite is a no-op for duplicates.
@@ -415,14 +382,10 @@ class LibraryCog(commands.Cog):
 
         if count_after == count_before:
             # No row was inserted → duplicate (D-19)
-            await interaction.response.send_message(
-                pick_random(FAVORITE_DUPLICATE), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(FAVORITE_DUPLICATE), ephemeral=True)
         else:
             log.info("User %s favorited: %s (%s)", user_id, track.title, track.video_id)
-            await interaction.response.send_message(
-                pick_random(FAVORITE_SAVED), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(FAVORITE_SAVED), ephemeral=True)
 
     @app_commands.command(name="favorites", description="View and queue your saved favorites")
     async def favorites(self, interaction: discord.Interaction) -> None:
@@ -434,9 +397,7 @@ class LibraryCog(commands.Cog):
         rows = await get_favorites(self.bot.pool, user_id=user_id)
 
         if not rows:
-            await interaction.response.send_message(
-                pick_random(FAVORITES_EMPTY), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(FAVORITES_EMPTY), ephemeral=True)
             return
 
         view = FavoritesView(rows, self, interaction.user.id)
@@ -447,13 +408,9 @@ class LibraryCog(commands.Cog):
         )
 
     @favorite.error
-    async def favorite_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
-    ) -> None:
+    async def favorite_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.CommandOnCooldown):
-            await interaction.response.send_message(
-                f"cooldown. try again in {error.retry_after:.1f}s.", ephemeral=True
-            )
+            await interaction.response.send_message(f"cooldown. try again in {error.retry_after:.1f}s.", ephemeral=True)
 
     # ---- /playlist group -------------------------------------------------
 
@@ -464,9 +421,7 @@ class LibraryCog(commands.Cog):
 
     @playlist.command(name="save", description="Save the current queue as a named playlist")
     @app_commands.describe(name="Name for the playlist (max 60 chars)")
-    async def playlist_save(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def playlist_save(self, interaction: discord.Interaction, name: str) -> None:
         """/playlist save <name> — snapshot the current queue to a named playlist.
 
         Guards: empty queue, over-long name, playlist cap (unless overwriting).
@@ -474,16 +429,12 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         name = name.strip()
         if not name:
-            await interaction.response.send_message(
-                "playlist name can't be empty.", ephemeral=True
-            )
+            await interaction.response.send_message("playlist name can't be empty.", ephemeral=True)
             return
 
         if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
@@ -495,16 +446,12 @@ class LibraryCog(commands.Cog):
 
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                "music isn't loaded right now.", ephemeral=True
-            )
+            await interaction.response.send_message("music isn't loaded right now.", ephemeral=True)
             return
 
         queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
         if not queue.tracks:
-            await interaction.response.send_message(
-                "the queue is empty. add some songs first.", ephemeral=True
-            )
+            await interaction.response.send_message("the queue is empty. add some songs first.", ephemeral=True)
             return
 
         user_id = str(interaction.user.id)
@@ -515,27 +462,21 @@ class LibraryCog(commands.Cog):
         if existing is None:
             current_count = await count_playlists(self.bot.pool, user_id=user_id)
             if current_count >= config.PLAYLISTS_MAX_PER_USER:
-                await interaction.response.send_message(
-                    pick_random(PLAYLIST_CAP_HIT), ephemeral=True
-                )
+                await interaction.response.send_message(pick_random(PLAYLIST_CAP_HIT), ephemeral=True)
                 return
 
         snapshot = [t.to_dict() for t in queue.tracks]
         await save_playlist(self.bot.pool, user_id=user_id, name=name, snapshot=snapshot)
 
-        log.info(
-            "User %s saved playlist '%s' with %d tracks", user_id, name, len(snapshot)
-        )
+        log.info("User %s saved playlist '%s' with %d tracks", user_id, name, len(snapshot))
         await interaction.response.send_message(
-            f"{pick_random(PLAYLIST_SAVED)} ({len(snapshot)} tracks, \"{name}\")",
+            f'{pick_random(PLAYLIST_SAVED)} ({len(snapshot)} tracks, "{name}")',
             ephemeral=True,
         )
 
     @playlist.command(name="load", description="Append a saved playlist to the current queue")
     @app_commands.describe(name="Name of the playlist to load")
-    async def playlist_load(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def playlist_load(self, interaction: discord.Interaction, name: str) -> None:
         """/playlist load <name> — rebuild tracks from snapshot and APPEND to queue (D-26).
 
         Truncates to MAX_QUEUE_SIZE_PER_GUILD with a message if the queue would overflow.
@@ -543,9 +484,7 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         user_id = str(interaction.user.id)
@@ -553,22 +492,16 @@ class LibraryCog(commands.Cog):
 
         rows = await get_playlist(self.bot.pool, user_id=user_id, name=name)
         if rows is None:
-            await interaction.response.send_message(
-                pick_random(PLAYLIST_NOT_FOUND), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(PLAYLIST_NOT_FOUND), ephemeral=True)
             return
 
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                "music isn't loaded right now.", ephemeral=True
-            )
+            await interaction.response.send_message("music isn't loaded right now.", ephemeral=True)
             return
 
         if not interaction.user.voice or not interaction.user.voice.channel:  # type: ignore[union-attr]
-            await interaction.response.send_message(
-                "you're not in a voice channel.", ephemeral=True
-            )
+            await interaction.response.send_message("you're not in a voice channel.", ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -608,9 +541,7 @@ class LibraryCog(commands.Cog):
                     # Stop here on connect failure instead of falling through to
                     # _play_track with no voice client connected (WR-03).
                     log.warning("playlist load: connect failed: %s", exc)
-                    await interaction.followup.send(
-                        "couldn't join your voice channel. try again.", ephemeral=True
-                    )
+                    await interaction.followup.send("couldn't join your voice channel. try again.", ephemeral=True)
                     return
 
             queue.current_index = len(queue.tracks) - added  # first newly added track
@@ -622,16 +553,15 @@ class LibraryCog(commands.Cog):
                 # ephemeral text below is the loader's private confirmation.
                 await music_cog._refresh_now_playing(guild, queue)  # type: ignore[attr-defined]
                 await interaction.followup.send(
-                    f"{pick_random(PLAYLIST_LOADED)} now playing \"{name}\" — {added} track(s).",
+                    f'{pick_random(PLAYLIST_LOADED)} now playing "{name}" — {added} track(s).',
                     ephemeral=True,
                 )
                 return
 
-        summary = f"{pick_random(PLAYLIST_LOADED)} added {added} track(s) from \"{name}\"."
+        summary = f'{pick_random(PLAYLIST_LOADED)} added {added} track(s) from "{name}".'
         if truncated:
             summary += (
-                f" {truncated} track(s) were skipped — queue is at the"
-                f" {config.MAX_QUEUE_SIZE_PER_GUILD}-song cap."
+                f" {truncated} track(s) were skipped — queue is at the {config.MAX_QUEUE_SIZE_PER_GUILD}-song cap."
             )
         await interaction.followup.send(summary, ephemeral=True)
 
@@ -655,11 +585,7 @@ class LibraryCog(commands.Cog):
         for row in rows:
             updated = row["updated_at"]
             # updated_at may be a datetime or an aware datetime from asyncpg
-            ts = (
-                discord.utils.format_dt(updated, style="R")
-                if hasattr(updated, "tzinfo")
-                else str(updated)
-            )
+            ts = discord.utils.format_dt(updated, style="R") if hasattr(updated, "tzinfo") else str(updated)
             embed.add_field(
                 name=row["name"],
                 value=f"{row['track_count']} track(s) — updated {ts}",
@@ -670,9 +596,7 @@ class LibraryCog(commands.Cog):
 
     @playlist.command(name="delete", description="Delete a saved playlist")
     @app_commands.describe(name="Name of the playlist to delete")
-    async def playlist_delete(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def playlist_delete(self, interaction: discord.Interaction, name: str) -> None:
         """/playlist delete <name> — remove a named playlist (D-28).
 
         Ephemeral confirmation or not-found message (D-29, D-30).
@@ -682,15 +606,11 @@ class LibraryCog(commands.Cog):
 
         deleted = await delete_playlist(self.bot.pool, user_id=user_id, name=name)
         if not deleted:
-            await interaction.response.send_message(
-                pick_random(PLAYLIST_NOT_FOUND), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(PLAYLIST_NOT_FOUND), ephemeral=True)
             return
 
         log.info("User %s deleted playlist '%s'", user_id, name)
-        await interaction.response.send_message(
-            f"deleted playlist \"{name}\".", ephemeral=True
-        )
+        await interaction.response.send_message(f'deleted playlist "{name}".', ephemeral=True)
 
     # ---- /jam group (Phase 12, UX-01) ------------------------------------
     # Guild-scoped shared mixtapes — anyone in the server can save/add/load/list/delete.
@@ -704,9 +624,7 @@ class LibraryCog(commands.Cog):
 
     @jam.command(name="save", description="Save the current queue as a server jam")
     @app_commands.describe(name="Name for the jam (max 60 chars)")
-    async def jam_save(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def jam_save(self, interaction: discord.Interaction, name: str) -> None:
         """/jam save <name> — snapshot the current queue to a guild-shared jam.
 
         Guards: guild-only, empty queue, over-long name, jam cap (unless overwriting).
@@ -714,16 +632,12 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         name = name.strip()
         if not name:
-            await interaction.response.send_message(
-                "jam name can't be empty.", ephemeral=True
-            )
+            await interaction.response.send_message("jam name can't be empty.", ephemeral=True)
             return
 
         if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
@@ -735,16 +649,12 @@ class LibraryCog(commands.Cog):
 
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                "music isn't loaded right now.", ephemeral=True
-            )
+            await interaction.response.send_message("music isn't loaded right now.", ephemeral=True)
             return
 
         queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
         if not queue.tracks:
-            await interaction.response.send_message(
-                "the queue is empty. add some songs first.", ephemeral=True
-            )
+            await interaction.response.send_message("the queue is empty. add some songs first.", ephemeral=True)
             return
 
         guild_id = str(guild.id)
@@ -756,8 +666,7 @@ class LibraryCog(commands.Cog):
             current_count = await count_jams(self.bot.pool, guild_id=guild_id)
             if current_count >= config.JAMS_PER_GUILD_MAX:
                 await interaction.response.send_message(
-                    f"this server has hit the {config.JAMS_PER_GUILD_MAX}-jam cap."
-                    " delete one before saving a new jam.",
+                    f"this server has hit the {config.JAMS_PER_GUILD_MAX}-jam cap. delete one before saving a new jam.",
                     ephemeral=True,
                 )
                 return
@@ -767,18 +676,19 @@ class LibraryCog(commands.Cog):
 
         log.info(
             "Guild %s: jam '%s' saved with %d tracks by user %s",
-            guild_id, name, len(snapshot), interaction.user.id,
+            guild_id,
+            name,
+            len(snapshot),
+            interaction.user.id,
         )
         await interaction.response.send_message(
-            f"saved jam \"{name}\" ({len(snapshot)} tracks).",
+            f'saved jam "{name}" ({len(snapshot)} tracks).',
             ephemeral=True,
         )
 
     @jam.command(name="add", description="Add the now-playing track to a jam")
     @app_commands.describe(name="Name of the jam to append to")
-    async def jam_add(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def jam_add(self, interaction: discord.Interaction, name: str) -> None:
         """/jam add <name> — append the now-playing track to a named jam (D-04).
 
         If no track is currently playing, responds with a nothing-playing message.
@@ -788,16 +698,12 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         name = name.strip()
         if not name:
-            await interaction.response.send_message(
-                "jam name can't be empty.", ephemeral=True
-            )
+            await interaction.response.send_message("jam name can't be empty.", ephemeral=True)
             return
 
         if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
@@ -809,9 +715,7 @@ class LibraryCog(commands.Cog):
 
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                "music isn't loaded right now.", ephemeral=True
-            )
+            await interaction.response.send_message("music isn't loaded right now.", ephemeral=True)
             return
 
         queue = music_cog.get_queue(guild.id)  # type: ignore[attr-defined]
@@ -819,9 +723,7 @@ class LibraryCog(commands.Cog):
         # Nothing-playing guard — do NOT crash on None track (T-12-01-03, Pitfall 5)
         track = queue.get_current()
         if track is None:
-            await interaction.response.send_message(
-                pick_random(NOTHING_PLAYING), ephemeral=True
-            )
+            await interaction.response.send_message(pick_random(NOTHING_PLAYING), ephemeral=True)
             return
 
         guild_id = str(guild.id)
@@ -848,18 +750,20 @@ class LibraryCog(commands.Cog):
 
         log.info(
             "Guild %s: track '%s' added to jam '%s' by user %s (now %d tracks)",
-            guild_id, track.title, name, interaction.user.id, len(snapshot),
+            guild_id,
+            track.title,
+            name,
+            interaction.user.id,
+            len(snapshot),
         )
         await interaction.response.send_message(
-            f"added \"{track.title}\" to jam \"{name}\" ({len(snapshot)} track(s) total).",
+            f'added "{track.title}" to jam "{name}" ({len(snapshot)} track(s) total).',
             ephemeral=True,
         )
 
     @jam.command(name="load", description="Append a server jam to the current queue")
     @app_commands.describe(name="Name of the jam to load")
-    async def jam_load(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def jam_load(self, interaction: discord.Interaction, name: str) -> None:
         """/jam load <name> — rebuild tracks from a guild jam and APPEND to queue (D-04).
 
         Mirrors playlist_load exactly but reads from get_jam(guild_id=...) instead of
@@ -869,9 +773,7 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         guild_id = str(guild.id)
@@ -880,29 +782,23 @@ class LibraryCog(commands.Cog):
         rows = await get_jam(self.bot.pool, guild_id=guild_id, name=name)
         if rows is None:
             await interaction.response.send_message(
-                f"i can't find a jam called \"{name}\". check /jam list.",
+                f'i can\'t find a jam called "{name}". check /jam list.',
                 ephemeral=True,
             )
             return
 
         # Empty-jam snapshot — distinct error rather than silent no-op (Pitfall 7)
         if len(rows) == 0:
-            await interaction.response.send_message(
-                f"that jam is empty.", ephemeral=True
-            )
+            await interaction.response.send_message("that jam is empty.", ephemeral=True)
             return
 
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                "music isn't loaded right now.", ephemeral=True
-            )
+            await interaction.response.send_message("music isn't loaded right now.", ephemeral=True)
             return
 
         if not interaction.user.voice or not interaction.user.voice.channel:  # type: ignore[union-attr]
-            await interaction.response.send_message(
-                "you're not in a voice channel.", ephemeral=True
-            )
+            await interaction.response.send_message("you're not in a voice channel.", ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -942,9 +838,7 @@ class LibraryCog(commands.Cog):
                     # Stop here on connect failure instead of falling through to
                     # _play_track with no voice client connected (WR-03).
                     log.warning("jam load: connect failed: %s", exc)
-                    await interaction.followup.send(
-                        "couldn't join your voice channel. try again.", ephemeral=True
-                    )
+                    await interaction.followup.send("couldn't join your voice channel. try again.", ephemeral=True)
                     return
 
             queue.current_index = len(queue.tracks) - added  # first newly added track
@@ -956,16 +850,15 @@ class LibraryCog(commands.Cog):
                 # ephemeral text below is the loader's private confirmation.
                 await music_cog._refresh_now_playing(guild, queue)  # type: ignore[attr-defined]
                 await interaction.followup.send(
-                    f"loaded jam \"{name}\": now playing — {added} track(s).",
+                    f'loaded jam "{name}": now playing — {added} track(s).',
                     ephemeral=True,
                 )
                 return
 
-        summary = f"loaded jam \"{name}\": added {added} track(s)."
+        summary = f'loaded jam "{name}": added {added} track(s).'
         if truncated:
             summary += (
-                f" {truncated} track(s) were skipped — queue is at the"
-                f" {config.MAX_QUEUE_SIZE_PER_GUILD}-song cap."
+                f" {truncated} track(s) were skipped — queue is at the {config.MAX_QUEUE_SIZE_PER_GUILD}-song cap."
             )
         await interaction.followup.send(summary, ephemeral=True)
 
@@ -974,9 +867,7 @@ class LibraryCog(commands.Cog):
         """/jam list — ephemeral embed of the guild's saved jams (UX-01, D-02)."""
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         guild_id = str(guild.id)
@@ -995,11 +886,7 @@ class LibraryCog(commands.Cog):
         )
         for row in rows:
             updated = row["updated_at"]
-            ts = (
-                discord.utils.format_dt(updated, style="R")
-                if hasattr(updated, "tzinfo")
-                else str(updated)
-            )
+            ts = discord.utils.format_dt(updated, style="R") if hasattr(updated, "tzinfo") else str(updated)
             embed.add_field(
                 name=row["name"],
                 value=f"{row['track_count']} track(s) — updated {ts}",
@@ -1010,9 +897,7 @@ class LibraryCog(commands.Cog):
 
     @jam.command(name="delete", description="Delete a server jam")
     @app_commands.describe(name="Name of the jam to delete")
-    async def jam_delete(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def jam_delete(self, interaction: discord.Interaction, name: str) -> None:
         """/jam delete <name> — remove a named guild jam (D-03, D-05).
 
         Any guild member can delete (no ownership gate — collaborative model).
@@ -1020,9 +905,7 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         guild_id = str(guild.id)
@@ -1031,24 +914,20 @@ class LibraryCog(commands.Cog):
         deleted = await delete_jam(self.bot.pool, guild_id=guild_id, name=name)
         if not deleted:
             await interaction.response.send_message(
-                f"i can't find a jam called \"{name}\". check /jam list.",
+                f'i can\'t find a jam called "{name}". check /jam list.',
                 ephemeral=True,
             )
             return
 
         log.info("Guild %s: jam '%s' deleted by user %s", guild_id, name, interaction.user.id)
-        await interaction.response.send_message(
-            f"deleted jam \"{name}\".", ephemeral=True
-        )
+        await interaction.response.send_message(f'deleted jam "{name}".', ephemeral=True)
 
     @jam.command(
         name="suggest",
         description="Get validation-gated AI suggestions for a jam",
     )
     @app_commands.describe(name="Name of the jam to riff on")
-    async def jam_suggest(
-        self, interaction: discord.Interaction, name: str
-    ) -> None:
+    async def jam_suggest(self, interaction: discord.Interaction, name: str) -> None:
         """/jam suggest <name> — seed Gemini with the named jam's EXISTING tracks and
         request additions (D-06). EVERY suggestion is validated against real YouTube
         search results via validate_youtube_match (reused verbatim from the auto-queue
@@ -1061,16 +940,12 @@ class LibraryCog(commands.Cog):
         """
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message(
-                "this only works in a server.", ephemeral=True
-            )
+            await interaction.response.send_message("this only works in a server.", ephemeral=True)
             return
 
         name = name.strip()
         if not name:
-            await interaction.response.send_message(
-                "jam name can't be empty.", ephemeral=True
-            )
+            await interaction.response.send_message("jam name can't be empty.", ephemeral=True)
             return
 
         if len(name) > config.PLAYLIST_NAME_MAX_LENGTH:
@@ -1082,9 +957,7 @@ class LibraryCog(commands.Cog):
 
         music_cog = self.bot.get_cog("MusicCog")  # type: ignore[attr-defined]
         if music_cog is None:
-            await interaction.response.send_message(
-                "music isn't loaded right now.", ephemeral=True
-            )
+            await interaction.response.send_message("music isn't loaded right now.", ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -1097,16 +970,14 @@ class LibraryCog(commands.Cog):
         existing = await get_jam(self.bot.pool, guild_id=guild_id, name=name)
         if existing is None:
             await interaction.followup.send(
-                f"i don't have a jam called \"{name}\" to riff on. check /jam list.",
+                f'i don\'t have a jam called "{name}" to riff on. check /jam list.',
                 ephemeral=True,
             )
             return
 
         gemini_service = getattr(self.bot, "gemini_service", None)
         if gemini_service is None:
-            await interaction.followup.send(
-                "the brain's offline right now. try again later.", ephemeral=True
-            )
+            await interaction.followup.send("the brain's offline right now. try again later.", ephemeral=True)
             return
 
         prompt = build_jam_suggestion_prompt(existing, count=config.JAM_SUGGEST_CANDIDATE_COUNT)
@@ -1129,18 +1000,14 @@ class LibraryCog(commands.Cog):
                         search_query, count=config.AUTO_QUEUE_SEARCH_CANDIDATES
                     )
                 except Exception as exc:
-                    log.debug(
-                        "jam suggest: async_search failed for '%s' (%s)", search_query, exc
-                    )
+                    log.debug("jam suggest: async_search failed for '%s' (%s)", search_query, exc)
                     continue
                 if not results:
                     continue
 
                 validated = None
                 for result in results:
-                    if validate_youtube_match(
-                        result.get("title", ""), suggestion["title"], suggestion["artist"]
-                    ):
+                    if validate_youtube_match(result.get("title", ""), suggestion["title"], suggestion["artist"]):
                         validated = result
                         break
 
@@ -1149,24 +1016,24 @@ class LibraryCog(commands.Cog):
                     # don't error (D-07).
                     continue
 
-                validated_candidates.append({
-                    "title": validated.get("title") or suggestion["title"],
-                    "artist": suggestion["artist"],
-                    "url": validated.get("url"),
-                })
+                validated_candidates.append(
+                    {
+                        "title": validated.get("title") or suggestion["title"],
+                        "artist": suggestion["artist"],
+                        "url": validated.get("url"),
+                    }
+                )
 
         # D-07: if none survive validation, say so in character and leave the jam
         # snapshot completely untouched — no save_jam call is reachable on this path.
         if not validated_candidates:
             await interaction.followup.send(
-                f"nothing landed for \"{name}\" — every suggestion failed the youtube check.",
+                f'nothing landed for "{name}" — every suggestion failed the youtube check.',
                 ephemeral=True,
             )
             return
 
-        lines = "\n".join(
-            f"- {c['title']} by {c['artist']}" for c in validated_candidates
-        )
+        lines = "\n".join(f"- {c['title']} by {c['artist']}" for c in validated_candidates)
         view = JamSuggestConfirmView(self.bot, guild_id, name, validated_candidates)
         message = await interaction.followup.send(
             f"here's what i'd add to \"{name}\":\n{lines}\n\nconfirm to lock them in, or cancel.",
@@ -1203,9 +1070,7 @@ class JamSuggestConfirmView(discord.ui.View):
         self._used = False
 
     @discord.ui.button(label="confirm", style=discord.ButtonStyle.success)
-    async def confirm_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self._used:
             await interaction.response.send_message("already handled that.", ephemeral=True)
             return
@@ -1228,7 +1093,8 @@ class JamSuggestConfirmView(discord.ui.View):
                 except Exception as exc:
                     log.debug(
                         "jam suggest confirm: extract failed for '%s' (%s)",
-                        candidate.get("url"), exc,
+                        candidate.get("url"),
+                        exc,
                     )
                     continue
                 if data["duration"] > config.MAX_SONG_DURATION_SECONDS:
@@ -1254,26 +1120,27 @@ class JamSuggestConfirmView(discord.ui.View):
                 )
                 return
 
-            await save_jam(
-                self.bot.pool, guild_id=self.guild_id, name=self.jam_name, snapshot=snapshot
-            )
+            await save_jam(self.bot.pool, guild_id=self.guild_id, name=self.jam_name, snapshot=snapshot)
             log.info(
                 "Guild %s: jam '%s' got %d /jam suggest addition(s) confirmed by user %s",
-                self.guild_id, self.jam_name, added, interaction.user.id,
+                self.guild_id,
+                self.jam_name,
+                added,
+                interaction.user.id,
             )
             await interaction.followup.send(
-                f"added {added} track(s) to jam \"{self.jam_name}\"."
-                f" use /jam load \"{self.jam_name}\" to queue it up.",
+                f'added {added} track(s) to jam "{self.jam_name}". use /jam load "{self.jam_name}" to queue it up.',
                 ephemeral=True,
             )
         except Exception as exc:
             log.error(
                 "jam suggest: confirm failed for guild %s jam '%s': %s",
-                self.guild_id, self.jam_name, exc, exc_info=True,
+                self.guild_id,
+                self.jam_name,
+                exc,
+                exc_info=True,
             )
-            await interaction.followup.send(
-                "something broke saving those. the jam wasn't touched.", ephemeral=True
-            )
+            await interaction.followup.send("something broke saving those. the jam wasn't touched.", ephemeral=True)
 
         if self.message is not None:
             try:
@@ -1282,18 +1149,14 @@ class JamSuggestConfirmView(discord.ui.View):
                 pass
 
     @discord.ui.button(label="cancel", style=discord.ButtonStyle.secondary)
-    async def cancel_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self._used:
             await interaction.response.send_message("already handled that.", ephemeral=True)
             return
         self._used = True
         for child in self.children:
             child.disabled = True
-        await interaction.response.send_message(
-            "cancelled — nothing was added.", ephemeral=True
-        )
+        await interaction.response.send_message("cancelled — nothing was added.", ephemeral=True)
         if self.message is not None:
             try:
                 await self.message.edit(view=self)

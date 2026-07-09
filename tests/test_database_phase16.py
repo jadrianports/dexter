@@ -26,7 +26,6 @@ import pytest
 
 import database
 
-
 # ---------------------------------------------------------------------------
 # Skip guard — mirrors test_database_phase15.py convention
 # ---------------------------------------------------------------------------
@@ -50,12 +49,8 @@ class TestPhase16OptOutHelpers:
     """Verify the two new proactive-callback opt-out helpers exist with locked shapes."""
 
     def test_opt_out_helpers_exist(self) -> None:
-        assert hasattr(database, "set_proactive_opt_out"), (
-            "set_proactive_opt_out must exist in database.py (PROACT-02)"
-        )
-        assert hasattr(database, "get_proactive_opt_out"), (
-            "get_proactive_opt_out must exist in database.py (PROACT-02)"
-        )
+        assert hasattr(database, "set_proactive_opt_out"), "set_proactive_opt_out must exist in database.py (PROACT-02)"
+        assert hasattr(database, "get_proactive_opt_out"), "get_proactive_opt_out must exist in database.py (PROACT-02)"
 
     def test_set_proactive_opt_out_single_identity_param(self) -> None:
         """Structural guard: signature must be exactly (pool, user_id, opted_out).
@@ -87,18 +82,10 @@ class TestPhase16OptOutHelpers:
         """
         set_src = inspect.getsource(database.set_proactive_opt_out)
         get_src = inspect.getsource(database.get_proactive_opt_out)
-        assert "user_memories" not in set_src, (
-            "set_proactive_opt_out must never reference user_memories"
-        )
-        assert "user_memories" not in get_src, (
-            "get_proactive_opt_out must never reference user_memories"
-        )
-        assert "user_profiles" in set_src, (
-            "set_proactive_opt_out must reference user_profiles"
-        )
-        assert "user_profiles" in get_src, (
-            "get_proactive_opt_out must reference user_profiles"
-        )
+        assert "user_memories" not in set_src, "set_proactive_opt_out must never reference user_memories"
+        assert "user_memories" not in get_src, "get_proactive_opt_out must never reference user_memories"
+        assert "user_profiles" in set_src, "set_proactive_opt_out must reference user_profiles"
+        assert "user_profiles" in get_src, "get_proactive_opt_out must reference user_profiles"
 
     def test_set_proactive_opt_out_is_upsert(self) -> None:
         """Pitfall 3 / T-16-06 guard: must be an upsert, never a bare UPDATE."""
@@ -167,20 +154,12 @@ async def test_zero_memories_touched(pool) -> None:
 
     # Opt-out flips the flag but must not touch the memory row.
     await database.set_proactive_opt_out(pool, user_id=user_id, opted_out=True)
-    still_there = await database.search_memories(
-        pool, user_id=user_id, query_embedding=embedding, k=5
-    )
-    assert len(still_there) == 1, (
-        "set_proactive_opt_out(opted_out=True) must not delete memory rows"
-    )
+    still_there = await database.search_memories(pool, user_id=user_id, query_embedding=embedding, k=5)
+    assert len(still_there) == 1, "set_proactive_opt_out(opted_out=True) must not delete memory rows"
 
     await database.set_proactive_opt_out(pool, user_id=user_id, opted_out=False)
-    still_there_2 = await database.search_memories(
-        pool, user_id=user_id, query_embedding=embedding, k=5
-    )
-    assert len(still_there_2) == 1, (
-        "set_proactive_opt_out(opted_out=False) must not delete memory rows"
-    )
+    still_there_2 = await database.search_memories(pool, user_id=user_id, query_embedding=embedding, k=5)
+    assert len(still_there_2) == 1, "set_proactive_opt_out(opted_out=False) must not delete memory rows"
 
     # Now set opted_out=True and confirm /memory forget doesn't flip it back.
     await database.set_proactive_opt_out(pool, user_id=user_id, opted_out=True)
@@ -190,6 +169,5 @@ async def test_zero_memories_touched(pool) -> None:
     assert deleted == 1
 
     assert await database.get_proactive_opt_out(pool, user_id) is True, (
-        "delete_all_user_memories (/memory forget) must never flip "
-        "proactive_opt_out — the two controls are independent"
+        "delete_all_user_memories (/memory forget) must never flip proactive_opt_out — the two controls are independent"
     )

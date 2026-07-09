@@ -25,11 +25,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from database import normalize_search_query, get_resolution_cache, set_resolution_cache
+from database import get_resolution_cache, normalize_search_query, set_resolution_cache
 from models.queue import MusicQueue, Track
 from services.metrics import PerfMetrics
 from services.youtube import YouTubeService
-
 
 # ---------------------------------------------------------------------------
 # Shared test helpers
@@ -76,6 +75,7 @@ def _make_music_cog(queue: MusicQueue, is_cached: bool = False, download_path: P
 
     # Bind _prefetch_next_track from the real MusicCog class
     from cogs.music import MusicCog
+
     cog._prefetch_next_track = MusicCog._prefetch_next_track.__get__(cog, type(cog))
 
     return cog
@@ -210,8 +210,7 @@ class TestResolutionCache:
         # Manually set expires_at to the past so it appears expired
         async with pool.acquire() as conn:
             await conn.execute(
-                "UPDATE resolution_cache SET expires_at = now() - INTERVAL '1 day'"
-                " WHERE query_key = $1",
+                "UPDATE resolution_cache SET expires_at = now() - INTERVAL '1 day' WHERE query_key = $1",
                 key,
             )
         result = await get_resolution_cache(pool, query_key=key)
@@ -231,8 +230,7 @@ class TestResolutionCache:
         # Expire the row
         async with pool.acquire() as conn:
             await conn.execute(
-                "UPDATE resolution_cache SET expires_at = now() - INTERVAL '1 day'"
-                " WHERE query_key = $1",
+                "UPDATE resolution_cache SET expires_at = now() - INTERVAL '1 day' WHERE query_key = $1",
                 key,
             )
         # Write again — should revive with new TTL and updated video_id
@@ -393,6 +391,7 @@ async def test_prefetch_stale_gen_post_download(tmp_path):
     cog.bot = bot
 
     from cogs.music import MusicCog
+
     cog._prefetch_next_track = MusicCog._prefetch_next_track.__get__(cog, type(cog))
 
     guild_mock = MagicMock(id=444)

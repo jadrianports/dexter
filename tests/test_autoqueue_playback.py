@@ -78,16 +78,17 @@ def _make_env(*, queue_is_playing: bool, vc_is_playing: bool):
     bot.youtube_service = MagicMock()
     # UX-04: async_search now returns multiple candidates; include a "title" key so
     # validate_youtube_match can approve the result before async_extract is called.
-    bot.youtube_service.async_search = AsyncMock(side_effect=[
-        [{"url": "https://youtu.be/new1", "title": "Rec Artist - Rec new1"}],
-        [{"url": "https://youtu.be/new2", "title": "Rec Artist - Rec new2"}],
-    ])
-    bot.youtube_service.async_extract = AsyncMock(
-        side_effect=[_extract_data("new1"), _extract_data("new2")]
+    bot.youtube_service.async_search = AsyncMock(
+        side_effect=[
+            [{"url": "https://youtu.be/new1", "title": "Rec Artist - Rec new1"}],
+            [{"url": "https://youtu.be/new2", "title": "Rec Artist - Rec new2"}],
+        ]
     )
+    bot.youtube_service.async_extract = AsyncMock(side_effect=[_extract_data("new1"), _extract_data("new2")])
     bot.cogs = {"MusicCog": music_cog}
 
     from cogs.ai import AICog
+
     cog = AICog(bot)
     return cog, guild, queue, music_cog
 
@@ -97,15 +98,23 @@ def _patches():
     state = SimpleNamespace(auto_queue_rounds=0, auto_queue_results={"played": 0, "skipped": 0})
     return (
         patch("cogs.ai.get_server_state", return_value=state),
-        patch("cogs.ai.get_recent_songs", new=AsyncMock(return_value=[
-            {"title": "Already Played", "artist": "Someone"},
-        ])),
+        patch(
+            "cogs.ai.get_recent_songs",
+            new=AsyncMock(
+                return_value=[
+                    {"title": "Already Played", "artist": "Someone"},
+                ]
+            ),
+        ),
         patch("cogs.ai.build_genius_search_query", side_effect=lambda t, a: (t, a)),
         patch("cogs.ai.build_recommendation_prompt", return_value="prompt"),
-        patch("cogs.ai.parse_suggestions", return_value=[
-            {"title": "Rec new1", "artist": "Rec Artist"},
-            {"title": "Rec new2", "artist": "Rec Artist"},
-        ]),
+        patch(
+            "cogs.ai.parse_suggestions",
+            return_value=[
+                {"title": "Rec new1", "artist": "Rec Artist"},
+                {"title": "Rec new2", "artist": "Rec Artist"},
+            ],
+        ),
     )
 
 
@@ -160,13 +169,15 @@ async def test_autoqueue_falls_through_when_first_suggestion_candidates_all_reje
     # First suggestion ("Rec new1"): every candidate title is unrelated, so all
     # fail token-containment validation. Second suggestion ("Rec new2"): one
     # matching candidate that passes.
-    cog.bot.youtube_service.async_search = AsyncMock(side_effect=[
-        [
-            {"url": "https://youtu.be/bad1", "title": "Completely Different Track"},
-            {"url": "https://youtu.be/bad2", "title": "Another Unrelated Thing"},
-        ],
-        [{"url": "https://youtu.be/new2", "title": "Rec Artist - Rec new2"}],
-    ])
+    cog.bot.youtube_service.async_search = AsyncMock(
+        side_effect=[
+            [
+                {"url": "https://youtu.be/bad1", "title": "Completely Different Track"},
+                {"url": "https://youtu.be/bad2", "title": "Another Unrelated Thing"},
+            ],
+            [{"url": "https://youtu.be/new2", "title": "Rec Artist - Rec new2"}],
+        ]
+    )
     # async_extract is reached ONLY for the validated second suggestion.
     cog.bot.youtube_service.async_extract = AsyncMock(side_effect=[_extract_data("new2")])
 

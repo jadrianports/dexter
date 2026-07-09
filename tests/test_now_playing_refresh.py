@@ -6,12 +6,12 @@ on the previous song. Root cause: the refresh logic lived only inside
 with hardcoded default labels instead of deriving them from queue state.
 """
 
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from models.queue import Track, LoopMode, MusicQueue
 from cogs.music import MusicCog, NowPlayingView
+from models.queue import LoopMode, MusicQueue, Track
 
 
 def make_track(video_id: str = "abc123", title: str = "Test Song", **kwargs) -> Track:
@@ -99,9 +99,7 @@ class TestRefreshNowPlaying:
         q._now_playing_message_id = 999
 
         channel = Mock()
-        channel.fetch_message = AsyncMock(
-            side_effect=discord.NotFound(Mock(status=404), "gone")
-        )
+        channel.fetch_message = AsyncMock(side_effect=discord.NotFound(Mock(status=404), "gone"))
         new_msg = Mock(id=777)
         channel.send = AsyncMock(return_value=new_msg)
         cog._get_text_channel = Mock(return_value=channel)

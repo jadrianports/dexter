@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json  # noqa: F401 — used by callers for guild_queues jsonb payload
 import re
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import asyncpg
-import json  # noqa: F401 — used by callers for guild_queues jsonb payload
 
 import config
 from utils.logger import log
@@ -236,7 +236,12 @@ async def log_track_batch(
                 "INSERT INTO song_history"
                 " (guild_id, user_id, title, artist, url, duration_seconds)"
                 " VALUES ($1, $2, $3, $4, $5, $6)",
-                guild_id, user_id, title, artist, url, duration,
+                guild_id,
+                user_id,
+                title,
+                artist,
+                url,
+                duration,
             )
             if artist is not None:
                 await conn.execute(
@@ -244,7 +249,8 @@ async def log_track_batch(
                     " VALUES ($1, $2, 1)"
                     " ON CONFLICT (user_id, artist)"
                     " DO UPDATE SET play_count = user_artist_counts.play_count + 1",
-                    user_id, artist,
+                    user_id,
+                    artist,
                 )
             await conn.execute(
                 "INSERT INTO user_profiles (user_id, username, total_songs_queued)"
@@ -253,7 +259,8 @@ async def log_track_batch(
                 "   username = EXCLUDED.username,"
                 "   total_songs_queued = user_profiles.total_songs_queued + 1,"
                 "   last_active_at = now()",
-                user_id, username,
+                user_id,
+                username,
             )
 
 
@@ -279,13 +286,16 @@ async def log_song(
             "INSERT INTO song_history"
             " (guild_id, user_id, title, artist, url, duration_seconds)"
             " VALUES ($1, $2, $3, $4, $5, $6)",
-            guild_id, user_id, title, artist, url, duration,
+            guild_id,
+            user_id,
+            title,
+            artist,
+            url,
+            duration,
         )
 
 
-async def update_artist_count(
-    pool: asyncpg.Pool, *, user_id: str, artist: str | None
-) -> None:
+async def update_artist_count(pool: asyncpg.Pool, *, user_id: str, artist: str | None) -> None:
     """Increment the play count for an artist. Skips if artist is None."""
     if artist is None:
         return
@@ -295,13 +305,12 @@ async def update_artist_count(
             " VALUES ($1, $2, 1)"
             " ON CONFLICT (user_id, artist)"
             " DO UPDATE SET play_count = user_artist_counts.play_count + 1",
-            user_id, artist,
+            user_id,
+            artist,
         )
 
 
-async def update_user_profile(
-    pool: asyncpg.Pool, *, user_id: str, username: str
-) -> None:
+async def update_user_profile(pool: asyncpg.Pool, *, user_id: str, username: str) -> None:
     """Create or update a user profile, incrementing their song count."""
     async with pool.acquire() as conn:
         await conn.execute(
@@ -311,13 +320,12 @@ async def update_user_profile(
             "   username = EXCLUDED.username,"
             "   total_songs_queued = user_profiles.total_songs_queued + 1,"
             "   last_active_at = now()",
-            user_id, username,
+            user_id,
+            username,
         )
 
 
-async def set_proactive_opt_out(
-    pool: asyncpg.Pool, *, user_id: str, opted_out: bool
-) -> None:
+async def set_proactive_opt_out(pool: asyncpg.Pool, *, user_id: str, opted_out: bool) -> None:
     """Set (or clear) a user's proactive-callback opt-out flag (PROACT-02).
 
     Touches ONLY the user_profiles table — never the RAG memory-facts store.
@@ -349,7 +357,8 @@ async def set_proactive_opt_out(
             " VALUES ($1, $1, $2)"
             " ON CONFLICT (user_id) DO UPDATE SET"
             "   proactive_opt_out = EXCLUDED.proactive_opt_out",
-            user_id, opted_out,
+            user_id,
+            opted_out,
         )
 
 
@@ -384,7 +393,7 @@ async def increment_daily_stat(pool: asyncpg.Pool, field: str) -> None:
         "total_songs_played",
         "total_ai_queries",
         "total_images_generated",
-        "total_errors",              # Phase 8 addition (D-23)
+        "total_errors",  # Phase 8 addition (D-23)
     }
     if field not in allowed_fields:
         raise ValueError(f"Invalid stat field: {field}")
@@ -409,13 +418,12 @@ async def mark_song_skipped(pool: asyncpg.Pool, *, guild_id: str, url: str) -> N
             "   WHERE guild_id = $1 AND url = $2"
             "   ORDER BY queued_at DESC, id DESC LIMIT 1"
             ")",
-            guild_id, url,
+            guild_id,
+            url,
         )
 
 
-async def get_recent_songs(
-    pool: asyncpg.Pool, *, guild_id: str, limit: int = 10
-) -> list[dict]:
+async def get_recent_songs(pool: asyncpg.Pool, *, guild_id: str, limit: int = 10) -> list[dict]:
     """Return the last N songs for a guild, newest first."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -424,7 +432,8 @@ async def get_recent_songs(
             " WHERE guild_id = $1"
             " ORDER BY queued_at DESC, id DESC"
             " LIMIT $2",
-            guild_id, limit,
+            guild_id,
+            limit,
         )
     return [dict(row) for row in rows]
 
@@ -439,9 +448,10 @@ async def log_image(
     """Insert an image generation log entry."""
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO image_generation_log (guild_id, user_id, prompt)"
-            " VALUES ($1, $2, $3)",
-            guild_id, user_id, prompt,
+            "INSERT INTO image_generation_log (guild_id, user_id, prompt) VALUES ($1, $2, $3)",
+            guild_id,
+            user_id,
+            prompt,
         )
 
 
@@ -449,8 +459,7 @@ async def get_images_today(pool: asyncpg.Pool, *, user_id: str) -> int:
     """Count how many images a user has generated today."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT COUNT(*) AS cnt FROM image_generation_log"
-            " WHERE user_id = $1 AND generated_at::date = CURRENT_DATE",
+            "SELECT COUNT(*) AS cnt FROM image_generation_log WHERE user_id = $1 AND generated_at::date = CURRENT_DATE",
             user_id,
         )
     return row["cnt"] if row else 0
@@ -492,9 +501,7 @@ async def get_daily_stats_row(pool: asyncpg.Pool) -> dict:
     return dict(row)
 
 
-async def get_leaderboard_songs(
-    pool: asyncpg.Pool, guild_id: str
-) -> list[asyncpg.Record]:
+async def get_leaderboard_songs(pool: asyncpg.Pool, guild_id: str) -> list[asyncpg.Record]:
     """Return the top-N users by songs queued within a specific guild (D-10/D-14).
 
     Per-guild scope: queries song_history WHERE guild_id = $1 (not the global
@@ -512,13 +519,12 @@ async def get_leaderboard_songs(
             " HAVING COUNT(*) >= 1"
             " ORDER BY songs_queued DESC, up.first_seen_at ASC"
             " LIMIT $2",
-            guild_id, config.LEADERBOARD_TOP_N,
+            guild_id,
+            config.LEADERBOARD_TOP_N,
         )
 
 
-async def get_leaderboard_skips(
-    pool: asyncpg.Pool, guild_id: str
-) -> list[asyncpg.Record]:
+async def get_leaderboard_skips(pool: asyncpg.Pool, guild_id: str) -> list[asyncpg.Record]:
     """Return the top-N most-skipped song titles within a specific guild (D-12).
 
     Ranks song titles by skip count (was_skipped = true). Zero-skip titles are
@@ -534,13 +540,12 @@ async def get_leaderboard_skips(
             " HAVING COUNT(*) >= 1"
             " ORDER BY skip_count DESC"
             " LIMIT $2",
-            guild_id, config.LEADERBOARD_TOP_N,
+            guild_id,
+            config.LEADERBOARD_TOP_N,
         )
 
 
-async def get_leaderboard_streaks(
-    pool: asyncpg.Pool, guild_id: str
-) -> list[asyncpg.Record]:
+async def get_leaderboard_streaks(pool: asyncpg.Pool, guild_id: str) -> list[asyncpg.Record]:
     """Return the top-N users by longest streak who are active in this guild (D-15).
 
     Guild-active filter: subquery selects DISTINCT user_ids from song_history
@@ -559,7 +564,8 @@ async def get_leaderboard_streaks(
             "   AND up.longest_streak >= 1"
             " ORDER BY up.longest_streak DESC, up.first_seen_at ASC"
             " LIMIT $2",
-            guild_id, config.LEADERBOARD_TOP_N,
+            guild_id,
+            config.LEADERBOARD_TOP_N,
         )
 
 
@@ -570,15 +576,12 @@ async def get_images_today_global(pool: asyncpg.Pool) -> int:
     """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT COUNT(*) AS cnt FROM image_generation_log"
-            " WHERE generated_at::date = CURRENT_DATE"
+            "SELECT COUNT(*) AS cnt FROM image_generation_log WHERE generated_at::date = CURRENT_DATE"
         )
     return int(row["cnt"]) if row else 0
 
 
-async def get_repeat_song_count(
-    pool: asyncpg.Pool, *, guild_id: str, user_id: str, title: str
-) -> int:
+async def get_repeat_song_count(pool: asyncpg.Pool, *, guild_id: str, user_id: str, title: str) -> int:
     """Count plays of the same song by this user in this guild today (PERS-04).
 
     All parameters are bound via $N positional placeholders — no string
@@ -589,14 +592,14 @@ async def get_repeat_song_count(
             "SELECT COUNT(*) AS cnt FROM song_history"
             " WHERE guild_id = $1 AND user_id = $2 AND title = $3"
             "   AND queued_at::date = CURRENT_DATE",
-            guild_id, user_id, title,
+            guild_id,
+            user_id,
+            title,
         )
     return row["cnt"] if row else 0
 
 
-async def update_user_streak(
-    pool: asyncpg.Pool, *, user_id: str, tz_name: str
-) -> tuple[int, int, int | None]:
+async def update_user_streak(pool: asyncpg.Pool, *, user_id: str, tz_name: str) -> tuple[int, int, int | None]:
     """Update streak for user; return (new_streak, new_longest, milestone_or_None).
 
     Reads current_streak / last_streak_date from user_profiles, runs compute_streak(),
@@ -610,8 +613,7 @@ async def update_user_streak(
     """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT current_streak, longest_streak, last_streak_date"
-            " FROM user_profiles WHERE user_id = $1",
+            "SELECT current_streak, longest_streak, last_streak_date FROM user_profiles WHERE user_id = $1",
             user_id,
         )
         if row is None:
@@ -629,7 +631,10 @@ async def update_user_streak(
             "UPDATE user_profiles"
             " SET current_streak = $1, longest_streak = $2, last_streak_date = $3"
             " WHERE user_id = $4",
-            new_streak, new_longest, new_date, user_id,
+            new_streak,
+            new_longest,
+            new_date,
+            user_id,
         )
 
     # Milestone: fires when new_streak exactly equals a threshold AND increased
@@ -640,9 +645,7 @@ async def update_user_streak(
     return (new_streak, new_longest, milestone)
 
 
-async def get_history_rows(
-    pool: asyncpg.Pool, *, guild_id: str, limit: int = 50
-) -> list[dict]:
+async def get_history_rows(pool: asyncpg.Pool, *, guild_id: str, limit: int = 50) -> list[dict]:
     """Return the last N songs for a guild, newest first, with queued_at (HIST-01).
 
     LIMIT is bound as an int parameter — not string-interpolated (T-04-04 / V5).
@@ -654,7 +657,8 @@ async def get_history_rows(
             " WHERE guild_id = $1"
             " ORDER BY queued_at DESC, id DESC"
             " LIMIT $2",
-            guild_id, int(limit),
+            guild_id,
+            int(limit),
         )
     return [dict(row) for row in rows]
 
@@ -687,7 +691,13 @@ async def add_favorite(
             " (user_id, video_id, title, artist, url, duration_seconds, thumbnail)"
             " VALUES ($1, $2, $3, $4, $5, $6, $7)"
             " ON CONFLICT (user_id, video_id) DO NOTHING",
-            user_id, video_id, title, artist, url, duration_seconds, thumbnail,
+            user_id,
+            video_id,
+            title,
+            artist,
+            url,
+            duration_seconds,
+            thumbnail,
         )
 
 
@@ -701,9 +711,7 @@ async def count_favorites(pool: asyncpg.Pool, *, user_id: str) -> int:
     return int(row["cnt"]) if row else 0
 
 
-async def get_favorites(
-    pool: asyncpg.Pool, *, user_id: str, limit: int = 25
-) -> list[dict]:
+async def get_favorites(pool: asyncpg.Pool, *, user_id: str, limit: int = 25) -> list[dict]:
     """Return the user's saved favorites, newest first.
 
     Each dict carries enough fields to rebuild a Track:
@@ -716,7 +724,8 @@ async def get_favorites(
             " WHERE user_id = $1"
             " ORDER BY added_at DESC"
             " LIMIT $2",
-            user_id, int(limit),
+            user_id,
+            int(limit),
         )
     return [dict(row) for row in rows]
 
@@ -729,7 +738,8 @@ async def remove_favorite(pool: asyncpg.Pool, *, user_id: str, video_id: str) ->
     async with pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM user_favorites WHERE user_id = $1 AND video_id = $2",
-            user_id, video_id,
+            user_id,
+            video_id,
         )
 
 
@@ -757,7 +767,9 @@ async def save_playlist(
             " VALUES ($1, $2, $3::jsonb, now(), now())"
             " ON CONFLICT (user_id, name)"
             " DO UPDATE SET snapshot = EXCLUDED.snapshot, updated_at = now()",
-            user_id, name, json.dumps(snapshot),
+            user_id,
+            name,
+            json.dumps(snapshot),
         )
 
 
@@ -776,7 +788,8 @@ async def get_playlist(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT snapshot FROM user_playlists WHERE user_id = $1 AND name = $2",
-            user_id, name,
+            user_id,
+            name,
         )
     if row is None:
         return None
@@ -823,7 +836,8 @@ async def delete_playlist(
     async with pool.acquire() as conn:
         result = await conn.execute(
             "DELETE FROM user_playlists WHERE user_id = $1 AND name = $2",
-            user_id, name,
+            user_id,
+            name,
         )
     # asyncpg execute() returns a status string like "DELETE 1" or "DELETE 0";
     # parse the trailing affected-row count rather than a fragile suffix match.
@@ -867,7 +881,9 @@ async def save_jam(
             " VALUES ($1, $2, $3::jsonb, now(), now())"
             " ON CONFLICT (guild_id, name)"
             " DO UPDATE SET snapshot = EXCLUDED.snapshot, updated_at = now()",
-            guild_id, name, json.dumps(snapshot),
+            guild_id,
+            name,
+            json.dumps(snapshot),
         )
 
 
@@ -889,7 +905,8 @@ async def get_jam(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT snapshot FROM guild_jams WHERE guild_id = $1 AND name = $2",
-            guild_id, name,
+            guild_id,
+            name,
         )
     if row is None:
         return None
@@ -937,7 +954,8 @@ async def delete_jam(
     async with pool.acquire() as conn:
         result = await conn.execute(
             "DELETE FROM guild_jams WHERE guild_id = $1 AND name = $2",
-            guild_id, name,
+            guild_id,
+            name,
         )
     # asyncpg execute() returns a status string like "DELETE 1" or "DELETE 0";
     # parse the trailing affected-row count rather than a fragile suffix match.
@@ -1017,7 +1035,8 @@ async def search_memories(
             f" WHERE user_id = $1{kind_clause}"
             " ORDER BY embedding <=> $2"
             " LIMIT $" + str(len(params) + 1),
-            *params, k,
+            *params,
+            k,
         )
 
 
@@ -1061,7 +1080,13 @@ async def insert_memory(
             " (user_id, guild_id, kind, fact, embedding, salience, expires_at)"
             " VALUES ($1, $2, $3, $4, $5, $6, $7)"
             " RETURNING id",
-            user_id, guild_id, kind, fact, embedding, salience, expires_at,
+            user_id,
+            guild_id,
+            kind,
+            fact,
+            embedding,
+            salience,
+            expires_at,
         )
     return row["id"]
 
@@ -1091,9 +1116,7 @@ async def bump_memory_hit(pool: asyncpg.Pool, memory_id: int) -> None:
         )
 
 
-async def refresh_memory_expiry(
-    pool: asyncpg.Pool, memory_id: int, expires_at: datetime
-) -> None:
+async def refresh_memory_expiry(pool: asyncpg.Pool, memory_id: int, expires_at: datetime) -> None:
     """Reset the decay horizon on an existing memory row — expires_at ONLY.
 
     The D-05 self-refresh primitive: MemoryService.remember()'s dedup branch
@@ -1113,10 +1136,9 @@ async def refresh_memory_expiry(
     """
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE user_memories"
-            " SET expires_at = $2"
-            " WHERE id = $1",
-            memory_id, expires_at,
+            "UPDATE user_memories SET expires_at = $2 WHERE id = $1",
+            memory_id,
+            expires_at,
         )
 
 
@@ -1204,7 +1226,8 @@ async def evict_lowest_salience(
     async with pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM user_memories WHERE user_id = $1 AND id = ANY($2)",
-            user_id, ids,
+            user_id,
+            ids,
         )
 
 
@@ -1243,7 +1266,8 @@ async def list_user_memories(
             " WHERE user_id = $1"
             " ORDER BY salience DESC, created_at DESC"
             " LIMIT $2",
-            user_id, limit,
+            user_id,
+            limit,
         )
 
 
@@ -1324,10 +1348,7 @@ async def delete_expired_memories(pool: asyncpg.Pool, *, now: datetime) -> int:
     """
     async with pool.acquire() as conn:
         result = await conn.execute(
-            "DELETE FROM user_memories"
-            " WHERE expires_at IS NOT NULL"
-            "   AND expires_at < $1"
-            "   AND salience < $2",
+            "DELETE FROM user_memories WHERE expires_at IS NOT NULL   AND expires_at < $1   AND salience < $2",
             now,
             config.MEMORY_DECAY_SALIENCE_FLOOR,
         )
@@ -1361,8 +1382,7 @@ async def get_resolution_cache(pool: asyncpg.Pool, *, query_key: str) -> dict | 
     """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT video_id, title FROM resolution_cache"
-            " WHERE query_key = $1 AND expires_at > now()",
+            "SELECT video_id, title FROM resolution_cache WHERE query_key = $1 AND expires_at > now()",
             query_key,
         )
     return dict(row) if row else None
@@ -1392,13 +1412,14 @@ async def set_resolution_cache(
             "  video_id = EXCLUDED.video_id,"
             "  title = EXCLUDED.title,"
             "  expires_at = EXCLUDED.expires_at",
-            query_key, video_id, title, expires,
+            query_key,
+            video_id,
+            title,
+            expires,
         )
 
 
-async def get_user_skip_rate(
-    pool: asyncpg.Pool, *, guild_id: str, user_id: str
-) -> asyncpg.Record | None:
+async def get_user_skip_rate(pool: asyncpg.Pool, *, guild_id: str, user_id: str) -> asyncpg.Record | None:
     """Return an asyncpg Record with total_plays and total_skips for a user in a guild.
 
     Aggregate is all-time (no date filter, D-09) and scoped to BOTH guild_id ($1)
@@ -1416,7 +1437,8 @@ async def get_user_skip_rate(
             " COUNT(*) FILTER (WHERE was_skipped = true) AS total_skips"
             " FROM song_history"
             " WHERE guild_id = $1 AND user_id = $2",
-            guild_id, user_id,
+            guild_id,
+            user_id,
         )
 
 
@@ -1425,9 +1447,7 @@ async def get_user_skip_rate(
 # ---------------------------------------------------------------------------
 
 
-async def get_active_taste_users(
-    pool: asyncpg.Pool, *, since: datetime
-) -> list[asyncpg.Record]:
+async def get_active_taste_users(pool: asyncpg.Pool, *, since: datetime) -> list[asyncpg.Record]:
     """Return (guild_id, user_id, tracks_in_window) for every guild+user pair
     active in song_history since the given cutoff.
 
@@ -1489,7 +1509,10 @@ async def get_user_artist_activity(
             " WHERE guild_id = $1 AND user_id = $2"
             "   AND artist IS NOT NULL AND queued_at > $4"
             " GROUP BY artist",
-            guild_id, user_id, since, baseline_since,
+            guild_id,
+            user_id,
+            since,
+            baseline_since,
         )
 
 
@@ -1519,13 +1542,13 @@ async def get_recently_skipped(
             " WHERE guild_id = $1 AND was_skipped = true AND queued_at > $2"
             " ORDER BY queued_at DESC"
             " LIMIT $3",
-            guild_id, since, limit,
+            guild_id,
+            since,
+            limit,
         )
 
 
-async def get_user_top_artist(
-    pool: asyncpg.Pool, *, guild_id: str, user_id: str, limit: int
-) -> list[asyncpg.Record]:
+async def get_user_top_artist(pool: asyncpg.Pool, *, guild_id: str, user_id: str, limit: int) -> list[asyncpg.Record]:
     """Return the invoker's top artists (by play count) in this guild, for /discover's anchor.
 
     Phase 14: Smarter Music Brain (D-04, OQ2 anchor decision = Option B). Scoped to
@@ -1548,7 +1571,9 @@ async def get_user_top_artist(
             " GROUP BY artist"
             " ORDER BY play_count DESC"
             " LIMIT $3",
-            guild_id, user_id, limit,
+            guild_id,
+            user_id,
+            limit,
         )
 
 
@@ -1599,5 +1624,9 @@ async def get_artist_cooccurrence(
             " GROUP BY sh.artist"
             " ORDER BY co_occurrence DESC"
             " LIMIT $5",
-            guild_id, anchor_artist, since, tz_name, limit,
+            guild_id,
+            anchor_artist,
+            since,
+            tz_name,
+            limit,
         )
