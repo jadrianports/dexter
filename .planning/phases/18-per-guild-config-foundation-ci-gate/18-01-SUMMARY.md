@@ -131,3 +131,12 @@ None - no external service configuration required. Ruff is a dev-only tool; `req
 ---
 *Phase: 18-per-guild-config-foundation-ci-gate*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+- FOUND: pyproject.toml
+- FOUND: requirements-dev.txt
+- FOUND: .planning/phases/18-per-guild-config-foundation-ci-gate/18-01-SUMMARY.md
+- FOUND: 5c5314b (chore(18-01): add Ruff config and dev-requirements pin)
+- FOUND: 8353d3f (style(18-01): adopt ruff, format repo)
+- FOUND: 99b37b4 (docs(18-01): add plan 01 SUMMARY)
