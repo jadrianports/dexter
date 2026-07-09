@@ -440,6 +440,41 @@ async def _initialize_once() -> None:
 
     bot.log_to_discord = lambda embed: _log_to_discord(bot, embed)
 
+    # Phase 18 / CONFIG-03/05: per-guild config cache (D-04, D-06/D-07, D-08/D-09).
+    # Constructed unconditionally — unlike the Gemini-gated services above, every
+    # guild needs to resolve its ambient config regardless of which optional
+    # services are wired. load_all() already fails closed internally (D-07): do
+    # NOT wrap it in a boot-aborting try — an empty cache just means every guild
+    # reads as unconfigured (ambient-silent) until a restart succeeds.
+    from services.guild_config import GuildConfigService
+
+    bot.guild_config = GuildConfigService(bot.pool, bot)
+    await bot.guild_config.load_all()
+
+    # Home-guild seed (CONFIG-05 / D-08/D-09): config.DEXTER_CHANNEL_ID is now a
+    # one-time bootstrap input with no ongoing authority. Unset or unresolvable
+    # is a silent INFO skip (D-10) — a fresh clone / CI with no env var boots
+    # fine and stays ambient-silent. No owner-only setter or second-guild write
+    # path is added here (D-13) — this seed is the ONLY writer this phase.
+    if not config.DEXTER_CHANNEL_ID:
+        log.info("DEXTER_CHANNEL_ID unset — no home guild seeded; ambient-silent until /setup")
+    else:
+        _seed_channel = bot.get_channel(config.DEXTER_CHANNEL_ID)
+        _seed_guild = getattr(_seed_channel, "guild", None)
+        if _seed_guild is None:
+            log.info(
+                "DEXTER_CHANNEL_ID %s did not resolve to a guild channel — no home guild seeded",
+                config.DEXTER_CHANNEL_ID,
+            )
+        else:
+            try:
+                await bot.guild_config.seed_home_guild(
+                    guild_id=str(_seed_guild.id),
+                    ambient_channel_id=str(_seed_channel.id),
+                )
+            except Exception as exc:
+                log.warning("Home-guild config seed failed: %s", exc)
+
     # Phase 4: Queue persistence service (wired before cog loading so the service
     # exists on bot before MusicCog setup() runs)
     from services.queue_persistence import QueuePersistenceService
