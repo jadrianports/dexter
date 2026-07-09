@@ -99,7 +99,14 @@ Full phase details, success criteria, and decisions archived in
   3. Every ambient/unprompted surface resolves its channel through exactly one code path — `bot.py::_resolve_dexter_channel`, `cogs/events.py::_get_ambient_channel`, and the two bare-equality `message.channel.id == config.DEXTER_CHANNEL_ID` gates are gone, replaced by calls into the same consolidated resolver.
   4. Per-guild config reads never issue a live Neon round-trip during normal event handling — an in-memory cache serves them, loaded at boot and push-invalidated only when config changes.
   5. Every push and PR runs the pytest suite + lint in GitHub Actions (CICD-01), so Phases 19–23 — especially Phase 21's surgery on the scarred memory subsystem — all execute behind a green gate. The README build badge may land here or in Phase 23 alongside the rest of the README rewrite.
-**Plans**: TBD
+**Plans**: 7 plans (5 waves)
+- [ ] 18-01-PLAN.md — Ruff adoption + repo-wide lint/format cleanup (own atomic commit)
+- [ ] 18-02-PLAN.md — guild_config schema + boot helpers + conftest pgvector-codec fix
+- [ ] 18-03-PLAN.md — pure logic/guild_config.py decision seam (mock-free)
+- [ ] 18-04-PLAN.md — GuildConfigService: cache + strict ambient resolver + announce resolver
+- [ ] 18-05-PLAN.md — bot.py boot wiring + home-guild seed + ambient call-site consolidation
+- [ ] 18-06-PLAN.md — cogs/events.py consolidation (3 voice sites + 2 on_message gates) + tests
+- [ ] 18-07-PLAN.md — GitHub Actions CI gate (pytest + Ruff, pgvector service container)
 
 ### Phase 19: Onboarding & Admin Setup
 **Goal**: A server admin can turn Dexter "on" for their own guild with zero manual intervention from the owner — the preventive half of safety.
@@ -181,7 +188,7 @@ Full phase details, success criteria, and decisions archived in
 | 15. RAG Reach | v1.3 | 3/3 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
-| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 0/TBD | Not started | - |
+| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 0/7 | Not started | - |
 | 19. Onboarding & Admin Setup | v1.4 | 0/TBD | Not started | - |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 0/TBD | Not started | - |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |

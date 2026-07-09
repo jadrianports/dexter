@@ -1,8 +1,8 @@
 ---
 phase: 18
 slug: per-guild-config-foundation-ci-gate
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-10
 ---
@@ -98,11 +98,11 @@ and the seed's idempotence — is automated above.*
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (conftest fix → 18-02; test scaffolds → 18-02/03/04; pyproject → 18-01; ci.yml → 18-07)
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved — 7 plans across 5 waves; every task carries an <automated> verify (checkpoint tasks excepted); CICD-01 first-push check is parked manual-only per host precedent.
