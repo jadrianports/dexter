@@ -19,6 +19,7 @@ import os
 
 import asyncpg
 import pytest_asyncio
+from pgvector.asyncpg import register_vector
 
 from database import init_db
 
@@ -32,6 +33,13 @@ async def pool():
 
     Skips the test (not errors) when Postgres is unavailable — matching the
     documented "skipped (connection error)" behaviour in the module docstring.
+
+    Phase 18 / CICD-01 prerequisite: registers the pgvector codec
+    extension-first, mirroring bot.py::_initialize_once's boot ordering — a
+    throwaway connection runs CREATE EXTENSION IF NOT EXISTS vector BEFORE the
+    pool is created with init=register_vector. Without this, any live-DB test
+    that touches user_memories (vector(768)) errors with "unknown type:
+    public.vector" instead of passing.
     """
     import pytest  # local import keeps the global namespace clean
 
@@ -40,7 +48,13 @@ async def pool():
         "postgresql://dexter:dexter@localhost:5432/dexter_test",
     )
     try:
-        p = await asyncpg.create_pool(dsn)
+        _ext_conn = await asyncpg.connect(dsn=dsn)
+        try:
+            await _ext_conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        finally:
+            await _ext_conn.close()
+
+        p = await asyncpg.create_pool(dsn, init=register_vector)
     except Exception as exc:
         pytest.skip(f"Postgres unavailable ({exc}); skipping live-DB test")
         return  # unreachable — skip raises; satisfies type checkers
@@ -53,6 +67,7 @@ async def pool():
             " user_artist_counts, image_generation_log,"
             " bot_daily_stats, user_profiles,"
             " user_favorites, user_playlists, user_playlist_tracks,"
-            " resolution_cache, guild_jams CASCADE"
+            " resolution_cache, guild_jams, guild_config,"
+            " user_memories CASCADE"
         )
     await p.close()
