@@ -27,11 +27,19 @@ from cogs.events import EventsCog
 
 
 def _make_bot() -> MagicMock:
-    """Return a minimal fake bot with a pool and a memory_service.recall AsyncMock."""
+    """Return a minimal fake bot with a pool and a memory_service.recall AsyncMock.
+
+    Phase 18 / CONFIG-02: also carries a `guild_config` seam whose `.get(...)`
+    returns a configured row with `ambient_channel_id="500"` by default — the
+    new seam `on_message` gates dispatch through (replacing the old bare
+    env-var equality check).
+    """
     bot = MagicMock()
     bot.pool = MagicMock()
     bot.memory_service = MagicMock()
     bot.memory_service.recall = AsyncMock(return_value=[])
+    bot.guild_config = MagicMock()
+    bot.guild_config.get = MagicMock(return_value={"configured": True, "ambient_channel_id": "500"})
     return bot
 
 
@@ -170,6 +178,8 @@ async def test_opted_out_short_circuits():
 
 @pytest.mark.asyncio
 async def test_non_designated_channel_skips():
+    """A channel id that does not match the guild's configured ambient channel
+    (via bot.guild_config.get -> is_ambient_channel) never reaches the glue."""
     bot = _make_bot()
     bot.message_buffer = MagicMock()
     bot.message_buffer.add = MagicMock()
@@ -177,7 +187,6 @@ async def test_non_designated_channel_skips():
     cog = EventsCog(bot)
 
     with (
-        patch("cogs.events.config.DEXTER_CHANNEL_ID", 500),
         patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()) as mock_fire,
         patch.object(cog, "_handle_message_reactions", new=AsyncMock()),
     ):
@@ -188,7 +197,8 @@ async def test_non_designated_channel_skips():
 
 @pytest.mark.asyncio
 async def test_designated_channel_triggers():
-    """The mirror positive case: a matching channel id DOES call the glue."""
+    """The mirror positive case: a channel id matching the guild's configured
+    ambient channel (bot.guild_config.get -> is_ambient_channel) DOES call the glue."""
     bot = _make_bot()
     bot.message_buffer = MagicMock()
     bot.message_buffer.add = MagicMock()
@@ -196,13 +206,32 @@ async def test_designated_channel_triggers():
     cog = EventsCog(bot)
 
     with (
-        patch("cogs.events.config.DEXTER_CHANNEL_ID", 500),
         patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()) as mock_fire,
         patch.object(cog, "_handle_message_reactions", new=AsyncMock()),
     ):
         await cog.on_message(message)
 
     mock_fire.assert_awaited_once_with(message)
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_guild_skips():
+    """CONFIG-04: an unconfigured guild (guild_config.get -> None) is silent,
+    even when the channel id would otherwise have matched the old env var."""
+    bot = _make_bot()
+    bot.guild_config.get = MagicMock(return_value=None)
+    bot.message_buffer = MagicMock()
+    bot.message_buffer.add = MagicMock()
+    message = _make_message(channel_id=500)
+    cog = EventsCog(bot)
+
+    with (
+        patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()) as mock_fire,
+        patch.object(cog, "_handle_message_reactions", new=AsyncMock()),
+    ):
+        await cog.on_message(message)
+
+    mock_fire.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
