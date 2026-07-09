@@ -17,7 +17,7 @@ The foundational seam. Every other category reads from it.
 
 - [x] **CONFIG-01**: A `guild_config` table (`guild_id` PK, `ambient_channel_id`, `configured`, `silenced`, `is_blocked`, `joined_at`, `updated_at`) exists in `SCHEMA_SQL`, following the existing `guild_jams`/`resolution_cache` idiom
 - [x] **CONFIG-02**: One consolidated ambient-channel resolver replaces the duplicated `bot.py::_resolve_dexter_channel` and `cogs/events.py::_get_ambient_channel`, AND the two bare-equality `message.channel.id == config.DEXTER_CHANNEL_ID` gates in `events.py::on_message` (proactive-callback + vision-roast dispatch) route through it
-- [ ] **CONFIG-03**: A `GuildConfigService` serves per-guild config from an in-memory cache loaded at boot, push-invalidated on change — never a per-event DB round-trip against Neon
+- [x] **CONFIG-03**: A `GuildConfigService` serves per-guild config from an in-memory cache loaded at boot, push-invalidated on change — never a per-event DB round-trip against Neon
 - [x] **CONFIG-04**: Ambient/unprompted surfaces (roasts, proactive callbacks, vision roasts, idle + startup messages) stay silent in a guild until `/setup` runs; core commands (`/play`, `/ask`, …) work immediately on join
 - [x] **CONFIG-05**: The owner's home guild is seeded from the existing `config.DEXTER_CHANNEL_ID` so current behavior is unchanged after the refactor
 
@@ -124,7 +124,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | CONFIG-01 | Phase 18 | Complete |
 | CONFIG-02 | Phase 18 | Complete |
-| CONFIG-03 | Phase 18 | Pending |
+| CONFIG-03 | Phase 18 | Complete |
 | CONFIG-04 | Phase 18 | Complete |
 | CONFIG-05 | Phase 18 | Complete |
 | ONBOARD-01 | Phase 19 | Pending |
