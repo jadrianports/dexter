@@ -1,10 +1,11 @@
 ---
-gsd_state_version: '1.0'
+gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: planning
-last_updated: "2026-07-10T00:00:00.000Z"
-last_activity: 2026-07-10
+stopped_at: Phase 18 context gathered
+last_updated: "2026-07-09T18:49:40.376Z"
+last_activity: 2026-07-10 — ROADMAP.md created for v1.4 "Open House" (Phases 18–23, 31/31 requirements mapped)
 progress:
   total_phases: 6
   completed_phases: 0
@@ -94,9 +95,9 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-10 — v1.4 "Open House" ROADMAP.md created (Phases 18–23), STATE.md reset for the new milestone, REQUIREMENTS.md traceability filled in (31/31 mapped)
-Stopped at: Roadmap drafted and written; awaiting user approval
-Resume file: None
+Last session: 2026-07-09T18:49:40.366Z
+Stopped at: Phase 18 context gathered
+Resume file: .planning/phases/18-per-guild-config-foundation-ci-gate/18-CONTEXT.md
 
 ## Operator Next Steps
 
