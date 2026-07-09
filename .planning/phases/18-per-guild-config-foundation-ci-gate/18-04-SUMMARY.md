@@ -107,3 +107,13 @@ None - no external service configuration required.
 ---
 *Phase: 18-per-guild-config-foundation-ci-gate*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+- FOUND: services/guild_config.py
+- FOUND: tests/test_guild_config_service.py
+- FOUND: .planning/phases/18-per-guild-config-foundation-ci-gate/18-04-SUMMARY.md
+- FOUND: b88ef3e (feat: cache/load_all/seed_home_guild)
+- FOUND: 4fd9025 (feat: both resolvers)
+- FOUND: 6db6f2a (test: service tests)
+- FOUND: 4c6e05a (docs: SUMMARY commit)
