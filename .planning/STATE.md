@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Phase 18 context gathered
-last_updated: "2026-07-09T19:55:26.101Z"
-last_activity: 2026-07-10 — ROADMAP.md created for v1.4 "Open House" (Phases 18–23, 31/31 requirements mapped)
+stopped_at: Completed 18-01-PLAN.md (Ruff adoption + repo-wide lint/format cleanup)
+last_updated: "2026-07-09T20:29:43.553Z"
+last_activity: 2026-07-09 -- Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 7
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 18 — Per-Guild Config Foundation
+**Current focus:** Phase 18 — per-guild-config-foundation-ci-gate
 
 ## Current Position
 
-Phase: 18 of 23 (Per-Guild Config Foundation)
-Plan: — of TBD in current phase
+Phase: 18 (per-guild-config-foundation-ci-gate) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-07-10 — ROADMAP.md created for v1.4 "Open House" (Phases 18–23, 31/31 requirements mapped)
+Last activity: 2026-07-09 -- Phase 18 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 | 21. Memory Scoping & Guild Data Lifecycle | 0/TBD |
 | 22. Invite Plumbing | 0/TBD |
 | 23. Portfolio Surface & CI/CD | 0/TBD |
+| Phase 18 P01 | 40min | 3 tasks | 82 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - Pure-logic TDD seam (`logic/*.py`): all decision logic mock-free-tested before Discord wiring; glue stays untested-by-design.
 - **v1.4 sequencing lock (from research + roadmap):** Phase 18 (config seam) blocks everything; Phase 19 (onboarding, preventive) before Phase 20 (owner control plane, reactive); Phase 21 (memory scoping) sequenced after Phase 20 because MEM-04's purge hangs off the force-leave/`on_guild_remove` hook; Phase 22 (invite) sequenced after Phase 20 so the abuse mitigation is real before promoting invites; Phase 23 (portfolio) is strictly last — it needs a real second-guild walkthrough to be honest.
 - **Standing Descope Rule (REQUIREMENTS.md):** if plan-time research proves a requirement infeasible, descope rather than force it — applies with particular force to MEM-01/03/05, whose documented zero-code fallback is "keep memory global + disclose."
+- [Phase 18]: Ruff adopted as the single lint+format tool (D-14); config files committed separately from the mechanical cleanup pass so the repo-wide reformat stays its own atomic commit (D-16).
 
 ### Pending Todos
 
@@ -95,9 +97,9 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-09T18:49:40.366Z
-Stopped at: Phase 18 context gathered
-Resume file: .planning/phases/18-per-guild-config-foundation-ci-gate/18-CONTEXT.md
+Last session: 2026-07-09T20:29:43.541Z
+Stopped at: Completed 18-01-PLAN.md (Ruff adoption + repo-wide lint/format cleanup)
+Resume file: None
 
 ## Operator Next Steps
 
