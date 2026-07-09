@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 18-03-PLAN.md (pure guild_config decision seam + mock-free tests)
-last_updated: "2026-07-09T21:01:57.742Z"
+stopped_at: Completed 18-04-PLAN.md (GuildConfigService cache + both resolvers + service tests)
+last_updated: "2026-07-09T21:24:16.761Z"
 last_activity: 2026-07-09 -- Phase 18 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 18 (per-guild-config-foundation-ci-gate) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-07-09 -- Phase 18 execution started
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 18 P01 | 40min | 3 tasks | 82 files |
 | Phase 18 P02 | 25min | 3 tasks | 4 files |
 | Phase 18 P03 | 15min | 2 tasks | 2 files |
+| Phase 18 P04 | 16min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 18]: Ruff adopted as the single lint+format tool (D-14); config files committed separately from the mechanical cleanup pass so the repo-wide reformat stays its own atomic commit (D-16).
 - [Phase 18]: seed_guild_config_if_absent uses ON CONFLICT DO NOTHING (never DO UPDATE) so a stale DEXTER_CHANNEL_ID never overrides a later /setup write (D-09)
 - [Phase 18]: Extracted pure logic/guild_config.py decision seam (decide_ambient_channel + is_ambient_channel) mirroring logic/proactive.py; mock-free tested, no discord/asyncio/datetime/random imports — Locks the silent-until-configured invariant structurally so no future ambient surface can forget to guard itself (D-01/D-05)
+- [Phase 18]: GuildConfigService constructed unconditionally (no gemini-key guard) and both resolve_ambient_channel + resolve_announce_channel are synchronous (cache-only / no-await bodies) (18-04)
 
 ### Pending Todos
 
@@ -101,8 +103,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-09T21:01:57.729Z
-Stopped at: Completed 18-03-PLAN.md (pure guild_config decision seam + mock-free tests)
+Last session: 2026-07-09T21:24:16.746Z
+Stopped at: Completed 18-04-PLAN.md (GuildConfigService cache + both resolvers + service tests)
 Resume file: None
 
 ## Operator Next Steps

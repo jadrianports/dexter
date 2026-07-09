@@ -113,7 +113,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 18-04-PLAN.md — GuildConfigService: cache + strict ambient resolver + announce resolver
+- [x] 18-04-PLAN.md — GuildConfigService: cache + strict ambient resolver + announce resolver
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -219,7 +219,7 @@ Full phase details, success criteria, and decisions archived in
 | 15. RAG Reach | v1.3 | 3/3 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
-| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 3/7 | In Progress|  |
+| 18. Per-Guild Config Foundation & CI Gate | v1.4 | 4/7 | In Progress|  |
 | 19. Onboarding & Admin Setup | v1.4 | 0/TBD | Not started | - |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 0/TBD | Not started | - |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
