@@ -473,6 +473,150 @@ async def seed_guild_config_if_absent(
         )
 
 
+# Full guild_config column list shared by every RETURNING clause below (Task 2) —
+# defined once so the insert-if-absent signal and the four write helpers always
+# return the identical row shape.
+_GUILD_CONFIG_RETURNING_COLUMNS = (
+    "guild_id, ambient_channel_id, configured, silenced,"
+    " is_blocked, joined_at, updated_at,"
+    " ambient_roasts_enabled, vision_roasts_enabled"
+)
+
+
+async def insert_guild_config_if_absent(pool: asyncpg.Pool, *, guild_id: str) -> asyncpg.Record | None:
+    """INSERT-RETURNING sibling to seed_guild_config_if_absent (D-14).
+
+    Returns the freshly-inserted Record on a genuine insert, None on conflict
+    (a row for this guild_id already existed). This is the "did I actually
+    insert?" signal on_guild_join / the boot backfill hang the welcome-message
+    decision off of — never derive that decision from a cache-miss check.
+
+    Unlike seed_guild_config_if_absent, this writes ONLY guild_id —
+    ambient_channel_id, configured (false), ambient_roasts_enabled (true), and
+    vision_roasts_enabled (true) all fall through to their column defaults
+    (D-10/D-20). This does NOT set configured=true.
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT) — from guild.id on join, or the boot
+                  backfill loop over bot.guilds. Never user input.
+
+    Returns:
+        The newly-inserted Record, or None if the row already existed.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "INSERT INTO guild_config (guild_id) VALUES ($1)"
+            " ON CONFLICT (guild_id) DO NOTHING"
+            " RETURNING " + _GUILD_CONFIG_RETURNING_COLUMNS,
+            guild_id,
+        )
+
+
+async def configure_guild_first_time(pool: asyncpg.Pool, *, guild_id: str, channel_id: str) -> asyncpg.Record | None:
+    """First `/setup channel` write: designate the channel AND flip the row's on-flag live (D-19/D-20).
+
+    An UPSERT (not a plain UPDATE) so it is robust whether or not a
+    guild_config row already exists — under a fail-closed cache the
+    first-configure branch may run against a guild whose row was never
+    seeded/backfilled. This is the one place the vision toggle is turned
+    off: the default-vision-OFF policy is a deliberate `/setup channel` write,
+    not a column default (D-20), asserting itself over any pre-channel
+    `/setup vision on` (rare; surfaced by the D-05 echo).
+    The ambient-roast toggle is never named in this write, so it stays at its
+    existing value / true default (roasts ON).
+
+    Args:
+        pool:       asyncpg connection pool.
+        guild_id:   Discord guild id (TEXT).
+        channel_id: Discord channel id (TEXT) — the admin-picked ambient channel.
+
+    Returns:
+        The updated/inserted Record, or None if the write somehow can't be read back.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "INSERT INTO guild_config (guild_id, ambient_channel_id, configured, vision_roasts_enabled)"
+            " VALUES ($1, $2, true, false)"
+            " ON CONFLICT (guild_id) DO UPDATE SET"
+            "   ambient_channel_id = EXCLUDED.ambient_channel_id,"
+            "   configured = true,"
+            "   vision_roasts_enabled = false,"
+            "   updated_at = now()"
+            " RETURNING " + _GUILD_CONFIG_RETURNING_COLUMNS,
+            guild_id,
+            channel_id,
+        )
+
+
+async def redesignate_guild_channel(pool: asyncpg.Pool, *, guild_id: str, channel_id: str) -> asyncpg.Record | None:
+    """Re-designate an already-set-up guild's ambient channel (D-03).
+
+    Touches ONLY ambient_channel_id — never the setup flag, never either
+    toggle. D-20: a re-designate must not reset a toggle the admin has since
+    changed. Only ever called when a row for this guild already has its
+    channel designated, so a plain UPDATE (not an upsert) is correct here.
+
+    Args:
+        pool:       asyncpg connection pool.
+        guild_id:   Discord guild id (TEXT).
+        channel_id: Discord channel id (TEXT) — the new ambient channel.
+
+    Returns:
+        The updated Record, or None if no row exists for guild_id.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "UPDATE guild_config SET ambient_channel_id = $2, updated_at = now()"
+            " WHERE guild_id = $1"
+            " RETURNING " + _GUILD_CONFIG_RETURNING_COLUMNS,
+            guild_id,
+            channel_id,
+        )
+
+
+async def set_ambient_roasts_enabled(pool: asyncpg.Pool, *, guild_id: str, enabled: bool) -> asyncpg.Record | None:
+    """Toggle ambient roasts for a guild (`/setup roasts on|off`).
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT).
+        enabled:  True to turn ambient roasts on, False to silence them.
+
+    Returns:
+        The updated Record, or None if no row exists for guild_id.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "UPDATE guild_config SET ambient_roasts_enabled = $2, updated_at = now()"
+            " WHERE guild_id = $1"
+            " RETURNING " + _GUILD_CONFIG_RETURNING_COLUMNS,
+            guild_id,
+            enabled,
+        )
+
+
+async def set_vision_roasts_enabled(pool: asyncpg.Pool, *, guild_id: str, enabled: bool) -> asyncpg.Record | None:
+    """Toggle vision roasts for a guild (`/setup vision on|off`).
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT).
+        enabled:  True to turn vision roasts on, False to silence them.
+
+    Returns:
+        The updated Record, or None if no row exists for guild_id.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "UPDATE guild_config SET vision_roasts_enabled = $2, updated_at = now()"
+            " WHERE guild_id = $1"
+            " RETURNING " + _GUILD_CONFIG_RETURNING_COLUMNS,
+            guild_id,
+            enabled,
+        )
+
+
 async def increment_daily_stat(pool: asyncpg.Pool, field: str) -> None:
     """Increment a field in today's daily stats row."""
     today = date.today().isoformat()
