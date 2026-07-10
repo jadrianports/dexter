@@ -22,6 +22,12 @@ COMMANDS_INFO = [
     ("/help", "Show this help message"),
 ]
 
+ADMIN_COMMANDS_INFO = [
+    ("/setup channel <channel>", "Pick dexter's ambient channel (admin only)"),
+    ("/setup roasts <on|off>", "Toggle ambient roasts for this server (admin only)"),
+    ("/setup vision <on|off>", "Toggle vision roasts for this server (admin only)"),
+]
+
 
 class HelpCog(commands.Cog):
     """Provides the /help command."""
@@ -43,6 +49,12 @@ class HelpCog(commands.Cog):
             lines.append(f"**`{cmd}`** — {desc}")
 
         embed.add_field(name="Commands", value="\n".join(lines), inline=False)
+
+        admin_lines = []
+        for cmd, desc in ADMIN_COMMANDS_INFO:
+            admin_lines.append(f"**`{cmd}`** — {desc}")
+        embed.add_field(name="Admin", value="\n".join(admin_lines), inline=False)
+
         await interaction.response.send_message(embed=embed)
 
 
