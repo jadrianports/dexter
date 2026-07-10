@@ -513,6 +513,33 @@ async def insert_guild_config_if_absent(pool: asyncpg.Pool, *, guild_id: str) ->
         )
 
 
+async def get_guild_config(pool: asyncpg.Pool, *, guild_id: str) -> asyncpg.Record | None:
+    """Single-guild fetch — the lookup `load_all_guild_configs` deliberately
+    doesn't provide (CR-01).
+
+    `on_guild_remove` evicts a guild's cache entry (D-12); if `on_guild_join`
+    then observes the row already existed (a re-invite after a kick,
+    `insert_guild_config_if_absent` returning `None`), there was previously no
+    way to repopulate that single evicted entry short of a full `load_all()`.
+    This mirrors `load_all_guild_configs`'s column list and `Record` shape
+    exactly, so the row can be pushed straight into
+    `GuildConfigService._refresh_cache_entry` — byte-identical to a row that
+    came from `load_all()`.
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT).
+
+    Returns:
+        The guild's current guild_config Record, or None if no row exists.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT " + _GUILD_CONFIG_RETURNING_COLUMNS + " FROM guild_config WHERE guild_id = $1",
+            guild_id,
+        )
+
+
 async def configure_guild_first_time(pool: asyncpg.Pool, *, guild_id: str, channel_id: str) -> asyncpg.Record | None:
     """First `/setup channel` write: designate the channel AND flip the row's on-flag live (D-19/D-20).
 

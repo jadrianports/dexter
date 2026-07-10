@@ -673,6 +673,13 @@ async def on_guild_join(guild: discord.Guild) -> None:
     else:
         # A row already existed for this guild_id — not a genuine new join
         # (e.g. a re-invite after a kick). Never welcome-spam (D-14).
+        # CR-01: on_guild_remove evicted this guild's cache entry, so it MUST
+        # be re-fetched here or the guild reads as unconfigured (and a
+        # subsequent /setup channel run would wrongly treat it as a genuine
+        # first-time configure) for the rest of this process's uptime.
+        existing_row = await database.get_guild_config(bot.pool, guild_id=str(guild.id))
+        if existing_row is not None:
+            bot.guild_config._refresh_cache_entry(existing_row)
         welcome_posted = False
 
     await bot.log_to_discord(_build_guild_notice_embed(guild, joined=True, welcome_posted=welcome_posted))
