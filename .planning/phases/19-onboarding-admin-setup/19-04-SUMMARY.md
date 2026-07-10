@@ -104,3 +104,7 @@ None - no external service configuration required.
 ---
 *Phase: 19-onboarding-admin-setup*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+All created/modified files found on disk (cogs/admin.py, cogs/help.py, 19-04-SUMMARY.md); all four commit hashes (80d162c, 863dcbb, dde6a8b, fe5c098) found in git history.
