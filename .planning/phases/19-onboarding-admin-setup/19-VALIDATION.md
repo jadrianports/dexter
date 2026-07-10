@@ -1,8 +1,8 @@
 ---
 phase: 19
 slug: onboarding-admin-setup
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-10
 ---
@@ -54,39 +54,53 @@ created: 2026-07-10
 
 ## Per-Task Verification Map
 
-> Populated by `gsd-planner` from the plans it writes. Every task must land an `<automated>`
-> verify command from the Sampling Rate section above, or declare a Wave 0 dependency.
-> **Continuity rule:** no 3 consecutive tasks without an automated verify.
+> **Continuity rule:** no 3 consecutive tasks without an automated verify. Satisfied — every task
+> lands an `<automated>` command. Waves 1–2 carry the mock-free / live-DB / mock-unit coverage of all
+> genuinely-testable behavior; Wave-3 glue is untested-by-design per D-26, structurally verified via
+> `ruff` + targeted greps + a green full suite (`pytest -q`).
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| _(planner fills)_ | | | | | | | | | ⬜ pending |
+| 19-01-T1 | 19-01 | 1 | ONBOARD-04 | T-19-03 | Idempotent, param-free DDL; boot/seed SELECTs widened | static source | `python -c "import database; assert 'ADD COLUMN IF NOT EXISTS ambient_roasts_enabled BOOLEAN NOT NULL DEFAULT true' in database.SCHEMA_SQL"` | ❌ W0 (this plan) | ⬜ pending |
+| 19-01-T2 | 19-01 | 1 | ONBOARD-01, ONBOARD-04 | T-19-03 | `guild_id`/`channel_id` bound params only; DO NOTHING signal vs DO UPDATE first-configure | static source | `ruff check database.py` + `inspect.getsource` asserts | ❌ W0 (this plan) | ⬜ pending |
+| 19-01-T3 | 19-01 | 1 | ONBOARD-04 | T-19-03 | D-20 home-guild-regression lock (both toggles default true on a pre-existing row) | static + live-DB | `pytest tests/test_database_phase19.py tests/test_database_phase18.py -x` | ✅ (created here) | ⬜ pending |
+| 19-02-T1 | 19-02 | 2 | ONBOARD-01, ONBOARD-04 | T-19-01 | Required-kw `AmbientSurface` (no default) = structural gate; toggle-off silences; D-14 no-welcome-from-empty-cache | mock-free unit | `pytest tests/test_guild_config_logic.py tests/test_guild_lifecycle_logic.py -x` | ❌ W0 (test_guild_lifecycle_logic.py new) | ⬜ pending |
+| 19-02-T2 | 19-02 | 2 | ONBOARD-04 | T-19-01, T-19-05 | Surface passthrough (no re-derived branch); D-03 stale-channel skip preserved; write-then-invalidate | mock unit | `pytest tests/test_guild_config_service.py -x` | ✅ | ⬜ pending |
+| 19-02-T3 | 19-02 | 2 | ONBOARD-04 | T-19-01 | Reaction gate + independent per-surface booleans (CONFIG-04 reaction hole closed, D-21) | mock unit | `pytest tests/test_proactive_events.py -x` | ✅ | ⬜ pending |
+| 19-03-T1 | 19-03 | 3 | ONBOARD-01, ONBOARD-05 | T-19-02, T-19-05 | Safe embed rendering (plain `guild.name`, id in code span); welcome wrapped so a send failure never crashes the join | untested-by-design glue (structural) | `ruff check bot.py personality/roasts.py` + grep asserts + `pytest -q` | n/a | ⬜ pending |
+| 19-03-T2 | 19-03 | 3 | ONBOARD-01 | T-19-04 | Backfill welcome keyed on the insert Record (never cache); runs after `seed_home_guild`; home-only startup | untested-by-design glue (structural) | `ruff check bot.py` + grep asserts + `pytest -q` | n/a | ⬜ pending |
+| 19-03-T3 | 19-03 | 3 | CONFIG-04 / D-18 | — | Repeat-song + milestone roasts routed through the seam (silent in unconfigured guilds) | untested-by-design glue (structural) | `ruff check cogs/music.py` + grep asserts + `pytest -q` | n/a | ⬜ pending |
+| 19-04-T1 | 19-04 | 3 | ONBOARD-02, ONBOARD-03 | T-19-01, T-19-03, T-19-05 | Inline `manage_guild` gate first; no `guild` param (guild_id from `interaction.guild.id`); D-06 write-time send validation; native typed-channel picker | untested-by-design glue (structural) | `ruff check cogs/admin.py` + grep asserts + `pytest -q` | n/a | ⬜ pending |
+| 19-04-T2 | 19-04 | 3 | ONBOARD-04 | T-19-01, T-19-03 | Admin gate first in each toggle; D-07 accepted-before-channel; on/off only (never intensity) | untested-by-design glue (structural) | `ruff check cogs/admin.py` + grep asserts + `pytest -q` | n/a | ⬜ pending |
+| 19-04-T3 | 19-04 | 3 | ONBOARD-02 / D-25 | — | Additive `/help` admin field (discoverability) | untested-by-design glue (structural) | `ruff check cogs/help.py` + grep asserts + `pytest -q` | n/a | ⬜ pending |
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] **`tests/test_guild_lifecycle_logic.py`** (or folded into `tests/test_guild_config_logic.py`) —
-      mock-free coverage of a new pure decision function taking the insert result as a primitive
-      (e.g. `should_welcome_guild(*, insert_result: Mapping | None) -> bool`). The DB call and the
-      Discord send stay in glue; only the decision is locked. This is the one part of ONBOARD-01
-      that genuinely earns a `logic/` seam. **Must include a regression test that an errored /
-      empty cache cannot produce a welcome** — the D-14 fail-closed-vs-welcome-spam scar.
-- [ ] **`tests/test_database_phase19.py`** — mirrors `tests/test_database_phase18.py`'s structure:
-      static source/`SCHEMA_SQL` inspection (both new columns present with `DEFAULT true`; the new
-      insert helper uses `ON CONFLICT ... DO NOTHING RETURNING`) **plus** live-DB tests (a genuine
-      insert returns a `Record`; a conflicting insert returns `None`; both toggle columns read
-      `true` on a row that pre-existed the `ALTER` — the D-20 home-guild-regression lock).
-- [ ] **`tests/test_guild_config_logic.py`** — extend for `AmbientSurface`; every existing call to
-      `decide_ambient_channel` / `is_ambient_channel` gains the required `surface=` kwarg.
-      *(Breaking-change update, not new coverage.)*
-- [ ] **`tests/test_guild_config_service.py`** — same `surface=` threading through
-      `resolve_ambient_channel`; add `home_guild_id` coverage (set by `seed_home_guild`, `None`
-      when `DEXTER_CHANNEL_ID` is unset/unresolvable — the fresh-clone case).
-- [ ] **`tests/test_proactive_events.py`** — `bot.guild_config.get()` mocks updated to rows shaped
-      for the surface-keyed predicate. Confirmed by research as the complete regression surface;
-      `test_autoqueue_playback.py` / `test_now_playing_refresh.py` mock an unrelated
-      `_get_text_channel` and **must not** be conflated with it.
+- [ ] **`tests/test_guild_lifecycle_logic.py`** (created in 19-02-T1) — mock-free coverage of the new pure
+      `should_welcome_guild(*, inserted_row)` decision. The DB call and the Discord send stay in glue; only
+      the decision is locked. **Includes the regression test that an errored / empty cache (represented as
+      `inserted_row=None`) cannot produce a welcome** — the D-14 fail-closed-vs-welcome-spam scar.
+- [ ] **`tests/test_database_phase19.py`** (created in 19-01-T3) — mirrors `tests/test_database_phase18.py`'s
+      structure: static source/`SCHEMA_SQL` inspection (both new columns present with `DEFAULT true`; the new
+      insert helper uses `ON CONFLICT ... DO NOTHING RETURNING`) **plus** live-DB tests (a genuine insert
+      returns a `Record`; a conflicting insert returns `None`; both toggle columns read `true` on a row that
+      pre-existed the `ALTER` — the D-20 home-guild-regression lock; the configure/re-designate write semantics).
+- [ ] **`tests/test_guild_config_logic.py`** (updated in 19-02-T1) — extended for `AmbientSurface`; every
+      existing call to `decide_ambient_channel` / `is_ambient_channel` gains the required `surface=` kwarg,
+      plus toggle-off silence cases. *(Breaking-change update + new coverage.)*
+- [ ] **`tests/test_guild_config_service.py`** (updated in 19-02-T2) — same `surface=` threading through
+      `resolve_ambient_channel`; add `home_guild_id` coverage (None before `seed_home_guild`, set after — the
+      fresh-clone case) and a VISION-off-but-ROAST-on resolve case.
+- [ ] **`tests/test_proactive_events.py`** (updated in 19-02-T3) — `bot.guild_config.get()` mocks updated to
+      surface-shaped rows; asserts reactions are suppressed for an unconfigured / roasts-off channel and the
+      per-surface split. Confirmed by research as the complete regression surface;
+      `test_autoqueue_playback.py` / `test_now_playing_refresh.py` mock an unrelated `_get_text_channel` and
+      **must not** be conflated with it.
+- [ ] **`tests/test_database_phase18.py`** (corrected in 19-01-T3) — the two ALTER-invalidated assertions
+      (`test_guild_config_no_phase19_columns` string check; the exact 7-column `_GUILD_CONFIG_COLUMNS` set)
+      are removed/extended so the Phase 18 suite stays green post-ALTER.
 
 No framework install needed — pytest / pytest-asyncio are present; the CI pgvector container
 already exists from Phase 18.
@@ -97,13 +111,13 @@ already exists from Phase 18.
 
 ASVS L1. Threat inputs from `19-RESEARCH.md` §"Security / Threat Model Inputs".
 
-| Ref | Threat | STRIDE | Verification |
-|-----|--------|--------|--------------|
-| T-19-01 | Permission-check bypass — `default_permissions` treated as the gate | Elevation of Privilege | Structural review: `interaction.permissions.manage_guild` is the **first statement** of every `/setup` subcommand, before any data access (mirrors `cogs/ops.py:252`) |
-| T-19-02 | Markdown/embed injection via attacker-chosen `guild.name` into the owner's join/leave embed | Tampering / Spoofing | Structural review: `guild.name` renders as a plain embed field value — never wrapped in markdown, never used as a hyperlink label. Numeric snowflakes (`guild.id`, `owner_id`) go in inline-code spans (they cannot contain a backtick) |
-| T-19-03 | Confused deputy — a toggle write or channel designation applied to the wrong guild | EoP / Tampering | Structurally enforced by D-01's subcommand shape: no `/setup` subcommand accepts a `guild`/`guild_id` argument. Every write derives `guild_id` from `interaction.guild.id` only |
-| T-19-04 | Welcome-message / owner-notice spam via repeated kick-and-reinvite | Denial of Service | **Explicitly out of Phase 19's mitigation scope** — the blacklist + re-invite refusal is Phase 20's OWNER-04 (D-12). Record as a known limitation for PORT-04 disclosure; do not build a heuristic here (REQUIREMENTS.md lists automated abuse detection as Out of Scope) |
-| T-19-05 | TOCTOU on D-06's `send_messages` write-time validation | Tampering | Accepted, self-healing: D-03's silent-skip-with-log already covers a channel that *becomes* unwritable. The check-then-write window is milliseconds; a later revocation is caught by the next ambient send. No new code |
+| Ref | Threat | STRIDE | Owned by | Verification |
+|-----|--------|--------|----------|--------------|
+| T-19-01 | Permission-check bypass — `default_permissions` treated as the gate | Elevation of Privilege | 19-04 (gate), 19-02 (structural surface gate) | Structural review: `interaction.permissions.manage_guild` is the **first statement** of every `/setup` subcommand, before any data access (mirrors `cogs/ops.py:252`); `AmbientSurface` is required-kw so no surface fires unnamed |
+| T-19-02 | Markdown/embed injection via attacker-chosen `guild.name` into the owner's join/leave embed | Tampering / Spoofing | 19-03 | Structural review: `guild.name` renders as a plain embed field value — never markdown-wrapped, never a hyperlink label. Numeric snowflakes (`guild.id`, `owner_id`) go in inline-code spans (they cannot contain a backtick) |
+| T-19-03 | Confused deputy — a toggle write or channel designation applied to the wrong guild | EoP / Tampering | 19-04 (no guild param), 19-01 (bound params) | Structurally enforced by D-01's subcommand shape: no `/setup` subcommand accepts a `guild`/`guild_id` argument. Every write derives `guild_id` from `interaction.guild.id`; DB helpers bind it as `$1` |
+| T-19-04 | Welcome-message / owner-notice spam via repeated kick-and-reinvite | Denial of Service | 19-03 (record limitation) | **Explicitly out of Phase 19's mitigation scope** — the blacklist + re-invite refusal is Phase 20's OWNER-04 (D-12). Record as a known limitation for PORT-04 disclosure; do not build a heuristic here (REQUIREMENTS.md lists automated abuse detection as Out of Scope) |
+| T-19-05 | TOCTOU on D-06's `send_messages` write-time validation | Tampering | 19-04 (accepted), 19-02 (self-heal path) | Accepted, self-healing: D-03's silent-skip-with-log already covers a channel that *becomes* unwritable. The check-then-write window is milliseconds; a later revocation is caught by the next ambient send. No new code |
 
 ---
 
@@ -125,11 +139,11 @@ These become `19-HUMAN-UAT.md` at phase close.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or a declared Wave 0 dependency
-- [ ] Sampling continuity: no 3 consecutive tasks without an automated verify
-- [ ] Wave 0 covers all ❌ references above
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 20s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or a declared Wave 0 dependency
+- [x] Sampling continuity: no 3 consecutive tasks without an automated verify
+- [x] Wave 0 covers all ❌ references above
+- [x] No watch-mode flags
+- [x] Feedback latency < 20s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-10
