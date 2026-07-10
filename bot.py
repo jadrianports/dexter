@@ -624,9 +624,7 @@ async def _post_guild_welcome(guild: discord.Guild) -> bool:
         return False
 
 
-def _build_guild_notice_embed(
-    guild: discord.Guild, *, joined: bool, welcome_posted: bool | None
-) -> discord.Embed:
+def _build_guild_notice_embed(guild: discord.Guild, *, joined: bool, welcome_posted: bool | None) -> discord.Embed:
     """Build the D-16 owner-facing join/remove notice embed.
 
     T-19-02 (embed injection): guild.name and the owner tag are rendered as
@@ -663,9 +661,7 @@ async def on_guild_join(guild: discord.Guild) -> None:
     instead of crashing here.
     """
     if not hasattr(bot, "pool") or not hasattr(bot, "guild_config"):
-        log.warning(
-            "on_guild_join: bot not yet initialized, guild %s deferred to boot backfill", guild.id
-        )
+        log.warning("on_guild_join: bot not yet initialized, guild %s deferred to boot backfill", guild.id)
         return
 
     from logic.guild_config import should_welcome_guild

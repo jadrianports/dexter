@@ -26,6 +26,7 @@ from database import (
     set_resolution_cache,
     update_user_streak,
 )
+from logic.guild_config import AmbientSurface
 from logic.playback import TrackEndAction, decide_on_track_end, should_start_playback
 from models.queue import LoopMode, MusicQueue, QueueFullError, Track
 from models.user_profile import get_user_summary
@@ -1166,8 +1167,11 @@ class MusicCog(commands.Cog):
             return None
 
     async def _post_music_roast(self, guild: discord.Guild, line: str) -> None:
-        """Post a roast line to the music channel with allowed_mentions=none (D-11, T-03-14)."""
-        channel = self._get_text_channel(guild)
+        """Post a roast via the surface-keyed ambient seam (Pitfall 1 / CONFIG-04).
+
+        Gates repeat-song + both milestone roasts; silent when unconfigured.
+        """
+        channel = self.bot.guild_config.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST)
         if channel is None:
             return
         try:
