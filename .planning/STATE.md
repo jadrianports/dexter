@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 19-01-PLAN.md
-last_updated: "2026-07-10T10:41:28.886Z"
+stopped_at: Completed 19-02-PLAN.md
+last_updated: "2026-07-10T11:48:10.551Z"
 last_activity: 2026-07-10 -- Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 11
-  completed_plans: 8
+  completed_plans: 9
   percent: 17
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 19 (onboarding-admin-setup) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-07-10 -- Phase 19 execution started
 
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 18-per-guild-config-foundation-ci-gate P06 | 20min | 2 tasks | 2 files |
 | Phase 18 P07 | 12min | 1 tasks | 1 files |
 | Phase 19 P01 | 25min | 3 tasks | 3 files |
+| Phase 19 P02 | 20min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 18-07]: Single combined GitHub Actions lint+test job (not split) with pgvector/pgvector:pg16 service container; pull_request (never pull_request_target) + top-level permissions: contents: read + zero secrets.* as the standing CI least-privilege posture
 - [Phase 19]: [Phase 19-01]: insert_guild_config_if_absent (D-14) never sets configured=true; configure_guild_first_time is the separate upsert that turns vision off on first /setup channel write
 - [Phase 19]: [Phase 19-01]: redesignate_guild_channel is a plain UPDATE touching only ambient_channel_id, never resets configured or either toggle an admin has since changed (D-03/D-20)
+- [Phase 19-02]: AmbientSurface required keyword-only (no default) on decide_ambient_channel/is_ambient_channel/resolve_ambient_channel -- a future ambient surface cannot resolve a channel without naming itself, TypeError on omission (D-22)
+- [Phase 19-02]: on_message's shared in_ambient_channel boolean retired for two independent surface-keyed booleans (roast_channel_ok/vision_channel_ok) since ambient_roasts_enabled and vision_roasts_enabled can now disagree per guild; the CONFIG-04 reaction-gating hole is closed
+- [Phase 19-02]: GuildConfigService.home_guild_id set unconditionally at the end of seed_home_guild, even on ON CONFLICT DO NOTHING -- the seed still resolves which guild is home regardless of insert-vs-conflict (D-24)
 
 ### Pending Todos
 
@@ -112,8 +116,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-10T10:41:28.870Z
-Stopped at: Completed 19-01-PLAN.md
+Last session: 2026-07-10T11:48:10.539Z
+Stopped at: Completed 19-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
