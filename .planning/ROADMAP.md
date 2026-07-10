@@ -165,7 +165,23 @@ Full phase details, success criteria, and decisions archived in
   3. The owner can force-leave a guild; the teardown mirrors the existing `clear_persisted()` discipline (bump `_play_generation`, clear queue + voice state) so no ghost state resurrects if that guild re-invites Dexter.
   4. A blocked guild is refused re-entry via a block-check-first in the join handler, and every owner-only command rejects a non-owner caller via an inline `is_owner()` check — never `default_permissions` alone.
 
-**Plans**: TBD
+**Plans**: 7 plans (3 waves)
+
+**Wave 1**
+
+- [ ] 20-01-PLAN.md — guild_blocklist table + blocklist/silenced DB helpers + live-DB tests (OWNER-04/02)
+- [ ] 20-02-PLAN.md — pure logic: silenced branch in decide_ambient_channel + decide_interaction_allowed predicate (OWNER-05/06)
+- [ ] 20-03-PLAN.md — GeminiService per-guild session counter + guild_id kwargs + non-events call-site threading (RATE-01)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 20-04-PLAN.md — GuildConfigService _blocked set + block/unblock/silence/unsilence/is_* + tests (OWNER-04/02)
+- [ ] 20-05-PLAN.md — events.py ambient TOCTOU pre-send re-check + 2 Gemini call-site threads + regression (OWNER-06/02, RATE-01)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 20-06-PLAN.md — bot.py DexterCommandTree.interaction_check choke point + tree_cls + on_guild_join block-check-first (OWNER-05/06/04)
+- [ ] 20-07-PLAN.md — cogs/ops.py /guilds group (list/silence/unsilence/leave/block/unblock) + GuildListPageView (OWNER-01/02/03/04/06, RATE-01)
 
 ### Phase 21: Memory Scoping & Guild Data Lifecycle
 
@@ -236,7 +252,7 @@ Full phase details, success criteria, and decisions archived in
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
-| 20. Owner Control Plane & Rate Observability | v1.4 | 0/TBD | Not started | - |
+| 20. Owner Control Plane & Rate Observability | v1.4 | 0/7 | Planned | - |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
