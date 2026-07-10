@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-07-10T11:48:10.551Z"
+stopped_at: Completed 19-03-PLAN.md
+last_updated: "2026-07-10T12:06:19.003Z"
 last_activity: 2026-07-10 -- Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 17
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 19 (onboarding-admin-setup) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-07-10 -- Phase 19 execution started
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 18 P07 | 12min | 1 tasks | 1 files |
 | Phase 19 P01 | 25min | 3 tasks | 3 files |
 | Phase 19 P02 | 20min | 3 tasks | 6 files |
+| Phase 19 P03 | 20min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 19-02]: AmbientSurface required keyword-only (no default) on decide_ambient_channel/is_ambient_channel/resolve_ambient_channel -- a future ambient surface cannot resolve a channel without naming itself, TypeError on omission (D-22)
 - [Phase 19-02]: on_message's shared in_ambient_channel boolean retired for two independent surface-keyed booleans (roast_channel_ok/vision_channel_ok) since ambient_roasts_enabled and vision_roasts_enabled can now disagree per guild; the CONFIG-04 reaction-gating hole is closed
 - [Phase 19-02]: GuildConfigService.home_guild_id set unconditionally at the end of seed_home_guild, even on ON CONFLICT DO NOTHING -- the seed still resolves which guild is home regardless of insert-vs-conflict (D-24)
+- [Phase 19]: [Phase 19-03]: should_welcome_guild(inserted_row=) is the ONLY welcome-decision signal for on_guild_join and the boot backfill loop -- never bot.guild_config.get(), which would welcome-spam on a cache-miss race
+- [Phase 19]: [Phase 19-03]: boot backfill runs strictly after seed_home_guild and before queue-persistence wiring in _initialize_once -- reversing this order would backfill-and-welcome the home guild itself as configured=false (D-14 constraint 1)
 
 ### Pending Todos
 
@@ -116,8 +119,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-10T11:48:10.539Z
-Stopped at: Completed 19-02-PLAN.md
+Last session: 2026-07-10T12:06:18.989Z
+Stopped at: Completed 19-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
