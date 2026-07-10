@@ -9,6 +9,8 @@ Commands:
                              distinguish a first-configure write (turns
                              vision OFF, D-19/D-20) from a silent re-designate
                              (D-03 — resets no toggle).
+    /setup roasts on|off   — toggle `ambient_roasts_enabled` for this guild.
+    /setup vision on|off   — toggle `vision_roasts_enabled` for this guild.
 
 This is a DIFFERENT audience and DIFFERENT permission model than
 `cogs/ops.py` (owner/analytics, gated by `is_owner()`) — D-04 keeps the two
@@ -148,6 +150,75 @@ class AdminCog(commands.Cog):
         echo = await self._config_echo(interaction)
         await interaction.response.send_message(
             f"{lead}\n{echo}",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    # ---- /setup roasts --------------------------------------------------
+
+    @setup_group.command(name="roasts", description="turn ambient roasts on or off")
+    @app_commands.describe(setting="on to enable, off to disable")
+    @app_commands.choices(
+        setting=[
+            app_commands.Choice(name="on", value="on"),
+            app_commands.Choice(name="off", value="off"),
+        ]
+    )
+    async def setup_roasts(self, interaction: discord.Interaction, setting: app_commands.Choice[str]) -> None:
+        """/setup roasts on|off — toggle `ambient_roasts_enabled` (D-18).
+
+        D-07: valid even with no channel designated yet — the toggle is
+        independent state; the reply names the gap instead of refusing.
+        """
+        if not await self._require_guild_admin(interaction):
+            return
+
+        enabled = setting.value == "on"
+        await self.bot.guild_config.set_ambient_roasts_enabled(guild_id=str(interaction.guild.id), enabled=enabled)
+
+        cached = self.bot.guild_config.get(interaction.guild.id)
+        gap_note = ""
+        if cached is None or not cached["configured"]:
+            gap_note = "\nnoted. i still don't have a channel — run `/setup channel` first."
+
+        echo = await self._config_echo(interaction)
+        await interaction.response.send_message(
+            f"roasts: {'on' if enabled else 'off'}.{gap_note}\n{echo}",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    # ---- /setup vision --------------------------------------------------
+
+    @setup_group.command(name="vision", description="turn vision roasts on or off")
+    @app_commands.describe(setting="on to enable, off to disable")
+    @app_commands.choices(
+        setting=[
+            app_commands.Choice(name="on", value="on"),
+            app_commands.Choice(name="off", value="off"),
+        ]
+    )
+    async def setup_vision(self, interaction: discord.Interaction, setting: app_commands.Choice[str]) -> None:
+        """/setup vision on|off — toggle `vision_roasts_enabled` (D-19).
+
+        Same admin gate, same D-07 no-channel-yet gap note, same D-05 echo
+        as `/setup roasts` — vision is strictly on/off, never an intensity
+        dial (REQUIREMENTS.md Out of Scope).
+        """
+        if not await self._require_guild_admin(interaction):
+            return
+
+        enabled = setting.value == "on"
+        await self.bot.guild_config.set_vision_roasts_enabled(guild_id=str(interaction.guild.id), enabled=enabled)
+
+        cached = self.bot.guild_config.get(interaction.guild.id)
+        gap_note = ""
+        if cached is None or not cached["configured"]:
+            gap_note = "\nnoted. i still don't have a channel — run `/setup channel` first."
+
+        echo = await self._config_echo(interaction)
+        await interaction.response.send_message(
+            f"vision: {'on' if enabled else 'off'}.{gap_note}\n{echo}",
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )
