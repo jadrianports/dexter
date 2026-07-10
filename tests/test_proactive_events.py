@@ -33,13 +33,24 @@ def _make_bot() -> MagicMock:
     returns a configured row with `ambient_channel_id="500"` by default — the
     new seam `on_message` gates dispatch through (replacing the old bare
     env-var equality check).
+
+    Phase 19 / D-22: the row also carries both toggle keys, both True by
+    default, so ROAST and VISION surfaces resolve identically unless a test
+    overrides one explicitly.
     """
     bot = MagicMock()
     bot.pool = MagicMock()
     bot.memory_service = MagicMock()
     bot.memory_service.recall = AsyncMock(return_value=[])
     bot.guild_config = MagicMock()
-    bot.guild_config.get = MagicMock(return_value={"configured": True, "ambient_channel_id": "500"})
+    bot.guild_config.get = MagicMock(
+        return_value={
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "vision_roasts_enabled": True,
+        }
+    )
     return bot
 
 
@@ -232,6 +243,124 @@ async def test_unconfigured_guild_skips():
         await cog.on_message(message)
 
     mock_fire.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# (E2) Phase 19 / D-21/D-22: reaction gate + independent surface-keyed split
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reactions_fire_in_ambient_channel_with_roasts_enabled():
+    """D-21: _handle_message_reactions IS awaited in the ambient channel with
+    ambient_roasts_enabled True (closes the CONFIG-04 reaction hole)."""
+    bot = _make_bot()
+    bot.message_buffer = MagicMock()
+    bot.message_buffer.add = MagicMock()
+    message = _make_message(channel_id=500)
+    cog = EventsCog(bot)
+
+    with (
+        patch.object(cog, "_handle_message_reactions", new=AsyncMock()) as mock_react,
+        patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()),
+        patch.object(cog, "_maybe_fire_vision_roast", new=AsyncMock()),
+    ):
+        await cog.on_message(message)
+
+    mock_react.assert_awaited_once_with(message)
+
+
+@pytest.mark.asyncio
+async def test_reactions_suppressed_when_unconfigured():
+    """D-21: an unconfigured guild (guild_config.get -> None) never triggers reactions."""
+    bot = _make_bot()
+    bot.guild_config.get = MagicMock(return_value=None)
+    bot.message_buffer = MagicMock()
+    bot.message_buffer.add = MagicMock()
+    message = _make_message(channel_id=500)
+    cog = EventsCog(bot)
+
+    with (
+        patch.object(cog, "_handle_message_reactions", new=AsyncMock()) as mock_react,
+        patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()),
+        patch.object(cog, "_maybe_fire_vision_roast", new=AsyncMock()),
+    ):
+        await cog.on_message(message)
+
+    mock_react.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reactions_suppressed_when_channel_mismatched():
+    """D-21: a non-ambient channel id never triggers reactions."""
+    bot = _make_bot()
+    message = _make_message(channel_id=999)
+    cog = EventsCog(bot)
+
+    with (
+        patch.object(cog, "_handle_message_reactions", new=AsyncMock()) as mock_react,
+        patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()),
+        patch.object(cog, "_maybe_fire_vision_roast", new=AsyncMock()),
+    ):
+        await cog.on_message(message)
+
+    mock_react.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reactions_suppressed_when_ambient_roasts_disabled():
+    """D-22: ambient_roasts_enabled=False silences reactions (and the proactive
+    dispatch) even in the correctly-configured ambient channel."""
+    bot = _make_bot()
+    bot.guild_config.get = MagicMock(
+        return_value={
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": False,
+            "vision_roasts_enabled": True,
+        }
+    )
+    message = _make_message(channel_id=500)
+    cog = EventsCog(bot)
+
+    with (
+        patch.object(cog, "_handle_message_reactions", new=AsyncMock()) as mock_react,
+        patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()) as mock_fire,
+        patch.object(cog, "_maybe_fire_vision_roast", new=AsyncMock()),
+    ):
+        await cog.on_message(message)
+
+    mock_react.assert_not_awaited()
+    mock_fire.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_vision_disabled_does_not_affect_roast_surface():
+    """D-22: vision_roasts_enabled=False + an attachment silences ONLY the
+    vision dispatch — the proactive/reaction (ROAST) path is unaffected."""
+    bot = _make_bot()
+    bot.guild_config.get = MagicMock(
+        return_value={
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "vision_roasts_enabled": False,
+        }
+    )
+    message = _make_message(channel_id=500)
+    message.attachments = [MagicMock()]  # an attachment IS present
+    cog = EventsCog(bot)
+
+    with (
+        patch.object(cog, "_handle_message_reactions", new=AsyncMock()) as mock_react,
+        patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()) as mock_fire,
+        patch.object(cog, "_maybe_fire_vision_roast", new=AsyncMock()) as mock_vision,
+    ):
+        await cog.on_message(message)
+
+    mock_react.assert_awaited_once_with(message)
+    mock_fire.assert_awaited_once_with(message)
+    mock_vision.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

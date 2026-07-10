@@ -10,7 +10,7 @@ from discord.ext import commands
 
 import config
 import database
-from logic.guild_config import is_ambient_channel
+from logic.guild_config import AmbientSurface, is_ambient_channel
 from logic.proactive import should_fire_proactive_callback
 from logic.roasts import RoastScenario, cooldown_elapsed, decide_ambient_roast
 from logic.vision import should_fire_vision_roast
@@ -219,7 +219,7 @@ class EventsCog(commands.Cog):
             and after.channel is not None
             and before.channel != after.channel
         ):
-            channel = self.bot.guild_config.resolve_ambient_channel(member.guild)
+            channel = self.bot.guild_config.resolve_ambient_channel(member.guild, surface=AmbientSurface.ROAST)
             if channel:
                 await channel.send(
                     pick_random(roasts.BOT_MOVED_COMPLAINTS),
@@ -263,7 +263,7 @@ class EventsCog(commands.Cog):
                     fallback_pool = roasts.VOICE_JOIN_ROASTS
                     mem_kind = "daily_batch"  # WR-01: a daytime join is not a late_night event
                 line = await self._generate_ambient_roast(member, scenario, fallback_pool)
-                channel = self.bot.guild_config.resolve_ambient_channel(guild)
+                channel = self.bot.guild_config.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST)
                 if channel:
                     await channel.send(
                         line,
@@ -308,7 +308,7 @@ class EventsCog(commands.Cog):
                     "{name} just left the voice channel",
                     roasts.VOICE_LEAVE_ROASTS,
                 )
-                channel = self.bot.guild_config.resolve_ambient_channel(guild)
+                channel = self.bot.guild_config.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST)
                 if channel:
                     await channel.send(
                         line,
@@ -391,32 +391,42 @@ class EventsCog(commands.Cog):
                 content=message.content,
             )
 
-        # Handle reactions / deflecting responses
-        await self._handle_message_reactions(message)
-
-        # Phase 18 / CONFIG-02/04 / WR-02: computed once and reused by both gates
-        # below — both check the exact same (guild, channel) pair for this
-        # message, so re-deriving it per-gate is duplicated logic that could
-        # silently drift. The two cadences below remain SEPARATE, independent
-        # conditionals (do NOT merge them into one branch).
-        in_ambient_channel = message.guild is not None and is_ambient_channel(
+        # Phase 19 / D-22: each surface resolves its own predicate independently —
+        # roast_channel_ok and vision_channel_ok are each their own toggle-gated
+        # boolean (retires the Phase 18 WR-02 shared-boolean shape, since
+        # ambient_roasts_enabled/vision_roasts_enabled can now disagree). The
+        # gates below remain SEPARATE, independent conditionals (do NOT merge
+        # them into one branch).
+        roast_channel_ok = message.guild is not None and is_ambient_channel(
             config_row=self.bot.guild_config.get(message.guild.id),
             channel_id=message.channel.id,
+            surface=AmbientSurface.ROAST,
         )
+        vision_channel_ok = message.guild is not None and is_ambient_channel(
+            config_row=self.bot.guild_config.get(message.guild.id),
+            channel_id=message.channel.id,
+            surface=AmbientSurface.VISION,
+        )
+
+        # Phase 19 / D-21: reactions / deflecting responses are now gated on the
+        # ambient channel + ambient_roasts_enabled — closes the CONFIG-04 hole
+        # where reactions fired unconditionally in every channel of every guild.
+        if roast_channel_ok:
+            await self._handle_message_reactions(message)
 
         # Phase 16 / PROACT-01: proactive callback gate — designated channel only,
         # never a DM (Pitfall 2). message.author.bot already returned above.
         # Phase 18 / CONFIG-02/04: routed through is_ambient_channel over the
         # guild's cached config row instead of the bare-equality env-var check —
         # an unconfigured guild is structurally silent here.
-        if in_ambient_channel:
+        if roast_channel_ok:
             await self._maybe_fire_proactive_callback(message)
 
         # Phase 17 / VIS-01: vision-roast gate — a FOURTH independent cadence
         # (do NOT merge with the proactive gate). Designated channel only, and
         # only when the message actually carries attachments (the structural
         # mime/size gate runs inside _maybe_fire_vision_roast).
-        if in_ambient_channel and message.attachments:
+        if vision_channel_ok and message.attachments:
             await self._maybe_fire_vision_roast(message)
 
     # ──────────────────────────── PROACTIVE CALLBACK ────────────────────────────
