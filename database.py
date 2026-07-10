@@ -210,6 +210,13 @@ CREATE TABLE IF NOT EXISTS guild_config (
     joined_at          TIMESTAMPTZ DEFAULT now(),
     updated_at         TIMESTAMPTZ DEFAULT now()
 );
+
+-- Phase 19: per-guild ambient toggles (ONBOARD-04). Both default TRUE so every
+-- pre-existing row (the home guild) keeps today's exact behavior unchanged
+-- (CONFIG-05's promise) — the default-vision-OFF *policy* lives in /setup
+-- channel's first-configure write path, NOT in the column default (D-20/D-12).
+ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS ambient_roasts_enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS vision_roasts_enabled BOOLEAN NOT NULL DEFAULT true;
 """
 
 
@@ -417,7 +424,8 @@ async def load_all_guild_configs(pool: asyncpg.Pool) -> list[asyncpg.Record]:
     async with pool.acquire() as conn:
         return await conn.fetch(
             "SELECT guild_id, ambient_channel_id, configured, silenced,"
-            "       is_blocked, joined_at, updated_at"
+            "       is_blocked, joined_at, updated_at,"
+            "       ambient_roasts_enabled, vision_roasts_enabled"
             " FROM guild_config"
         )
 
@@ -458,7 +466,8 @@ async def seed_guild_config_if_absent(
         )
         return await conn.fetchrow(
             "SELECT guild_id, ambient_channel_id, configured, silenced,"
-            "       is_blocked, joined_at, updated_at"
+            "       is_blocked, joined_at, updated_at,"
+            "       ambient_roasts_enabled, vision_roasts_enabled"
             " FROM guild_config WHERE guild_id = $1",
             guild_id,
         )
