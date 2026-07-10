@@ -21,6 +21,7 @@ from unittest.mock import MagicMock
 import discord
 import pytest
 
+from logic.guild_config import AmbientSurface
 from services.guild_config import GuildConfigService
 
 # ---------------------------------------------------------------------------
@@ -141,8 +142,8 @@ def test_no_round_trip_after_load_all():
 
     assert service.get(100) is not None
     assert service.get(999) is None
-    assert service.resolve_ambient_channel(guild) is channel
-    assert service.resolve_ambient_channel(guild) is channel
+    assert service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST) is channel
+    assert service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST) is channel
 
     # Still exactly one pool access -- everything after load_all was cache-only.
     assert pool.acquire_count == 1
@@ -191,7 +192,7 @@ def test_resolve_ambient_channel_cache_miss_returns_none():
     guild = _make_guild(guild_id=100, channels={})
     guild.get_channel = lambda cid: (_ for _ in ()).throw(AssertionError("should not be called"))
 
-    assert service.resolve_ambient_channel(guild) is None
+    assert service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST) is None
 
 
 def test_resolve_ambient_channel_configured_and_writable_returns_channel():
@@ -204,7 +205,7 @@ def test_resolve_ambient_channel_configured_and_writable_returns_channel():
     channel = _make_channel(channel_id=500, can_send=True)
     guild = _make_guild(guild_id=100, channels={500: channel})
 
-    assert service.resolve_ambient_channel(guild) is channel
+    assert service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST) is channel
 
 
 def test_resolve_ambient_channel_stale_channel_returns_none_row_intact(caplog):
@@ -218,7 +219,7 @@ def test_resolve_ambient_channel_stale_channel_returns_none_row_intact(caplog):
     guild = _make_guild(guild_id=100, channels={})  # channel 500 no longer exists
 
     with caplog.at_level("WARNING"):
-        result = service.resolve_ambient_channel(guild)
+        result = service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST)
 
     assert result is None
     assert service.get(100) is before  # untouched -- same object, still configured
@@ -238,12 +239,61 @@ def test_resolve_ambient_channel_no_send_perms_returns_none_row_intact(caplog):
     guild = _make_guild(guild_id=100, channels={500: channel})
 
     with caplog.at_level("WARNING"):
-        result = service.resolve_ambient_channel(guild)
+        result = service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST)
 
     assert result is None
     assert service.get(100) is before
     assert service.get(100)["configured"] is True
     assert any("send_messages" in r.message for r in caplog.records)
+
+
+def test_resolve_ambient_channel_vision_surface_resolves_channel():
+    """A configured row with no toggle overrides resolves a channel for VISION too (D-22)."""
+    rows = [{"guild_id": "100", "ambient_channel_id": "500", "configured": True}]
+    pool = _SpyPool(rows=rows)
+    service = GuildConfigService(pool, _FakeBot())
+    asyncio.run(service.load_all())
+
+    channel = _make_channel(channel_id=500, can_send=True)
+    guild = _make_guild(guild_id=100, channels={500: channel})
+
+    assert service.resolve_ambient_channel(guild, surface=AmbientSurface.VISION) is channel
+
+
+def test_resolve_ambient_channel_vision_toggle_off_silences_vision_only():
+    """vision_roasts_enabled=False cached row -> None for VISION, still a channel for ROAST (D-22)."""
+    rows = [
+        {
+            "guild_id": "100",
+            "ambient_channel_id": "500",
+            "configured": True,
+            "vision_roasts_enabled": False,
+        }
+    ]
+    pool = _SpyPool(rows=rows)
+    service = GuildConfigService(pool, _FakeBot())
+    asyncio.run(service.load_all())
+
+    channel = _make_channel(channel_id=500, can_send=True)
+    guild = _make_guild(guild_id=100, channels={500: channel})
+
+    assert service.resolve_ambient_channel(guild, surface=AmbientSurface.VISION) is None
+    assert service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST) is channel
+
+
+# ---------------------------------------------------------------------------
+# home_guild_id (D-24)
+# ---------------------------------------------------------------------------
+
+
+def test_home_guild_id_none_before_seed_and_set_after():
+    """home_guild_id is None until seed_home_guild runs, then equals the seeded guild id."""
+    service = GuildConfigService(_SpyPool(rows=[]), _FakeBot())
+    assert service.home_guild_id is None
+
+    asyncio.run(service.seed_home_guild(guild_id=100, ambient_channel_id=500))
+
+    assert service.home_guild_id == "100"
 
 
 # ---------------------------------------------------------------------------

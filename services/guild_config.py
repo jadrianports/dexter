@@ -32,7 +32,7 @@ import discord
 
 import config
 import database
-from logic.guild_config import decide_ambient_channel
+from logic.guild_config import AmbientSurface, decide_ambient_channel
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +55,11 @@ class GuildConfigService:
         self.pool = pool
         self._bot = bot
         self._cache: dict[str, asyncpg.Record] = {}
+        self.home_guild_id: str | None = None
+        """The home guild's id (D-24), set only by ``seed_home_guild`` — even on
+        an ``ON CONFLICT DO NOTHING`` no-op, since the seed still resolved the
+        guild. Stays ``None`` only when ``seed_home_guild`` is never called
+        (``DEXTER_CHANNEL_ID`` unset/unresolvable — the fresh-clone case)."""
 
     # -------------------------------------------------------------------------
     # Cache load + accessor (CONFIG-03 / D-06/D-07)
@@ -116,27 +121,38 @@ class GuildConfigService:
         )
         if row is not None:
             self._refresh_cache_entry(row)
+        # D-24: set even on ON CONFLICT DO NOTHING — the seed still resolved
+        # the guild, so this is the home guild whether or not a new row
+        # was actually inserted.
+        self.home_guild_id = str(guild_id)
 
     # -------------------------------------------------------------------------
-    # Resolvers (D-01/D-02/D-03)
+    # Resolvers (D-01/D-02/D-03/D-22)
     # -------------------------------------------------------------------------
 
-    def resolve_ambient_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
-        """STRICT, cache-only ambient-channel resolver (D-01). SYNCHRONOUS.
+    def resolve_ambient_channel(self, guild: discord.Guild, *, surface: AmbientSurface) -> discord.TextChannel | None:
+        """STRICT, cache-only ambient-channel resolver (D-01), surface-keyed (D-22). SYNCHRONOUS.
 
         Dispatches on ``logic.guild_config.decide_ambient_channel`` — does not
-        re-derive the ``configured`` branch (Phase 10 D-02 convention). Returns
-        ``None`` (silent) for an unconfigured guild with NO discord lookup
-        attempted at all.
+        re-derive the ``configured``/toggle branch here (Phase 10 D-02
+        convention). Returns ``None`` (silent) for an unconfigured or
+        toggled-off guild with NO discord lookup attempted at all.
 
-        For a configured guild, returns the resolved ``discord.TextChannel``
-        only when the channel still exists and Dexter can still send there.
-        Otherwise returns ``None`` and logs a WARNING (D-03) — the cache row
-        is NEVER mutated or cleared here; a transient permission blip or a
-        temporarily-missing channel must not permanently un-configure a guild.
+        For a configured, toggled-on guild, returns the resolved
+        ``discord.TextChannel`` only when the channel still exists and Dexter
+        can still send there. Otherwise returns ``None`` and logs a WARNING
+        (D-03) — the cache row is NEVER mutated or cleared here; a transient
+        permission blip or a temporarily-missing channel must not permanently
+        un-configure a guild.
+
+        Args:
+            guild:   The discord.Guild to resolve for.
+            surface: Which ambient behavior category is asking. Required
+                keyword-only, no default — see
+                ``logic.guild_config.AmbientSurface``.
         """
         row = self.get(guild.id)
-        channel_id = decide_ambient_channel(config_row=row)
+        channel_id = decide_ambient_channel(config_row=row, surface=surface)
         if channel_id is None:
             return None
 
@@ -158,6 +174,50 @@ class GuildConfigService:
             return None
 
         return ch
+
+    # -------------------------------------------------------------------------
+    # Write + push-invalidate methods (Phase 19 / ONBOARD-01/04) — the single
+    # owner of "write then invalidate cache". `/setup` (19-04) calls these;
+    # it never writes via `database` directly nor re-derives the cache push.
+    # -------------------------------------------------------------------------
+
+    async def configure_guild_first_time(self, *, guild_id: str, channel_id: str) -> None:
+        """First `/setup channel` write — designates the channel, flips
+        ``configured`` true, and turns vision off (D-19/D-20). Delegates to
+        ``database.configure_guild_first_time`` then push-invalidates the
+        cache with the returned Record.
+        """
+        row = await database.configure_guild_first_time(self.pool, guild_id=guild_id, channel_id=channel_id)
+        if row is not None:
+            self._refresh_cache_entry(row)
+
+    async def redesignate_guild_channel(self, *, guild_id: str, channel_id: str) -> None:
+        """Re-designate an already-set-up guild's ambient channel (D-03/D-20) —
+        touches ONLY ``ambient_channel_id``, never ``configured`` or either
+        toggle. Delegates to ``database.redesignate_guild_channel`` then
+        push-invalidates the cache with the returned Record.
+        """
+        row = await database.redesignate_guild_channel(self.pool, guild_id=guild_id, channel_id=channel_id)
+        if row is not None:
+            self._refresh_cache_entry(row)
+
+    async def set_ambient_roasts_enabled(self, *, guild_id: str, enabled: bool) -> None:
+        """Toggle ambient roasts for a guild (`/setup roasts on|off`).
+        Delegates to ``database.set_ambient_roasts_enabled`` then
+        push-invalidates the cache with the returned Record.
+        """
+        row = await database.set_ambient_roasts_enabled(self.pool, guild_id=guild_id, enabled=enabled)
+        if row is not None:
+            self._refresh_cache_entry(row)
+
+    async def set_vision_roasts_enabled(self, *, guild_id: str, enabled: bool) -> None:
+        """Toggle vision roasts for a guild (`/setup vision on|off`).
+        Delegates to ``database.set_vision_roasts_enabled`` then
+        push-invalidates the cache with the returned Record.
+        """
+        row = await database.set_vision_roasts_enabled(self.pool, guild_id=guild_id, enabled=enabled)
+        if row is not None:
+            self._refresh_cache_entry(row)
 
     def resolve_announce_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
         """Best-effort 4-step fallback chain (D-02). Preserved, NOT used by any
