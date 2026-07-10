@@ -672,21 +672,32 @@ async def on_guild_join(guild: discord.Guild) -> None:
 
     from logic.guild_config import should_welcome_guild
 
-    row = await database.insert_guild_config_if_absent(bot.pool, guild_id=str(guild.id))
-    if should_welcome_guild(inserted_row=row):
-        bot.guild_config._refresh_cache_entry(row)
-        welcome_posted = await _post_guild_welcome(guild)
-    else:
-        # A row already existed for this guild_id — not a genuine new join
-        # (e.g. a re-invite after a kick). Never welcome-spam (D-14).
-        # CR-01: on_guild_remove evicted this guild's cache entry, so it MUST
-        # be re-fetched here or the guild reads as unconfigured (and a
-        # subsequent /setup channel run would wrongly treat it as a genuine
-        # first-time configure) for the rest of this process's uptime.
-        existing_row = await database.get_guild_config(bot.pool, guild_id=str(guild.id))
-        if existing_row is not None:
-            bot.guild_config._refresh_cache_entry(existing_row)
-        welcome_posted = False
+    # WR-04: unlike the boot-backfill loop (which wraps its per-guild
+    # insert_guild_config_if_absent call in try/except: continue so one
+    # guild's DB hiccup doesn't derail the others), this DB write / welcome
+    # chain was previously unguarded — a transient DB error here would skip
+    # the owner join notice entirely with no retry until the next restart's
+    # boot backfill silently recovers it. Match the resilience discipline
+    # used elsewhere in this file: on failure, still attempt the owner notice
+    # (with welcome_posted=False) instead of losing it.
+    welcome_posted = False
+    try:
+        row = await database.insert_guild_config_if_absent(bot.pool, guild_id=str(guild.id))
+        if should_welcome_guild(inserted_row=row):
+            bot.guild_config._refresh_cache_entry(row)
+            welcome_posted = await _post_guild_welcome(guild)
+        else:
+            # A row already existed for this guild_id — not a genuine new join
+            # (e.g. a re-invite after a kick). Never welcome-spam (D-14).
+            # CR-01: on_guild_remove evicted this guild's cache entry, so it MUST
+            # be re-fetched here or the guild reads as unconfigured (and a
+            # subsequent /setup channel run would wrongly treat it as a genuine
+            # first-time configure) for the rest of this process's uptime.
+            existing_row = await database.get_guild_config(bot.pool, guild_id=str(guild.id))
+            if existing_row is not None:
+                bot.guild_config._refresh_cache_entry(existing_row)
+    except Exception as exc:
+        log.warning("on_guild_join: DB write/welcome chain failed for guild %s: %s", guild.id, exc)
 
     await bot.log_to_discord(_build_guild_notice_embed(guild, joined=True, welcome_posted=welcome_posted))
 
