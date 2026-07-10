@@ -447,7 +447,10 @@ async def _initialize_once() -> None:
     # CONFIG-05. Sequential, no cap (D-15) — this only runs once at boot.
     from logic.guild_config import should_welcome_guild
 
-    _welcomed_this_boot: list[tuple[str, int]] = []
+    # WR-01: track welcome-post success PER guild — _post_guild_welcome can
+    # return False (no resolvable channel, or a send failure) and the summary
+    # embed must not claim a delivery that didn't happen.
+    _welcomed_this_boot: list[tuple[str, int, bool]] = []
     for _guild in bot.guilds:
         try:
             _row = await database.insert_guild_config_if_absent(bot.pool, guild_id=str(_guild.id))
@@ -468,12 +471,15 @@ async def _initialize_once() -> None:
             _guild.name,
             _welcome_posted,
         )
-        _welcomed_this_boot.append((_guild.name, _guild.id))
+        _welcomed_this_boot.append((_guild.name, _guild.id, _welcome_posted))
 
     if _welcomed_this_boot:
-        _summary_lines = "\n".join(f"{name} (`{gid}`)" for name, gid in _welcomed_this_boot)
+        _summary_lines = "\n".join(
+            f"{name} (`{gid}`) — welcome posted: {'yes' if posted else 'no'}"
+            for name, gid, posted in _welcomed_this_boot
+        )
         _summary_embed = discord.Embed(
-            title=f"Boot backfill: welcomed {len(_welcomed_this_boot)} guild(s)",
+            title=f"Boot backfill: {len(_welcomed_this_boot)} new guild(s)",
             description=_summary_lines,
             color=0x2ECC71,
         )
