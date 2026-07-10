@@ -24,45 +24,91 @@ Locked by tests/test_guild_config_logic.py (mock-free boundary coverage).
 
 from __future__ import annotations
 
+import enum
 from typing import Mapping
+
+# ---------------------------------------------------------------------------
+# AmbientSurface
+# ---------------------------------------------------------------------------
+
+
+class AmbientSurface(enum.Enum):
+    """Which ambient behavior category a call site belongs to (D-22).
+
+    Required keyword-only on every function below (no default) — a future
+    ambient surface cannot resolve a channel or pass the predicate without
+    declaring its intent. This extends the Phase 18 D-02 structural-safety
+    principle surface-wise: a call site that forgets to pass ``surface=``
+    fails loudly (``TypeError``) rather than silently defaulting to a gate
+    it doesn't actually belong to.
+    """
+
+    ROAST = "roast"
+    """Gated by ``ambient_roasts_enabled``: voice-join/leave/move roasts,
+    proactive callbacks, repeat-song + milestone roasts, emoji reactions."""
+
+    VISION = "vision"
+    """Gated by ``vision_roasts_enabled``: image roasts only."""
+
+    PRESENCE = "presence"
+    """Gated by ``ambient_roasts_enabled`` (same column as ROAST, D-18) — a
+    distinct member for the startup message (home-guild-only, D-23) and the
+    idle-loneliness message."""
+
 
 # ---------------------------------------------------------------------------
 # decide_ambient_channel
 # ---------------------------------------------------------------------------
 
 
-def decide_ambient_channel(*, config_row: Mapping | None) -> int | None:
+def decide_ambient_channel(*, config_row: Mapping | None, surface: AmbientSurface) -> int | None:
     """Decide the ambient channel id for a guild from its cached config row.
 
     D-01: strict resolution — the config row or silence. No fallback chain.
+    D-22: surface-keyed — ``surface`` picks which toggle column gates
+    resolution, in addition to the pre-existing ``configured``/channel checks.
 
     Args:
         config_row: The guild's cached ``guild_config`` row (an ``asyncpg.Record``
             or any ``Mapping`` with ``configured`` and ``ambient_channel_id`` keys),
             or ``None`` when the guild has no row at all (never configured).
+        surface: Which ambient behavior category is asking. Required keyword-only,
+            no default — see :class:`AmbientSurface`.
 
     Returns:
         The ambient channel id as an ``int`` only when ``config_row`` is not
-        ``None``, ``configured`` is truthy, and ``ambient_channel_id`` is not
-        ``None``. Otherwise ``None`` (structural silence):
+        ``None``, ``configured`` is truthy, the surface's toggle column is not
+        explicitly ``False``, and ``ambient_channel_id`` is not ``None``.
+        Otherwise ``None`` (structural silence):
 
         - No row at all (guild never configured) -> ``None``.
         - Row present but ``configured`` is ``False`` -> ``None``, even if
           ``ambient_channel_id`` happens to be set (e.g. a `/setup` that was
           started then explicitly disabled).
-        - Row present, ``configured`` is ``True``, but ``ambient_channel_id`` is
-          ``None`` -> ``None`` (should not normally happen, but fails closed).
-        - Row present, ``configured`` is ``True``, ``ambient_channel_id`` set ->
-          the channel id, coerced with ``int(...)`` since the column is stored as
-          TEXT. A non-coercible value (e.g. ``""`` or ``"abc"``) also fails
-          closed to ``None`` (WR-01) rather than raising ``ValueError`` — the
-          column has no ``CHECK`` constraint, so a corrupted row must degrade to
-          silence like every other uncertain-state branch in this module.
+        - Row present, ``configured`` is ``True``, but the surface's toggle
+          column (``vision_roasts_enabled`` for VISION, else
+          ``ambient_roasts_enabled``) is ``False`` -> ``None``. A missing
+          toggle key defaults to ``True`` (fail-open, matching the column
+          ``DEFAULT true``).
+        - Row present, ``configured`` is ``True``, toggle not ``False``, but
+          ``ambient_channel_id`` is ``None`` -> ``None`` (should not normally
+          happen, but fails closed).
+        - Row present, ``configured`` is ``True``, toggle not ``False``,
+          ``ambient_channel_id`` set -> the channel id, coerced with
+          ``int(...)`` since the column is stored as TEXT. A non-coercible
+          value (e.g. ``""`` or ``"abc"``) also fails closed to ``None``
+          (WR-01) rather than raising ``ValueError`` — the column has no
+          ``CHECK`` constraint, so a corrupted row must degrade to silence
+          like every other uncertain-state branch in this module.
     """
     if config_row is None:
         return None
 
     if not config_row.get("configured", False):
+        return None
+
+    toggle_column = "vision_roasts_enabled" if surface is AmbientSurface.VISION else "ambient_roasts_enabled"
+    if not config_row.get(toggle_column, True):
         return None
 
     channel_id = config_row.get("ambient_channel_id")
@@ -79,7 +125,7 @@ def decide_ambient_channel(*, config_row: Mapping | None) -> int | None:
 # ---------------------------------------------------------------------------
 
 
-def is_ambient_channel(*, config_row: Mapping | None, channel_id: int) -> bool:
+def is_ambient_channel(*, config_row: Mapping | None, channel_id: int, surface: AmbientSurface) -> bool:
     """Decide whether ``channel_id`` is this guild's configured ambient channel.
 
     Replaces the two bare-equality gates
@@ -91,11 +137,44 @@ def is_ambient_channel(*, config_row: Mapping | None, channel_id: int) -> bool:
     Args:
         config_row: The guild's cached ``guild_config`` row, or ``None``.
         channel_id: The channel id to test (e.g. ``message.channel.id``).
+        surface: Which ambient behavior category is asking. Required
+            keyword-only, threaded straight through to
+            :func:`decide_ambient_channel` — see :class:`AmbientSurface`.
 
     Returns:
         ``True`` only if :func:`decide_ambient_channel` resolves a channel id for
         this guild AND it equals ``channel_id``. ``False`` for an unconfigured
-        guild (including a ``None`` row) and for any non-matching channel.
+        guild (including a ``None`` row), a toggled-off surface, and any
+        non-matching channel.
     """
-    decided = decide_ambient_channel(config_row=config_row)
+    decided = decide_ambient_channel(config_row=config_row, surface=surface)
     return decided is not None and decided == channel_id
+
+
+# ---------------------------------------------------------------------------
+# should_welcome_guild
+# ---------------------------------------------------------------------------
+
+
+def should_welcome_guild(*, inserted_row: object | None) -> bool:
+    """Pure wrapper naming the D-14 rule: welcome iff the INSERT actually inserted.
+
+    Deliberately trivial — the substance is the anti-pattern it encodes: never
+    derive this from a cache-miss check (e.g. ``bot.guild_config.get(guild_id)
+    is None``), which conflates "never configured" with "this event handler
+    happened to run before the cache was populated" and would replay the
+    welcome message on every restart/cache-miss race (the D-14 scar, see
+    Pitfall 3). The one true signal is whether
+    ``database.insert_guild_config_if_absent``'s own ``RETURNING`` clause
+    actually produced a row (a genuine first-time insert) versus ``None``
+    (the row already existed — ``ON CONFLICT DO NOTHING`` fired instead).
+
+    Args:
+        inserted_row: The return value of
+            ``database.insert_guild_config_if_absent`` — a fresh
+            ``asyncpg.Record`` on a genuine insert, or ``None`` on conflict.
+
+    Returns:
+        ``True`` only when ``inserted_row`` is not ``None``.
+    """
+    return inserted_row is not None
