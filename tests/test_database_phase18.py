@@ -47,6 +47,8 @@ _GUILD_CONFIG_COLUMNS = [
     "is_blocked",
     "joined_at",
     "updated_at",
+    "ambient_roasts_enabled",
+    "vision_roasts_enabled",
 ]
 
 
@@ -65,10 +67,10 @@ class TestGuildConfigSchemaShape:
         for column in _GUILD_CONFIG_COLUMNS:
             assert column in database.SCHEMA_SQL, f"guild_config is missing column {column!r}"
 
-    def test_guild_config_no_phase19_columns(self) -> None:
-        """D-12: Phase 18 ships exactly CONFIG-01's columns, nothing speculative."""
-        assert "ambient_roasts_enabled" not in database.SCHEMA_SQL
-        assert "vision_roasts_enabled" not in database.SCHEMA_SQL
+    # The prior test locking the two toggle columns' ABSENCE was removed: Phase 19
+    # (ONBOARD-04) added ambient_roasts_enabled + vision_roasts_enabled to
+    # guild_config, legitimately superseding that Phase-18-scope-lock assertion.
+    # Presence is now asserted in tests/test_database_phase19.py.
 
     def test_boot_helpers_exist(self) -> None:
         assert hasattr(database, "load_all_guild_configs")
