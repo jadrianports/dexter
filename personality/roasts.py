@@ -37,6 +37,8 @@ __all__ = [
     "ROAST_NO_HISTORY_LINES",
     "PROACTIVE_CALLBACK_FALLBACKS",
     "VISION_ROAST_FALLBACKS",
+    "WELCOME_MESSAGES",
+    "WELCOME_SETUP_HINT",
 ]
 
 
@@ -104,6 +106,26 @@ STARTUP_MESSAGES: list[str] = [
     "i'm back. let's see how fast someone ruins it.",
     "online. queue's empty. someone's going to fix that with something terrible. i can feel it.",
 ]
+
+# ---------------------------------------------------------------------------
+# New-guild welcome (Phase 19 / ONBOARD-01, D-11) — in-persona one-liners with
+# NO placeholders (no {name} — the guild has no single "user" yet on join).
+# Contempt aimed outward at the server in general, arrogant not self-deprecating,
+# same LOCKED voice register as STARTUP_MESSAGES.
+# ---------------------------------------------------------------------------
+
+WELCOME_MESSAGES: list[str] = [
+    "new server. i already know your playlist is going to be a problem. 🎵",
+    "another discord, another group of people about to disappoint me musically.",
+    "i'm here. try not to make me regret the invite within the first hour.",
+    "showed up. someone's going to queue something unforgivable within the week, i can already tell.",
+    "new server, same low bar. let's see who clears it.",
+]
+
+# Plain, non-sarcastic functional line (D-11 / Critical Rule 6: sarcasm dialed back
+# for genuinely functional instructions) — names the exact next command so a fresh
+# admin isn't left guessing. Never combined into WELCOME_MESSAGES' .format() path.
+WELCOME_SETUP_HINT: str = "run `/setup channel` to pick where i talk. i'll stay quiet until you do."
 
 # ---------------------------------------------------------------------------
 # Status rotation lines (supplement current song / server count)

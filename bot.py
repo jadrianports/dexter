@@ -536,6 +536,108 @@ async def _post_startup_messages() -> None:
             log.warning("Startup message post failed for guild %s: %s", guild.id, exc)
 
 
+async def _post_guild_welcome(guild: discord.Guild) -> bool:
+    """Send an in-persona welcome + /setup hint to the guild's best-effort channel (D-13).
+
+    Uses resolve_announce_channel (the best-effort fallback chain), NOT
+    resolve_ambient_channel — a brand-new guild has no configured row yet, so
+    the strict resolver would always return None here.
+
+    Returns True on a successful send, False on a missing resolvable channel
+    or a send failure. Both are non-fatal: the welcome send must never raise
+    up into on_guild_join / the boot backfill and crash the join (T-19-05).
+    """
+    from personality.roasts import WELCOME_MESSAGES, WELCOME_SETUP_HINT
+    from personality.roasts import pick_random as _pick_random
+
+    channel = bot.guild_config.resolve_announce_channel(guild)
+    if channel is None:
+        log.warning("_post_guild_welcome: no writable channel found in guild %s", guild.id)
+        return False
+    try:
+        await channel.send(
+            _pick_random(WELCOME_MESSAGES) + "\n" + WELCOME_SETUP_HINT,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        return True
+    except discord.HTTPException as exc:
+        log.warning("_post_guild_welcome: welcome send failed in guild %s: %s", guild.id, exc)
+        return False
+
+
+def _build_guild_notice_embed(
+    guild: discord.Guild, *, joined: bool, welcome_posted: bool | None
+) -> discord.Embed:
+    """Build the D-16 owner-facing join/remove notice embed.
+
+    T-19-02 (embed injection): guild.name and the owner tag are rendered as
+    PLAIN field values — never markdown-wrapped, never used as a hyperlink
+    label — so an attacker-controlled guild name or owner display name cannot
+    inject markdown/link structure into the owner's error-log channel. The
+    numeric guild.id / owner_id are wrapped in backtick inline-code spans (a
+    Discord snowflake cannot contain a backtick, so this is a safe literal).
+    """
+    title = f"joined: {guild.name}" if joined else f"removed: {guild.name}"
+    embed = discord.Embed(title=title, color=0x2ECC71 if joined else 0xE74C3C)
+    embed.add_field(name="members", value=str(guild.member_count), inline=True)
+    owner_tag = str(guild.owner) if guild.owner else "unknown"
+    embed.add_field(name="owner", value=f"{owner_tag} (`{guild.owner_id}`)", inline=True)
+    embed.add_field(name="guild id", value=f"`{guild.id}`", inline=True)
+    embed.add_field(
+        name="created",
+        value=discord.utils.format_dt(guild.created_at, "R"),
+        inline=True,
+    )
+    embed.add_field(name="total guilds", value=str(len(bot.guilds)), inline=True)
+    if joined and welcome_posted is not None:
+        embed.add_field(name="welcome posted", value="yes" if welcome_posted else "no", inline=True)
+    return embed
+
+
+@bot.event
+async def on_guild_join(guild: discord.Guild) -> None:
+    """New-guild join: insert-if-absent, welcome iff genuinely new, always notify owner (ONBOARD-01/05).
+
+    Defensively returns if boot init hasn't completed yet (bot.pool /
+    bot.guild_config not yet attached) — a join racing _initialize_once is
+    picked up by the boot backfill loop on the next successful init pass
+    instead of crashing here.
+    """
+    if not hasattr(bot, "pool") or not hasattr(bot, "guild_config"):
+        log.warning(
+            "on_guild_join: bot not yet initialized, guild %s deferred to boot backfill", guild.id
+        )
+        return
+
+    from logic.guild_config import should_welcome_guild
+
+    row = await database.insert_guild_config_if_absent(bot.pool, guild_id=str(guild.id))
+    if should_welcome_guild(inserted_row=row):
+        bot.guild_config._refresh_cache_entry(row)
+        welcome_posted = await _post_guild_welcome(guild)
+    else:
+        # A row already existed for this guild_id — not a genuine new join
+        # (e.g. a re-invite after a kick). Never welcome-spam (D-14).
+        welcome_posted = False
+
+    await bot.log_to_discord(_build_guild_notice_embed(guild, joined=True, welcome_posted=welcome_posted))
+
+
+@bot.event
+async def on_guild_remove(guild: discord.Guild) -> None:
+    """Guild removal: notify owner + evict the cache entry only — NO DB write (D-12).
+
+    The MEM-04 guild-data purge is Phase 21's job. Phase 21 must also preserve
+    a blocked guild's row (or move the blacklist to its own table) so a
+    kicked-then-re-invited guild can be refused — this plan does not solve
+    that constraint, only carries it forward.
+    """
+    if hasattr(bot, "guild_config"):
+        bot.guild_config._cache.pop(str(guild.id), None)
+    if hasattr(bot, "log_to_discord"):
+        await bot.log_to_discord(_build_guild_notice_embed(guild, joined=False, welcome_posted=None))
+
+
 async def _background_sync_retry() -> None:
     """Background retry helper for command-tree sync (REL-03 / D-05).
 
