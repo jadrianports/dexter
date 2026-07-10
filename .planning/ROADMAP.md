@@ -235,7 +235,7 @@ Full phase details, success criteria, and decisions archived in
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
-| 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete   | 2026-07-10 |
+| 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 0/TBD | Not started | - |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
