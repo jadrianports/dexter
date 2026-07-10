@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: verifying
-stopped_at: Completed 18-07-PLAN.md
-last_updated: "2026-07-09T22:48:41.509Z"
+stopped_at: Phase 19 context gathered
+last_updated: "2026-07-10T09:16:15.372Z"
 last_activity: 2026-07-09
 progress:
   total_phases: 6
@@ -109,9 +109,9 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-09T22:08:17.305Z
-Stopped at: Completed 18-07-PLAN.md
-Resume file: None
+Last session: 2026-07-10T09:16:15.365Z
+Stopped at: Phase 19 context gathered
+Resume file: .planning/phases/19-onboarding-admin-setup/19-CONTEXT.md
 
 ## Operator Next Steps
 
