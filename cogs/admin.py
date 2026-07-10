@@ -174,7 +174,19 @@ class AdminCog(commands.Cog):
             return
 
         enabled = setting.value == "on"
-        await self.bot.guild_config.set_ambient_roasts_enabled(guild_id=str(interaction.guild.id), enabled=enabled)
+        saved = await self.bot.guild_config.set_ambient_roasts_enabled(
+            guild_id=str(interaction.guild.id), enabled=enabled
+        )
+
+        if not saved:
+            # WR-02: no guild_config row exists yet (e.g. a boot-backfill DB
+            # hiccup) — the write was a complete no-op. Never report success.
+            await interaction.response.send_message(
+                "couldn't save that — try `/setup channel` first.",
+                ephemeral=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
 
         cached = self.bot.guild_config.get(interaction.guild.id)
         gap_note = ""
@@ -209,7 +221,19 @@ class AdminCog(commands.Cog):
             return
 
         enabled = setting.value == "on"
-        await self.bot.guild_config.set_vision_roasts_enabled(guild_id=str(interaction.guild.id), enabled=enabled)
+        saved = await self.bot.guild_config.set_vision_roasts_enabled(
+            guild_id=str(interaction.guild.id), enabled=enabled
+        )
+
+        if not saved:
+            # WR-02: no guild_config row exists yet (e.g. a boot-backfill DB
+            # hiccup) — the write was a complete no-op. Never report success.
+            await interaction.response.send_message(
+                "couldn't save that — try `/setup channel` first.",
+                ephemeral=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
 
         cached = self.bot.guild_config.get(interaction.guild.id)
         gap_note = ""

@@ -201,23 +201,37 @@ class GuildConfigService:
         if row is not None:
             self._refresh_cache_entry(row)
 
-    async def set_ambient_roasts_enabled(self, *, guild_id: str, enabled: bool) -> None:
+    async def set_ambient_roasts_enabled(self, *, guild_id: str, enabled: bool) -> bool:
         """Toggle ambient roasts for a guild (`/setup roasts on|off`).
         Delegates to ``database.set_ambient_roasts_enabled`` then
         push-invalidates the cache with the returned Record.
+
+        Returns:
+            True if a guild_config row existed and was updated, False if no
+            row exists for guild_id (WR-02) — the plain ``UPDATE`` is then a
+            complete no-op and the caller must not report success.
         """
         row = await database.set_ambient_roasts_enabled(self.pool, guild_id=guild_id, enabled=enabled)
-        if row is not None:
-            self._refresh_cache_entry(row)
+        if row is None:
+            return False
+        self._refresh_cache_entry(row)
+        return True
 
-    async def set_vision_roasts_enabled(self, *, guild_id: str, enabled: bool) -> None:
+    async def set_vision_roasts_enabled(self, *, guild_id: str, enabled: bool) -> bool:
         """Toggle vision roasts for a guild (`/setup vision on|off`).
         Delegates to ``database.set_vision_roasts_enabled`` then
         push-invalidates the cache with the returned Record.
+
+        Returns:
+            True if a guild_config row existed and was updated, False if no
+            row exists for guild_id (WR-02) — the plain ``UPDATE`` is then a
+            complete no-op and the caller must not report success.
         """
         row = await database.set_vision_roasts_enabled(self.pool, guild_id=guild_id, enabled=enabled)
-        if row is not None:
-            self._refresh_cache_entry(row)
+        if row is None:
+            return False
+        self._refresh_cache_entry(row)
+        return True
 
     def resolve_announce_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
         """Best-effort 4-step fallback chain (D-02). Preserved, NOT used by any
