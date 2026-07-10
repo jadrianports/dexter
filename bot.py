@@ -439,6 +439,46 @@ async def _initialize_once() -> None:
             except Exception as exc:
                 log.warning("Home-guild config seed failed: %s", exc)
 
+    # Boot backfill (ONBOARD-01 / D-14/D-15): welcome any guild Dexter was invited
+    # to while offline — the on-demand hosting model means the gateway
+    # on_guild_join event never fired for those joins. MUST run AFTER the
+    # home-guild seed above (D-14 constraint 1) — running before it would
+    # backfill-and-welcome the home guild itself as configured=false, breaking
+    # CONFIG-05. Sequential, no cap (D-15) — this only runs once at boot.
+    from logic.guild_config import should_welcome_guild
+
+    _welcomed_this_boot: list[tuple[str, int]] = []
+    for _guild in bot.guilds:
+        try:
+            _row = await database.insert_guild_config_if_absent(bot.pool, guild_id=str(_guild.id))
+        except Exception as exc:
+            log.warning("Boot backfill insert failed for guild %s: %s", _guild.id, exc)
+            continue
+        if not should_welcome_guild(inserted_row=_row):
+            # Row already existed — not a new join while offline (D-14 constraint 2:
+            # this decision reads the INSERT's own return value, never
+            # bot.guild_config.get(), so a fail-closed empty cache cannot
+            # welcome-spam every guild on a restart).
+            continue
+        bot.guild_config._refresh_cache_entry(_row)
+        _welcome_posted = await _post_guild_welcome(_guild)
+        log.info(
+            "Boot backfill: welcomed guild %s (%s) — welcome posted: %s",
+            _guild.id,
+            _guild.name,
+            _welcome_posted,
+        )
+        _welcomed_this_boot.append((_guild.name, _guild.id))
+
+    if _welcomed_this_boot:
+        _summary_lines = "\n".join(f"{name} (`{gid}`)" for name, gid in _welcomed_this_boot)
+        _summary_embed = discord.Embed(
+            title=f"Boot backfill: welcomed {len(_welcomed_this_boot)} guild(s)",
+            description=_summary_lines,
+            color=0x2ECC71,
+        )
+        await bot.log_to_discord(_summary_embed)
+
     # Phase 4: Queue persistence service (wired before cog loading so the service
     # exists on bot before MusicCog setup() runs)
     from services.queue_persistence import QueuePersistenceService
@@ -446,7 +486,15 @@ async def _initialize_once() -> None:
     bot.queue_persistence = QueuePersistenceService(bot.pool)
 
     # Load cogs (idempotent — a retry after a partial init must not double-load)
-    for _ext in ("cogs.music", "cogs.help", "cogs.events", "cogs.library", "cogs.ops", "cogs.memory"):
+    for _ext in (
+        "cogs.music",
+        "cogs.help",
+        "cogs.events",
+        "cogs.library",
+        "cogs.ops",
+        "cogs.memory",
+        "cogs.admin",
+    ):
         if _ext not in bot.extensions:
             await bot.load_extension(_ext)
     if hasattr(bot, "gemini_service"):
@@ -512,28 +560,39 @@ async def _initialize_once() -> None:
 
 
 async def _post_startup_messages() -> None:
-    """Post the arrogant startup message to each guild (best-effort)."""
+    """Post the arrogant startup message to the home guild only (best-effort, D-23).
+
+    Narrowed from "every guild" to "the home guild" — Phase 19 is a
+    multi-tenant world where most guilds are strangers Dexter doesn't need to
+    arrogantly announce itself in on every restart; only the home guild (the
+    one seeded from DEXTER_CHANNEL_ID) gets the startup line. A fresh clone
+    with no home guild seeded (home_guild_id is None) sends nothing.
+    """
     # Phase 3: Startup message — MUST be last (after all load_extension calls and
     # background-task starts) so commands are registered first (Pitfall 5).
     # Uses STARTUP_MESSAGES (arrogant, D-02) — never self-deprecating.
     # SECURITY (T-03-19): allowed_mentions=none() prevents mention injection.
+    from logic.guild_config import AmbientSurface
     from personality.roasts import STARTUP_MESSAGES
     from personality.roasts import pick_random as _pick_random
 
-    # WR-03: try/except lives INSIDE the loop body so one guild's send failure
-    # (e.g. discord.Forbidden after a permission change, a transient
-    # discord.HTTPException) is logged and skipped without aborting the
-    # startup announcement for every other guild.
-    for guild in bot.guilds:
-        try:
-            channel = bot.guild_config.resolve_ambient_channel(guild)
-            if channel:
-                await channel.send(
-                    _pick_random(STARTUP_MESSAGES),
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
-        except Exception as exc:
-            log.warning("Startup message post failed for guild %s: %s", guild.id, exc)
+    home_id = bot.guild_config.home_guild_id
+    if not home_id:
+        return
+
+    home_guild = bot.get_guild(int(home_id))
+    if home_guild is None:
+        return
+
+    try:
+        channel = bot.guild_config.resolve_ambient_channel(home_guild, surface=AmbientSurface.PRESENCE)
+        if channel:
+            await channel.send(
+                _pick_random(STARTUP_MESSAGES),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+    except Exception as exc:
+        log.warning("Startup message post failed for home guild %s: %s", home_guild.id, exc)
 
 
 async def _post_guild_welcome(guild: discord.Guild) -> bool:
@@ -843,10 +902,11 @@ async def idle_check():
                     # Only post once per silence window
                     vc._loneliness_posted = True
                     try:
+                        from logic.guild_config import AmbientSurface
                         from personality.roasts import IDLE_LONELINESS_MESSAGES
                         from personality.roasts import pick_random as _pr
 
-                        channel = bot.guild_config.resolve_ambient_channel(guild)
+                        channel = bot.guild_config.resolve_ambient_channel(guild, surface=AmbientSurface.PRESENCE)
                         if channel:
                             await channel.send(
                                 _pr(IDLE_LONELINESS_MESSAGES),
