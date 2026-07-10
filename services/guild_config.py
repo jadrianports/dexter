@@ -165,9 +165,13 @@ class GuildConfigService:
             )
             return None
 
-        if not ch.permissions_for(guild.me).send_messages:
+        perms = ch.permissions_for(guild.me)
+        if not (perms.send_messages and perms.view_channel):
+            # WR-03: also require view_channel — a view_channel-denied,
+            # send_messages-allowed overwrite still fails an actual
+            # channel.send() with Forbidden in practice.
             log.warning(
-                "guild_config: lost send_messages in configured channel %s (guild %s)",
+                "guild_config: lost send_messages/view_channel in configured channel %s (guild %s)",
                 channel_id,
                 guild.id,
             )

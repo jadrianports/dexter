@@ -120,7 +120,13 @@ class AdminCog(commands.Cog):
         if not await self._require_guild_admin(interaction):
             return
 
-        if not channel.permissions_for(interaction.guild.me).send_messages:
+        perms = channel.permissions_for(interaction.guild.me)
+        if not (perms.send_messages and perms.view_channel):
+            # WR-03: view_channel denied + send_messages allowed is an
+            # unusual but valid overwrite combination — an actual
+            # channel.send() would still raise Forbidden, defeating D-06's
+            # "refuse loudly, write nothing" intent if only send_messages
+            # were checked.
             await interaction.response.send_message(
                 f"can't post in {channel.mention} — i don't have send messages there. "
                 "fix my permissions or pick a different channel.",
