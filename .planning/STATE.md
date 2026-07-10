@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
-status: executing
-stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-07-10T12:06:19.003Z"
+status: verifying
+stopped_at: Completed 19-04-PLAN.md
+last_updated: "2026-07-10T12:16:21.866Z"
 last_activity: 2026-07-10 -- Phase 19 execution started
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
-  completed_plans: 10
-  percent: 17
+  completed_plans: 11
+  percent: 33
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 19 (onboarding-admin-setup) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-10 -- Phase 19 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 19 P01 | 25min | 3 tasks | 3 files |
 | Phase 19 P02 | 20min | 3 tasks | 6 files |
 | Phase 19 P03 | 20min | 3 tasks | 3 files |
+| Phase 19 P04 | 15min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 19-02]: GuildConfigService.home_guild_id set unconditionally at the end of seed_home_guild, even on ON CONFLICT DO NOTHING -- the seed still resolves which guild is home regardless of insert-vs-conflict (D-24)
 - [Phase 19]: [Phase 19-03]: should_welcome_guild(inserted_row=) is the ONLY welcome-decision signal for on_guild_join and the boot backfill loop -- never bot.guild_config.get(), which would welcome-spam on a cache-miss race
 - [Phase 19]: [Phase 19-03]: boot backfill runs strictly after seed_home_guild and before queue-persistence wiring in _initialize_once -- reversing this order would backfill-and-welcome the home guild itself as configured=false (D-14 constraint 1)
+- [Phase 19]: [Phase 19-04]: setup_channel reads the cached row once before branching, driving both the first-configure/re-designate decision and (for re-designate) the old->new channel phrasing in the reply
+- [Phase 19]: [Phase 19-04]: cogs/admin.py is a dedicated guild-admin (manage_guild) surface, structurally separate from cogs/ops.py's owner (is_owner) surface (D-04)
 
 ### Pending Todos
 
@@ -119,8 +122,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-10T12:06:18.989Z
-Stopped at: Completed 19-03-PLAN.md
+Last session: 2026-07-10T12:16:21.836Z
+Stopped at: Completed 19-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
