@@ -25,10 +25,10 @@ The foundational seam. Every other category reads from it.
 
 ### Onboarding & Admin Setup (ONBOARD)
 
-- [ ] **ONBOARD-01**: When Dexter joins a server it posts a welcome/setup-nudge message in a safely-resolved channel, wrapped so a permission failure never crashes the join
+- [x] **ONBOARD-01**: When Dexter joins a server it posts a welcome/setup-nudge message in a safely-resolved channel, wrapped so a permission failure never crashes the join
 - [ ] **ONBOARD-02**: A server admin can run `/setup` to designate the ambient channel, enforced by an inline `manage_guild` permission check (`default_permissions` is a UI hint only, never the gate)
 - [ ] **ONBOARD-03**: `/setup` presents a channel dropdown picker rather than a raw channel argument
-- [ ] **ONBOARD-04**: A server admin can toggle ambient roasting and vision roasting independently for their guild
+- [x] **ONBOARD-04**: A server admin can toggle ambient roasting and vision roasting independently for their guild
 - [ ] **ONBOARD-05**: The owner is notified in `ERROR_LOG_CHANNEL_ID` when Dexter joins or is removed from a server
 
 ### Owner Control Plane / Kill-Switch (OWNER)
@@ -127,10 +127,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CONFIG-03 | Phase 18 | Complete |
 | CONFIG-04 | Phase 18 | Complete |
 | CONFIG-05 | Phase 18 | Complete |
-| ONBOARD-01 | Phase 19 | Pending |
+| ONBOARD-01 | Phase 19 | Complete |
 | ONBOARD-02 | Phase 19 | Pending |
 | ONBOARD-03 | Phase 19 | Pending |
-| ONBOARD-04 | Phase 19 | Pending |
+| ONBOARD-04 | Phase 19 | Complete |
 | ONBOARD-05 | Phase 19 | Pending |
 | OWNER-01 | Phase 20 | Pending |
 | OWNER-02 | Phase 20 | Pending |

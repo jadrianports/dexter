@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Phase 19 context gathered
-last_updated: "2026-07-10T10:17:32.371Z"
-last_activity: 2026-07-10 -- Phase 19 planning complete
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-07-10T10:41:28.886Z"
+last_activity: 2026-07-10 -- Phase 19 execution started
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 11
+  completed_plans: 8
   percent: 17
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 18 — per-guild-config-foundation-ci-gate
+**Current focus:** Phase 19 — onboarding-admin-setup
 
 ## Current Position
 
-Phase: 19
-Plan: Not started
+Phase: 19 (onboarding-admin-setup) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-07-10 -- Phase 19 planning complete
+Last activity: 2026-07-10 -- Phase 19 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 18 P05 | 25min | 2 tasks | 1 files |
 | Phase 18-per-guild-config-foundation-ci-gate P06 | 20min | 2 tasks | 2 files |
 | Phase 18 P07 | 12min | 1 tasks | 1 files |
+| Phase 19 P01 | 25min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 18]: [Phase 18] bot.py boot wiring (18-05): GuildConfigService constructed + load_all()'d right after log_to_discord is wired, before Gemini-gated services; home-guild seed reads config.DEXTER_CHANNEL_ID via bot.get_channel, silent INFO skip on unset/unresolvable (D-10); _resolve_dexter_channel deleted, both bot.py ambient sites now call resolve_ambient_channel synchronously — Keeps the home guild's behavior unchanged while making every other guild ambient-silent by construction; cogs/events.py's remaining call sites are a sibling plan (18-06)
 - [Phase 18-06]: cogs/events.py ambient surfaces (3 voice sites + 2 on_message gates) consolidated onto the Phase 18 guild_config seam; DEXTER_CHANNEL_ID fully removed from cogs/ — Completes CONFIG-02/04 wiring for the events.py surface; tests updated to mock bot.guild_config.get() instead of patching the retired env var
 - [Phase 18-07]: Single combined GitHub Actions lint+test job (not split) with pgvector/pgvector:pg16 service container; pull_request (never pull_request_target) + top-level permissions: contents: read + zero secrets.* as the standing CI least-privilege posture
+- [Phase 19]: [Phase 19-01]: insert_guild_config_if_absent (D-14) never sets configured=true; configure_guild_first_time is the separate upsert that turns vision off on first /setup channel write
+- [Phase 19]: [Phase 19-01]: redesignate_guild_channel is a plain UPDATE touching only ambient_channel_id, never resets configured or either toggle an admin has since changed (D-03/D-20)
 
 ### Pending Todos
 
@@ -109,9 +112,9 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-10T09:16:15.365Z
-Stopped at: Phase 19 context gathered
-Resume file: .planning/phases/19-onboarding-admin-setup/19-CONTEXT.md
+Last session: 2026-07-10T10:41:28.870Z
+Stopped at: Completed 19-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

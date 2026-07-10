@@ -101,6 +101,7 @@ Full phase details, success criteria, and decisions archived in
   3. Every ambient/unprompted surface resolves its channel through exactly one code path — `bot.py::_resolve_dexter_channel`, `cogs/events.py::_get_ambient_channel`, and the two bare-equality `message.channel.id == config.DEXTER_CHANNEL_ID` gates are gone, replaced by calls into the same consolidated resolver.
   4. Per-guild config reads never issue a live Neon round-trip during normal event handling — an in-memory cache serves them, loaded at boot and push-invalidated only when config changes.
   5. Every push and PR runs the pytest suite + lint in GitHub Actions (CICD-01), so Phases 19–23 — especially Phase 21's surgery on the scarred memory subsystem — all execute behind a green gate. The README build badge may land here or in Phase 23 alongside the rest of the README rewrite.
+
 **Plans**: 7 plans (5 waves)
 
 **Wave 1**
@@ -141,7 +142,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 1**
 
-- [ ] 19-01-PLAN.md — guild_config toggle columns + RETURNING insert-if-absent + channel/toggle write helpers
+- [x] 19-01-PLAN.md — guild_config toggle columns + RETURNING insert-if-absent + channel/toggle write helpers
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -234,7 +235,7 @@ Full phase details, success criteria, and decisions archived in
 | 16. Proactive Memory Callbacks | v1.3 | 4/4 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
-| 19. Onboarding & Admin Setup | v1.4 | 0/4 | Planned (3 waves) | - |
+| 19. Onboarding & Admin Setup | v1.4 | 1/4 | In Progress|  |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 0/TBD | Not started | - |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
