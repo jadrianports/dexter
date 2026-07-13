@@ -717,6 +717,15 @@ async def on_guild_join(guild: discord.Guild) -> None:
         log.warning("on_guild_join: bot not yet initialized, guild %s deferred to boot backfill", guild.id)
         return
 
+    if bot.guild_config.is_blocked(str(guild.id)):
+        # OWNER-04: a blocklisted guild that re-invites Dexter is left
+        # immediately, before any insert/welcome. The guild never actually
+        # onboarded, so no owner "joined" notice is sent -- the log line is
+        # the correct (and only) record of this event.
+        log.info("on_guild_join: guild %s is blocklisted, leaving immediately", guild.id)
+        await guild.leave()
+        return
+
     from logic.guild_config import should_welcome_guild
 
     # WR-04: unlike the boot-backfill loop (which wraps its per-guild
