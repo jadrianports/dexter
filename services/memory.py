@@ -63,13 +63,16 @@ class MemoryService:
         guild_id: str,
         query_text: str,
         kind: str | None = None,
+        *,
+        guild_scoped: bool = False,
     ) -> list[str]:
         """Retrieve the top relevant memories for a user + query pair.
 
         Full pipeline:
           1. Embed query_text via GeminiService.embed at priority=1 (user critical path)
              using the RETRIEVAL_QUERY task type.
-          2. Run scoped cosine ANN via database.search_memories (WHERE user_id only).
+          2. Run scoped cosine ANN via database.search_memories (WHERE user_id, plus
+             an optional guild narrowing — see guild_scoped below).
           3. Map rows to MemoryFact; drop everything below MEMORY_SIMILARITY_FLOOR.
           4. rerank() with spike-tuned weights from config.
           5. Cap to MEMORY_INJECT_CAP (1–3 facts).
@@ -84,19 +87,24 @@ class MemoryService:
         "No memory beats a wrong memory" (Pitfall 8): never inject below-floor facts.
 
         Args:
-            user_id:    Discord user ID — ANN search scope (T-11-03a / V4).
-            guild_id:   Guild ID — reserved for future per-guild memory scoping;
-                        currently the ANN scopes to user_id only (cross-server
-                        personal facts are desirable: the same user uses the bot
-                        on multiple servers and their taste/history is personal).
-            query_text: The raw text to embed as a retrieval query (e.g. the /ask
-                        question, or the roast context string from events.py).
-            kind:       Phase 14 (OQ1) — optional exact-match filter forwarded
-                        straight to database.search_memories, e.g.
-                        "taste_episode" for D-03's positive-taste blend. Defaults
-                        to None, which is byte-identical to pre-Phase-14 recall()
-                        (no kind clause emitted at all — T-14-03: this can only
-                        narrow the existing user_id scope, never widen it).
+            user_id:      Discord user ID — ANN search scope (T-11-03a / V4).
+            guild_id:     Guild ID for this call. Used as the ANN guild filter ONLY
+                          when guild_scoped is True; ignored otherwise. Both /ask
+                          and /roast pass a real non-null guild_id today, so guild_id
+                          presence alone can never be the scoping signal (D-02).
+            query_text:   The raw text to embed as a retrieval query (e.g. the /ask
+                          question, or the roast context string from events.py).
+            kind:         Phase 14 (OQ1) — optional exact-match filter forwarded
+                          straight to database.search_memories, e.g.
+                          "taste_episode" for D-03's positive-taste blend. Defaults
+                          to None, which is byte-identical to pre-Phase-14 recall()
+                          (no kind clause emitted at all — T-14-03: this can only
+                          narrow the existing user_id scope, never widen it).
+            guild_scoped: Phase 21 (MEM-01/D-02) — keyword-only opt-in. Default
+                          False = global recall, byte-identical to pre-Phase-21 (no
+                          guild_id kwarg forwarded to database.search_memories at
+                          all). True = narrow the ANN to this guild's rows plus the
+                          grandfathered guild_id IS NULL corpus (D-01).
 
         Returns:
             List of fact strings (at most MEMORY_INJECT_CAP), or [] when nothing
@@ -118,13 +126,21 @@ class MemoryService:
             return []
 
         try:
-            # Step 2 — scoped cosine ANN (user_id WHERE clause = cross-user guard T-11-03a)
+            # Step 2 — scoped cosine ANN (user_id WHERE clause = cross-user guard T-11-03a).
+            # guild_id is forwarded ONLY when guild_scoped is True (D-02) — a bare
+            # None-defaulted kwarg unconditionally forwarded would break every
+            # hand-written fake_search stub on this call path that doesn't declare
+            # a guild_id parameter.
+            search_kwargs: dict = {}
+            if guild_scoped:
+                search_kwargs["guild_id"] = guild_id
             rows = await database.search_memories(
                 self._pool,
                 user_id=user_id,
                 query_embedding=query_vec,
                 k=config.MEMORY_TOP_K,
                 kind=kind,
+                **search_kwargs,
             )
 
             # Step 3 — map rows to MemoryFact dataclass

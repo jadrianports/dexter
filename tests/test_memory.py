@@ -756,6 +756,109 @@ class TestRecallKindParam:
         assert sig.parameters["kind"].default is None
 
 
+class TestRecallGuildScoped:
+    """services.memory.MemoryService.recall: guild_scoped opt-in (MEM-02 / D-02).
+
+    Stubs here use a **extra catch-all (not the narrow kind=None signature used
+    by TestRecallKindParam) because these tests must be able to observe whether
+    guild_id was forwarded at all — a narrow signature declaring guild_id would
+    itself mask the "omitted entirely" assertion this class exists to make.
+    """
+
+    def _make_service(self):
+        from services.memory import MemoryService
+
+        mock_gemini = MagicMock()
+        mock_gemini.embed = AsyncMock(return_value=[[0.1] * 768])
+        mock_pool = MagicMock()
+        return MemoryService(mock_pool, mock_gemini)
+
+    def test_default_forwards_no_guild_id(self) -> None:
+        """recall() without guild_scoped forwards NO guild_id kwarg (MEM-02 global default)."""
+        import asyncio
+
+        import database
+
+        svc = self._make_service()
+        captured: list[dict] = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None, **extra):
+            captured.append(extra)
+            return []
+
+        orig_search = database.search_memories
+        database.search_memories = fake_search
+        try:
+            asyncio.run(svc.recall("user1", "guild1", "test query"))
+        finally:
+            database.search_memories = orig_search
+
+        assert len(captured) == 1
+        assert "guild_id" not in captured[0]
+
+    def test_guild_scoped_true_forwards_guild_id(self) -> None:
+        """recall(..., guild_scoped=True) forwards guild_id straight through."""
+        import asyncio
+
+        import database
+
+        svc = self._make_service()
+        captured: list[dict] = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None, **extra):
+            captured.append(extra)
+            return []
+
+        orig_search = database.search_memories
+        database.search_memories = fake_search
+        try:
+            asyncio.run(svc.recall("user1", "guild1", "test query", guild_scoped=True))
+        finally:
+            database.search_memories = orig_search
+
+        assert len(captured) == 1
+        assert captured[0]["guild_id"] == "guild1"
+
+    def test_kind_and_guild_scoped_both_forwarded(self) -> None:
+        """recall(..., kind=..., guild_scoped=True) forwards BOTH kind and guild_id."""
+        import asyncio
+
+        import database
+
+        svc = self._make_service()
+        captured_kind: list = []
+        captured_extra: list[dict] = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None, **extra):
+            captured_kind.append(kind)
+            captured_extra.append(extra)
+            return []
+
+        orig_search = database.search_memories
+        database.search_memories = fake_search
+        try:
+            asyncio.run(
+                svc.recall("user1", "guild1", "test query", kind="taste_episode", guild_scoped=True)
+            )
+        finally:
+            database.search_memories = orig_search
+
+        assert captured_kind == ["taste_episode"]
+        assert captured_extra[0]["guild_id"] == "guild1"
+
+    def test_guild_scoped_is_keyword_only_with_default_false(self) -> None:
+        """guild_scoped must be KEYWORD_ONLY with default False (MEM-02 default)."""
+        import inspect
+
+        from services.memory import MemoryService
+
+        sig = inspect.signature(MemoryService.recall)
+        assert "guild_scoped" in sig.parameters
+        param = sig.parameters["guild_scoped"]
+        assert param.kind == inspect.Parameter.KEYWORD_ONLY
+        assert param.default is False
+
+
 # ---------------------------------------------------------------------------
 # TestDedupDecision (11-04 Task 1)
 # ---------------------------------------------------------------------------
