@@ -101,11 +101,21 @@ memory is just a new `kind` on `user_memories`, per the kind-agnostic MemoryServ
 Phase 18 added the `guild_config` table — the per-guild configuration seam that replaces the
 hardcoded `config.DEXTER_CHANNEL_ID` single-channel assumption. Phase 20 added the `guild_blocklist`
 table (D-01) — the owner kill-switch's persistent blacklist, deliberately its OWN table so
-Phase 21's `guild_config` purge (MEM-04) can run as a clean `DELETE ... WHERE guild_id = $1` with
+Phase 21's guild-data purge (MEM-04) could run as a clean `DELETE ... WHERE guild_id = $1` with
 no "except if blocked" carve-out. `guild_config.is_blocked` is now DEAD/superseded — `guild_blocklist`
 is the sole authoritative blacklist (D-03); the column stays in place unused (no `DROP COLUMN`,
 additive-only DDL precedent). Phase 20 is also the first reader/writer of `guild_config.silenced`
-(via `set_silenced`), which Phase 18 shipped unread.
+(via `set_silenced`), which Phase 18 shipped unread. Phase 21 spent the Phase 20 D-01 dividend:
+`database.purge_guild_data(pool, guild_id=...)` hard-deletes a departed guild's rows from exactly
+four tables (`guild_config`, `guild_queues`, `guild_jams`, guild-stamped `user_memories`) in one
+transaction, called from `bot.py::on_guild_remove` (single hook, best-effort, never crashes guild
+removal). `guild_blocklist` is excluded from that purge by design — it is why Phase 20 gave it its
+own table. Phase 21 also narrows the `user_memories` ANN read path: `recall()`/`search_memories()`
+optionally add a `(guild_id = $N OR guild_id IS NULL)` clause when a call site opts in via
+`guild_scoped=True`, so a third party's memory never travels between servers on ambient/unprompted
+surfaces, while the legacy `guild_id IS NULL` corpus (`daily_batch`'s only writer) stays globally
+recallable. The write path (`remember()`, dedup, cap-eviction) is untouched — still fully
+`user_id`-scoped, deliberately not reopening the Phase 13 CR-01 scar.
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -833,6 +843,7 @@ Cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image
 14. **Every Gemini call that can receive user-influenced content sets explicit `safety_settings`** — Gemini 2.5 defaults them OFF; vision uses a real block (`BLOCK_MEDIUM_AND_ABOVE`), `/ask`/`/imagine` stay permissive-but-explicit (`BLOCK_ONLY_HIGH`) so edgy output doesn't regress (Phase 17 / VIS-03)
 15. **A safety-blocked vision reaction is a SILENT skip — never a visible refusal or the generic rate-limit fallback template (Phase 17 / VIS-02)**
 16. **`/memory forget` must be a real hard-delete (rows + embeddings) — it is the trust escape hatch proactive callbacks (Phase 16) hard-depend on shipping first**
+17. **Guild-scoping on memory recall is an EXPLICIT per-call-site opt-in (`guild_scoped=True`), never inferred from `guild_id` presence** — `/ask` also passes a real `guild_id` and must stay global (MEM-02); only unprompted/ambient recall (`/roast`, ambient roasts, proactive callbacks, the music-command callback, the auto-queue taste blend) opts in (Phase 21)
 
 ---
 
@@ -885,3 +896,10 @@ Cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image
 - **Pitfall-1: `_generate_ambient_roast` has its OWN internal `MEMORY_CALLBACK_CHANCE` gate** — calling it from the proactive surface unmodified triple-gates. The fix is an optional `pre_recalled_memories` param (default `None` = byte-identical ambient path), passed as an if/else split around the internal recall block, NOT an early return (Phase 16)
 - **Vision reuses a DEDICATED `_generate_vision_roast` (str|None), never the ambient always-str generator** — the ambient path collapses safety-block AND transport-failure into one `return fallback_line`, which would leak a visible template for a safety-blocked image (VIS-02). Success→line, transport-except→fallback, empty/blocked→`None` silent-skip. `chat()` already returns `None`-no-raise on empty/blocked (Phase 17)
 - **Vision mime allowlist EXCLUDES gif** (Gemini image-understanding 400s on GIF) and normalizes `content_type` (strip `;charset=`, `None`→reject); the mime/size gate runs BEFORE `attachment.read()`/download; the free structural gate runs BEFORE the DB opt-out lookup (WR-01/02/03 close-out fixes, Phase 17)
+
+**Phases 18–21 (per-guild config, onboarding, owner control plane, memory scoping):**
+- **`search_memories`'s SQL placeholder numbers are computed from `len(params)`, not hardcoded** — two optional clauses now exist (`kind`, `guild_id`), each appended only when its arg is set; a future third optional clause must follow the same discipline or it will silently bind to the wrong `$N` (Phase 21)
+- **`recall()` forwards `guild_id=` to `search_memories` ONLY when `guild_scoped=True`** — passing it unconditionally (even as `None`) would break existing narrow-signature test doubles/fakes across the recall call sites, and would risk emitting a degenerate `guild_id IS NULL`-only filter instead of omitting the clause entirely (Phase 21, following the Phase 14 `kind`-clause precedent)
+- **`remember()`'s k=1 dedup search stays fully `user_id`-scoped — untouched by the Phase 21 guild-scoping work** (CR-13-01 scar); guild-scoping was deliberately added to the READ path (`recall`/`search_memories`) only, never to dedup or `MEMORY_MAX_PER_USER` cap-eviction, which stay global per-user budgets (Phase 21, D-02)
+- **`purge_guild_data`'s four-table DELETE list is four hardcoded SQL literals, never a loop or a schema-catalog introspection** — a dynamic form would eventually and silently sweep up `guild_blocklist` too; the reviewability of the literal list IS the control (Phase 21, T-21-03)
+- **`purge_guild_data` raises on failure by design (no internal try/except)** — the best-effort swallow lives at the `bot.py::on_guild_remove` call site, mirroring `on_guild_join`'s WR-04 discipline, keeping the helper itself honestly testable (Phase 21)
