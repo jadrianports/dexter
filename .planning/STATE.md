@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 20-05-PLAN.md
-last_updated: "2026-07-13T15:56:20.229Z"
+stopped_at: Completed 20-06-PLAN.md
+last_updated: "2026-07-13T16:09:32.199Z"
 last_activity: 2026-07-13 -- Phase 20 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 18
-  completed_plans: 16
+  completed_plans: 17
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 20 (owner-control-plane-rate-observability) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-07-13 -- Phase 20 execution started
 
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 20 P03 | 15min | 3 tasks | 6 files |
 | Phase 20 P04 | 20min | 2 tasks | 2 files |
 | Phase 20 P05 | 21min | 3 tasks | 3 files |
+| Phase 20 P06 | 18min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 20-04]: GuildConfigService.load_all() restructured (try/except/else) so the blocklist load and config-cache load are fully independent -- neither failure blanks the other
 - [Phase 20]: [Phase 20-05]: Pre-send re-check re-invokes the same silence-aware is_ambient_channel predicate immediately before message.reply in _maybe_fire_proactive_callback and _maybe_fire_vision_roast (D-14 / SC-2) -- a second read of the same cache, not a new mechanism
 - [Phase 20]: [Phase 20-05]: guild_id threaded through the last 2 events.py Gemini call sites (ambient roast, vision roast) completes RATE-01 for this file
+- [Phase 20-06]: interaction_check computes is_owner/has_guild/blocked/silenced and dispatches on decide_interaction_allowed; refusal is sent from INSIDE interaction_check before return False (D-12), never via app_commands.CheckFailure -- returning False alone never reaches on_app_command_error (verified discord.py 2.7.1 mechanic)
+- [Phase 20-06]: on_guild_join block-check-first runs after the boot-race guard and before insert_guild_config_if_absent -- a blocklisted re-invite is left immediately via guild.leave(), no config insert, no welcome, no owner joined notice
 
 ### Pending Todos
 
@@ -134,8 +137,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T15:56:20.221Z
-Stopped at: Completed 20-05-PLAN.md
+Last session: 2026-07-13T16:09:32.190Z
+Stopped at: Completed 20-06-PLAN.md
 Resume file: 
 
 None
