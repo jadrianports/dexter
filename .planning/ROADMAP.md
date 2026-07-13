@@ -223,7 +223,18 @@ Full phase details, success criteria, and decisions archived in
   2. Running `/invite` returns a working invite link that successfully adds Dexter to a server the invoker manages, with `bot` + `applications.commands` scopes.
   3. The in-bot `/invite` link and the publicly-promoted link (Developer Portal / landing page) are the same URL — a single source of truth, not two hand-maintained copies that can drift.
 
-**Plans**: TBD
+> **Bitfield (D-09, user-confirmed):** TEN permissions, value `309240908864` — the 8-permission `3263552` from D-01's original table is SUPERSEDED (research found `/autolyrics`' thread call sites at `cogs/music.py:938,950,958,965`).
+
+**Plans**: 3 plans (2 waves)
+
+**Wave 1**
+
+- [ ] 22-01-PLAN.md — config constants (`DISCORD_CLIENT_ID`/`INVITE_PERMISSIONS_VALUE`/`INVITE_SCOPES`) + pure `logic/invite.py::build_invite_url()` + D-02 negative-assertion bitfield lock (INVITE-01)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 22-02-PLAN.md — `cogs/invite.py` `/invite` (public embed + link button, DM-allowed, no cooldown) + registration at BOTH `bot.py` cog sites + `/help` entry (INVITE-02 / SC-2)
+- [ ] 22-03-PLAN.md — git-tracked-doc drift guard (excl. `.planning/`, D-10) + mandatory positive control + single-URL-constructor source lock (INVITE-02 / SC-3)
 
 ### Phase 23: Portfolio Surface & CI/CD
 
@@ -269,5 +280,5 @@ Full phase details, success criteria, and decisions archived in
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
-| 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
+| 22. Invite Plumbing | v1.4 | 0/3 | Planned | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
