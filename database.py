@@ -735,6 +735,68 @@ async def delete_blocklist(pool: asyncpg.Pool, *, guild_id: str) -> None:
         await conn.execute("DELETE FROM guild_blocklist WHERE guild_id = $1", guild_id)
 
 
+async def purge_guild_data(pool: asyncpg.Pool, *, guild_id: str) -> dict[str, int]:
+    """Atomically purge one departed guild's data from exactly FOUR tables (MEM-04).
+
+    Deletes ``guild_id = $1`` rows from: ``guild_config``, ``guild_queues``,
+    ``guild_jams``, ``user_memories``. All four DELETEs run inside ONE
+    transaction — either all commit or none do (T-21-06: a partial purge would
+    leave stale context that resurfaces on re-invite, the exact MEM-04 failure
+    mode this function exists to prevent).
+
+    The owner's abuse-mitigation blocklist table (see ``insert_blocklist`` /
+    ``delete_blocklist`` / ``load_blocklist`` above) is NEVER touched by this
+    function, by design (Phase 20 D-01 / OWNER-04). Phase 20 deliberately gave
+    that blocklist its own table so this purge could be a clean
+    ``DELETE ... WHERE guild_id = $1`` with no "except if blocked" carve-out —
+    a kicked abuser's block must outlive the purge their own removal triggers,
+    so a re-invite can still be refused. The table list below is four
+    hardcoded SQL literals, never a loop or a schema-catalog-driven
+    introspection of "tables with a guild_id column" (T-21-03) — a dynamic
+    form would eventually and silently sweep up the blocklist table too.
+    (Deliberately not naming that table's literal identifier in this
+    docstring; a regression test locks that this source contains zero
+    occurrences of it.)
+
+    ``user_memories`` rows with ``guild_id IS NULL`` are NOT deleted: SQL's
+    ``=`` operator never matches NULL, so the D-01 grandfathered global corpus
+    survives automatically with no extra ``AND guild_id IS NOT NULL`` clause
+    (T-21-07).
+
+    This function does NOT swallow exceptions — it raises on failure so the
+    caller decides how to handle it. The best-effort try/except wrapping lives
+    at the ``bot.py::on_guild_remove`` call site (plan 21-04), mirroring
+    ``on_guild_join``'s WR-04 discipline. Keeping this helper honest (raise,
+    don't swallow) keeps it independently testable.
+
+    There are no foreign keys anywhere in ``SCHEMA_SQL``, so the order of the
+    four DELETEs is functionally irrelevant — the transaction buys atomicity,
+    not ordering correctness.
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT) that has departed (left/kicked/left
+                  via owner force-leave). Never user input.
+
+    Returns:
+        Dict mapping each of the four table names to the integer count of rows
+        deleted from that table (parsed from asyncpg's ``"DELETE <n>"`` command
+        tag).
+    """
+    counts: dict[str, int] = {}
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            tag = await conn.execute("DELETE FROM guild_config WHERE guild_id = $1", guild_id)
+            counts["guild_config"] = int(tag.split()[-1])
+            tag = await conn.execute("DELETE FROM guild_queues WHERE guild_id = $1", guild_id)
+            counts["guild_queues"] = int(tag.split()[-1])
+            tag = await conn.execute("DELETE FROM guild_jams WHERE guild_id = $1", guild_id)
+            counts["guild_jams"] = int(tag.split()[-1])
+            tag = await conn.execute("DELETE FROM user_memories WHERE guild_id = $1", guild_id)
+            counts["user_memories"] = int(tag.split()[-1])
+    return counts
+
+
 async def increment_daily_stat(pool: asyncpg.Pool, field: str) -> None:
     """Increment a field in today's daily stats row."""
     today = date.today().isoformat()
