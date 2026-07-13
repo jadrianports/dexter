@@ -1,4 +1,5 @@
-"""OpsCog — /leaderboard (SOCIAL-02) and /stats (OPS-01/OPS-03) commands.
+"""OpsCog — /leaderboard (SOCIAL-02), /stats (OPS-01/OPS-03), and /guilds
+(OWNER-01…06 / RATE-01, Phase 20) commands.
 
 Decisions implemented:
     D-11  One embed, three sections for /leaderboard
@@ -14,12 +15,33 @@ Decisions implemented:
     D-27  Rich metrics only in /stats; never on public /health
     D-31  gather_bot_metrics is the shared source of truth for /stats + /health
     D-33  Non-owner /stats: ephemeral refusal before any data is gathered
+    D-04  /guilds is a single app_commands.Group (list/silence/unsilence/leave/block/unblock)
+    D-05  /guilds lives in cogs/ops.py (the owner is_owner()-gated surface, distinct
+          from cogs/admin.py's manage_guild-gated /setup)
+    D-06  default_permissions on the group is a UI hint ONLY; the real gate is the
+          inline await self.bot.is_owner(interaction.user) as each subcommand's FIRST statement
+    D-07  /guilds leave|block|silence|unsilence|unblock execute immediately with an
+          in-persona ephemeral echo — no danger-confirm (both leave and block are reversible)
+    D-10  /guilds list: one row per guild, sorted by session AI usage descending
+          (the budget hog is line one), paginated (no silent truncation), ephemeral
+    D-11  /guilds block = the OWNER-03 force-leave teardown THEN a guild_blocklist insert;
+          /guilds leave is the teardown standalone (no blacklist)
 
 Security:
     T-08-09  Owner gate — inline await bot.is_owner() before any data access
     T-08-10  Guild-scoped leaderboard — str(interaction.guild_id) passed as $N param
     T-08-08  No internal state in public /health (D-27) — gather_bot_metrics is
              only called from /stats (ephemeral) and the health handler (generic reasons only)
+    T-20-01  Elevation of privilege — every /guilds subcommand opens with the inline
+             is_owner() check; default_permissions never the gate
+    T-20-05  Tampering (malformed input) — _parse_guild_id wraps int() in try/except,
+             never raises into the interaction
+    T-20-07  Injection — /guilds list rows render guild names as plain text, ids
+             backtick-wrapped (mirrors bot.py::_build_guild_notice_embed); echoes use
+             AllowedMentions.none()
+    T-20-16  Tampering (ghost state on re-invite) — /guilds leave|block resolve the
+             target via bot.get_guild(int(guild_id)), never interaction.guild (Pitfall 3),
+             and run the exact /stop teardown template before leaving/blocking
 """
 
 from __future__ import annotations
@@ -129,12 +151,97 @@ async def gather_bot_metrics(bot) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# /guilds list pagination (D-10) — char-budget chunking, clone of
+# cogs/memory.py::_chunk_facts_into_pages / MemoryPageView.
+# ---------------------------------------------------------------------------
+
+
+def _chunk_guild_rows_into_pages(rows: list[str], char_budget: int) -> list[str]:
+    """Group pre-formatted guild-row strings into page strings bounded by char_budget.
+
+    Mirrors cogs/memory.py::_chunk_facts_into_pages — rows arrive already
+    fully rendered (unlike facts, no "- " prefix is added here since each row
+    already carries its own separators), never truncated (D-10 / Phase 19 D-15).
+    """
+    if not rows:
+        return [""]
+    pages: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for row in rows:
+        # +1 for the newline separator that will be added between rows
+        if current and current_len + len(row) + 1 > char_budget:
+            pages.append("\n".join(current))
+            current, current_len = [], 0
+        current.append(row)
+        current_len += len(row) + 1
+    if current:
+        pages.append("\n".join(current))
+    return pages
+
+
+class GuildListPageView(discord.ui.View):
+    """Paginated /guilds list view with Previous/Next buttons.
+
+    Clone of cogs/memory.py::MemoryPageView (D-10) — pre-chunked pages
+    (list[str]), message reference stored so on_timeout can visually disable
+    buttons. All edits use allowed_mentions=discord.AllowedMentions.none() as
+    defense-in-depth against mention injection from guild names (T-20-07).
+    """
+
+    def __init__(self, pages: list[str], title: str, timeout: float = 600.0) -> None:
+        super().__init__(timeout=timeout)
+        self.pages = pages
+        self.title = title
+        self.page = 0
+        self.message: discord.Message | None = None  # set after send
+
+    def _build_embed(self) -> discord.Embed:
+        total = len(self.pages)
+        embed = discord.Embed(
+            title=self.title,
+            description=self.pages[self.page],
+            color=0x3498DB,  # blue — distinct from memory's purple / lyrics' blurple
+        )
+        embed.set_footer(text=f"Page {self.page + 1}/{total}")
+        return embed
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.page = max(0, self.page - 1)
+        await interaction.response.edit_message(
+            embed=self._build_embed(),
+            view=self,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.page = min(len(self.pages) - 1, self.page + 1)
+        await interaction.response.edit_message(
+            embed=self._build_embed(),
+            view=self,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # OpsCog
 # ---------------------------------------------------------------------------
 
 
 class OpsCog(commands.Cog):
-    """Ops surface: /leaderboard (public) and /stats (owner-only, ephemeral)."""
+    """Ops surface: /leaderboard (public), /stats (owner-only, ephemeral), and
+    /guilds (owner-only kill-switch group, Phase 20)."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -142,6 +249,17 @@ class OpsCog(commands.Cog):
     @property
     def pool(self):
         return self.bot.pool
+
+    def _parse_guild_id(self, s: str) -> int | None:
+        """Parse an owner-supplied guild_id string, never raising (V5 / T-20-05).
+
+        A malformed or non-numeric value returns None rather than propagating
+        a ValueError into the interaction handler.
+        """
+        try:
+            return int(s.strip())
+        except (TypeError, ValueError, AttributeError):
+            return None
 
     # ---- /leaderboard -------------------------------------------------------
 
@@ -276,6 +394,67 @@ class OpsCog(commands.Cog):
         perf_summary = self.bot.perf_metrics.summary() if getattr(self.bot, "perf_metrics", None) is not None else None
         embed = embeds.stats_embed(daily, rpm, config.GEMINI_RPM_LIMIT, images, metrics, perf_metrics=perf_summary)
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # ---- /guilds group (Phase 20, OWNER-01…06 / RATE-01) ---------------------
+
+    guilds = app_commands.Group(
+        name="guilds",
+        description="owner-only: list, silence, or remove guilds",
+        default_permissions=discord.Permissions(administrator=True),  # UI hint ONLY (D-06)
+    )
+
+    @guilds.command(
+        name="list",
+        description="(Owner only) List every guild Dexter is in, sorted by session AI usage",
+    )
+    async def guilds_list(self, interaction: discord.Interaction) -> None:
+        """/guilds list — the fleet view (OWNER-01/RATE-01/D-10).
+
+        Owner gate is FIRST (OWNER-06). One row per guild, sorted by this
+        session's Gemini usage descending so the budget hog is line one.
+        Guild names render as plain text, ids backtick-wrapped (T-20-07,
+        mirrors bot.py::_build_guild_notice_embed). Paginated — never
+        silently truncated (D-10 / Phase 19 D-15).
+        """
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("not authorized.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        gemini_service = getattr(self.bot, "gemini_service", None)
+
+        def _usage(g: discord.Guild) -> int:
+            return gemini_service.guild_usage(g.id) if gemini_service is not None else 0
+
+        guild_config = self.bot.guild_config
+        ordered = sorted(self.bot.guilds, key=_usage, reverse=True)
+
+        rows: list[str] = []
+        for g in ordered:
+            config_row = guild_config.get(g.id)
+            flags = ["configured"] if config_row and config_row.get("configured", False) else ["unconfigured"]
+            if guild_config.is_silenced(g.id):
+                flags.append("silenced")
+            if guild_config.is_blocked(g.id):
+                flags.append("blocked")
+            rows.append(
+                f"{g.name} (`{g.id}`) — {g.member_count} members — {_usage(g)} calls this session — {', '.join(flags)}"
+            )
+
+        if not rows:
+            await interaction.followup.send("i'm not in any guilds right now.", ephemeral=True)
+            return
+
+        pages = _chunk_guild_rows_into_pages(rows, config.GUILDS_LIST_PAGE_SIZE)
+        view = GuildListPageView(pages, title="guild fleet (sorted by session ai usage)")
+        await interaction.followup.send(
+            embed=view._build_embed(),
+            view=view,
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        view.message = await interaction.original_response()
 
 
 async def setup(bot: commands.Bot) -> None:

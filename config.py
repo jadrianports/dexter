@@ -263,6 +263,12 @@ VISION_SAFETY_THRESHOLD = "BLOCK_MEDIUM_AND_ABOVE"  # D-01: real block — visio
 TEXT_SAFETY_THRESHOLD = "BLOCK_ONLY_HIGH"
 
 
+# --- Phase 20: Owner Control Plane & Rate Observability (OWNER-01/RATE-01) ---
+# char-budget per /guilds list page — mirrors the MEMORY_VIEW_PAGE_SIZE idiom
+# (D-10: no silent truncation, paginate instead)
+GUILDS_LIST_PAGE_SIZE = 1800
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
