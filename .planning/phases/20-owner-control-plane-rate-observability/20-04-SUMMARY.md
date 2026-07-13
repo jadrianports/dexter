@@ -99,3 +99,12 @@ None - no external service configuration required.
 ---
 *Phase: 20-owner-control-plane-rate-observability*
 *Completed: 2026-07-13*
+
+## Self-Check: PASSED
+
+- FOUND: services/guild_config.py
+- FOUND: tests/test_guild_config_service.py
+- FOUND: .planning/phases/20-owner-control-plane-rate-observability/20-04-SUMMARY.md
+- FOUND: f0c2d4f (Task 1 commit)
+- FOUND: b31a40a (Task 2 commit)
+- FOUND: 8cd2218 (SUMMARY commit)
