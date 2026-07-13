@@ -1,8 +1,8 @@
 ---
 phase: 21
 slug: memory-scoping-guild-data-lifecycle
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-14
 ---
@@ -110,6 +110,6 @@ fixture in `conftest.py` cover every test type this phase needs.*
 - [x] Wave 0 covers all MISSING references
 - [x] No watch-mode flags
 - [x] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-14 (planner) — 4 plans / 3 waves; every Per-Task Verification Map row maps to a task acceptance criterion.

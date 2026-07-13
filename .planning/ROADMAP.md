@@ -195,7 +195,22 @@ Full phase details, success criteria, and decisions archived in
   3. Either: `/roast @user`, ambient roasts, and proactive callbacks recall only guild-scoped memories — with the legacy `guild_id = NULL` corpus (e.g. `daily_batch`) handled by an explicit, tested backward-compat rule, and with a regression test locking that guild-scoped search cannot corrupt cross-kind dedup or `expires_at` semantics (the Phase 13 CR-01 scar) — or: the documented zero-code fallback ("keep memory global + disclose") ships instead.
   4. Whichever path is taken, the decision and its rationale are recorded in PROJECT.md Key Decisions before the phase closes, so PORT-04 can disclose it honestly.
 
-**Plans**: TBD
+> **Descope gate (D-04): NOT triggered.** Plan-time research evaluated all three REQUIREMENTS.md tripwires against the literal code — none fire. The full hybrid scoping is planned; the "keep memory global + disclose" fallback is NOT being built.
+
+**Plans**: 4 plans (3 waves)
+
+**Wave 1**
+
+- [ ] 21-01-PLAN.md — search_memories optional guild clause (D-01 grandfather rule) + recall(guild_scoped=) keyword-only opt-in + MEM-05 dedup call-shape lock (MEM-02/03/05)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 21-02-PLAN.md — purge_guild_data 4-table transaction (never guild_blocklist) + live-DB integration tests (MEM-04/03)
+- [ ] 21-03-PLAN.md — 5 recall call-site guild_scoped opt-ins + /ask stays-global regression lock (MEM-01/02)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 21-04-PLAN.md — bot.py on_guild_remove purge wiring (single hook, WR-04 wrapped) + PROJECT.md Key Decisions record (SC-4 / PORT-04) (MEM-04/01/03/05)
 
 ### Phase 22: Invite Plumbing
 
