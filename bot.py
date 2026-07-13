@@ -760,15 +760,35 @@ async def on_guild_join(guild: discord.Guild) -> None:
 
 @bot.event
 async def on_guild_remove(guild: discord.Guild) -> None:
-    """Guild removal: notify owner + evict the cache entry only — NO DB write (D-12).
+    """Guild removal: evict the cache entry, purge the guild's data, notify owner (MEM-04).
 
-    The MEM-04 guild-data purge is Phase 21's job. Phase 21 must also preserve
-    a blocked guild's row (or move the blacklist to its own table) so a
-    kicked-then-re-invited guild can be refused — this plan does not solve
-    that constraint, only carries it forward.
+    Evicts the config cache first, then best-effort purges this guild's rows
+    from the database helper's four tables (`guild_config`, `guild_queues`,
+    `guild_jams`, guild-stamped `user_memories`), then sends the owner
+    notice. The purge call is wrapped in try/except mirroring
+    `on_guild_join`'s WR-04 discipline: the helper raises on failure by
+    design, and a DB outage during a gateway event must never crash guild
+    removal, so a failure here only logs a warning and is swallowed.
+
+    `guild_blocklist` is deliberately NOT purged (Phase 20 D-01 / OWNER-04) —
+    it lives in its own table specifically so a kicked abuser's block
+    survives their data being wiped, and a re-invite is still refused.
+
+    This is the SINGLE purge site. `/guilds leave` and `/guilds block`
+    (`cogs/ops.py::_force_leave_teardown`) both call `guild.leave()`, which
+    fires this same gateway event — `cogs/ops.py` must never grow its own
+    purge call (D-03); a second site risks a double-delete or a missed path.
+    In the `/guilds block` flow the blocklist INSERT happens after
+    `guild.leave()` and can run concurrently with this purge with no race:
+    the purge's four tables and `guild_blocklist` are completely disjoint.
     """
     if hasattr(bot, "guild_config"):
         bot.guild_config._cache.pop(str(guild.id), None)
+    if hasattr(bot, "pool"):
+        try:
+            await database.purge_guild_data(bot.pool, guild_id=str(guild.id))
+        except Exception as exc:
+            log.warning("on_guild_remove: guild-data purge failed for guild %s: %s", guild.id, exc)
     if hasattr(bot, "log_to_discord"):
         await bot.log_to_discord(_build_guild_notice_embed(guild, joined=False, welcome_posted=None))
 
