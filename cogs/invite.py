@@ -1,0 +1,61 @@
+"""Invite slash command (Phase 22 / INVITE-02 / D-05, D-06).
+
+The URL comes from the single pure builder in `logic/invite.py` and is never
+constructed here (D-03) — this cog only calls that builder and hands its
+output to a link-style button.
+"""
+
+from __future__ import annotations
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import config
+from logic.invite import build_invite_url
+
+
+class InviteCog(commands.Cog):
+    """Provides the /invite command."""
+
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+
+    # Deliberately no rate-limiting decorator here — unlike /help's 5s
+    # cooldown, /invite does zero I/O (no DB, no Gemini, no network) and
+    # returns a static string built in microseconds. Nothing to rate-limit
+    # (Claude's Discretion, 22-CONTEXT.md; see T-22-06).
+    #
+    # Deliberately no DM-restriction decorator here — DM support is a
+    # requirement (D-06). It needs zero new plumbing: this command already
+    # flows through bot.py::DexterCommandTree.interaction_check, which
+    # computes has_guild, and logic/guild_config.py::decide_interaction_allowed
+    # models has_guild=False as a first-class allowed case.
+    @app_commands.command(name="invite", description="Get Dexter's invite link")
+    async def invite_command(self, interaction: discord.Interaction) -> None:
+        # The committed constant first (the CI drift-guard has no running
+        # bot); bot.application_id only as the fork fallback. application_id
+        # is always populated by the time a slash command can fire.
+        client_id = config.DISCORD_CLIENT_ID or self.bot.application_id
+
+        url = build_invite_url(
+            client_id=client_id,
+            permissions_value=config.INVITE_PERMISSIONS_VALUE,
+            scopes=config.INVITE_SCOPES,
+        )
+
+        embed = discord.Embed(
+            description="here. go unleash me on your own server. i'm sure it'll be fine.",
+            color=0x2C76DD,
+        )
+
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(style=discord.ButtonStyle.link, url=url, label="Add to Discord"))
+
+        # Public reply, not a private one (D-05: spreading the bot is the
+        # point), and no defer() (the builder is synchronous and instant).
+        await interaction.response.send_message(embed=embed, view=view)
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(InviteCog(bot))
