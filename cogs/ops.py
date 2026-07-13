@@ -456,6 +456,67 @@ class OpsCog(commands.Cog):
         )
         view.message = await interaction.original_response()
 
+    @guilds.command(name="silence", description="(Owner only) Silence a guild — stay joined, go quiet")
+    @app_commands.describe(guild_id="the guild id to silence")
+    async def guilds_silence(self, interaction: discord.Interaction, guild_id: str) -> None:
+        """/guilds silence — flips guild_config.silenced true (OWNER-02).
+
+        Owner gate FIRST. Immediate execute, in-persona ephemeral echo, no
+        confirm (D-07). Takes effect on the very next event via the
+        push-invalidated config cache (SC-2).
+        """
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("not authorized.", ephemeral=True)
+            return
+
+        gid = self._parse_guild_id(guild_id)
+        if gid is None:
+            await interaction.response.send_message("that's not a valid guild id.", ephemeral=True)
+            return
+
+        ok = await self.bot.guild_config.silence_guild(guild_id=str(gid))
+        if not ok:
+            await interaction.response.send_message(
+                "i'm not set up in that guild / no config to silence.", ephemeral=True
+            )
+            return
+
+        target = self.bot.get_guild(gid)
+        name = target.name if target is not None else str(gid)
+        await interaction.response.send_message(
+            f"silenced. i'll keep my mouth shut in {name} (`{gid}`).",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @guilds.command(name="unsilence", description="(Owner only) Unsilence a guild")
+    @app_commands.describe(guild_id="the guild id to unsilence")
+    async def guilds_unsilence(self, interaction: discord.Interaction, guild_id: str) -> None:
+        """/guilds unsilence — flips guild_config.silenced false (OWNER-02)."""
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("not authorized.", ephemeral=True)
+            return
+
+        gid = self._parse_guild_id(guild_id)
+        if gid is None:
+            await interaction.response.send_message("that's not a valid guild id.", ephemeral=True)
+            return
+
+        ok = await self.bot.guild_config.unsilence_guild(guild_id=str(gid))
+        if not ok:
+            await interaction.response.send_message(
+                "i'm not set up in that guild / no config to unsilence.", ephemeral=True
+            )
+            return
+
+        target = self.bot.get_guild(gid)
+        name = target.name if target is not None else str(gid)
+        await interaction.response.send_message(
+            f"unsilenced. back to my usual self in {name} (`{gid}`).",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(OpsCog(bot))
