@@ -786,7 +786,8 @@ async def on_guild_remove(guild: discord.Guild) -> None:
         bot.guild_config._cache.pop(str(guild.id), None)
     if hasattr(bot, "pool"):
         try:
-            await database.purge_guild_data(bot.pool, guild_id=str(guild.id))
+            counts = await database.purge_guild_data(bot.pool, guild_id=str(guild.id))
+            log.info("on_guild_remove: purged guild %s data: %s", guild.id, counts)
         except Exception as exc:
             log.warning("on_guild_remove: guild-data purge failed for guild %s: %s", guild.id, exc)
     if hasattr(bot, "log_to_discord"):
