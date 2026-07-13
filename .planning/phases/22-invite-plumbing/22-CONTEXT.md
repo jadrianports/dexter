@@ -49,6 +49,26 @@ explicitly deferred (see Deferred Ideas).
   justified from the code. Grep confirmed **zero** uses of `manage_messages` or external emojis
   anywhere in the repo.
 
+- **D-09: AMENDMENT to D-01 (post-research, user-confirmed 2026-07-14) — the set is TEN
+  permissions, not eight. Locked bitfield value: `309240908864`.** Research
+  (`22-RESEARCH.md` Pitfall 3) found the discussion-time scan missed a real, code-proven call
+  site: `cogs/music.py:938` `parent.create_thread(...)` (the `/autolyrics` feature) requires
+  `create_public_threads`, and the three `thread.send(...)` calls at `cogs/music.py:950,958,965`
+  require `send_messages_in_threads`. Both are added to D-01's table:
+
+  | Permission | Why — proven by code |
+  |---|---|
+  | `create_public_threads` | `cogs/music.py:938` — `/autolyrics` thread creation |
+  | `send_messages_in_threads` | `cogs/music.py:950,958,965` — posting lyrics into that thread |
+
+  This is **not** the "forward-looking buffer" D-01 rejected — it is proven by a shipped,
+  documented command, exactly like the other 8, and neither flag implies moderation or admin
+  capability. Without them `/autolyrics` silently no-ops on every freshly-invited server (the
+  failure is swallowed by `_post_auto_lyrics`' blanket `try/except`), which is precisely the
+  "worst possible first impression" failure mode D-01's own rationale rejected bare-minimum to
+  avoid. The 8-permission value (`3263552`) is superseded — **every reference to the bitfield in
+  code, tests, and docs uses `309240908864`.**
+
 - **D-02: The bitfield is test-locked with a negative assertion.** A pytest asserts the exact
   bitfield value AND that `administrator`, `manage_guild`, `manage_roles`, `manage_channels`,
   `ban_members`, `kick_members` are all `False`. INVITE-01's "no Administrator" claim becomes a
@@ -63,8 +83,8 @@ explicitly deferred (see Deferred Ideas).
   for text docs, regexes any `discord.com/…oauth2/authorize…` URL it finds, and asserts each one
   equals `build_invite_url()`'s output.
 
-  **This test passes vacuously today** (no doc contains a link yet) and **automatically starts
-  enforcing the moment Phase 23 pastes a link into the README or `/site`**. Drift becomes
+  **This test passes vacuously today** (no doc contains a link yet — see D-10) and **automatically
+  starts enforcing the moment Phase 23 pastes a link into the README or `/site`**. Drift becomes
   structurally impossible instead of merely discouraged. Rejected: a generator script with no
   guard (relies on discipline), and "docs just say run `/invite`" (fails SC-2/PORT-01 — a
   recruiter needs a clickable button, not an instruction to already have the bot).
@@ -76,6 +96,25 @@ explicitly deferred (see Deferred Ideas).
   new docs Phase 23 creates — the guarantee doesn't decay as the doc surface grows. Rejected:
   resolving a redirect in-test (needs network in CI, couples the gate to an external service —
   more moving parts than the whole feature).
+
+- **D-10: The drift-guard scans git-tracked text docs but EXCLUDES the entire `.planning/` tree**
+  (a directory-prefix denylist, not a per-file allowlist), further filtered to a text-extension
+  allowlist (`.md`, `.html`, `.txt`). Research (`22-RESEARCH.md` Pitfall 2) found `.planning/`
+  holds legitimate non-canonical example URLs — notably a `<APP_ID>` **placeholder** in
+  `.planning/research/STACK.md` (plus milestone-archive copies) that can never equal
+  `build_invite_url()`'s output. Scanning it would be a permanent, unfixable false-positive
+  failure. Excluding `.planning/` still honors D-07's "auto-covers whatever new docs Phase 23
+  creates" guarantee, since Phase 23's README/`/site` live outside that tree — and it matches
+  SC-3's own wording ("the publicly-promoted link — Developer Portal / landing page"), which
+  `.planning/` is not.
+
+  **Related, already actioned:** research also found CONTEXT.md's "passes vacuously today" premise
+  was FALSE — `dexter-architecture.md:824` carried a stale hand-built URL (and, adjacent to it, a
+  live bot token). The token has been **rotated**, and `dexter-architecture.md` is now **untracked
+  + gitignored** (commits `2a25f89`, `dfcb133`). `git grep oauth2/authorize` over tracked
+  non-`.planning` files now returns nothing, so the vacuous-pass premise holds again — genuinely,
+  and verifiably. A **positive-control test** (the scanner provably finds a URL when one exists,
+  via a `tmp_path` fixture) is REQUIRED so the vacuous pass can never be a false green.
 
 ### Client ID sourcing
 
