@@ -99,7 +99,13 @@ Phase 11 enabled the `vector` extension + `user_memories`; Phase 12 added `guild
 Phase 16 added `user_profiles.proactive_opt_out`. (v1.3 added no new tables — the `taste_episode`
 memory is just a new `kind` on `user_memories`, per the kind-agnostic MemoryService design.)
 Phase 18 added the `guild_config` table — the per-guild configuration seam that replaces the
-hardcoded `config.DEXTER_CHANNEL_ID` single-channel assumption.
+hardcoded `config.DEXTER_CHANNEL_ID` single-channel assumption. Phase 20 added the `guild_blocklist`
+table (D-01) — the owner kill-switch's persistent blacklist, deliberately its OWN table so
+Phase 21's `guild_config` purge (MEM-04) can run as a clean `DELETE ... WHERE guild_id = $1` with
+no "except if blocked" carve-out. `guild_config.is_blocked` is now DEAD/superseded — `guild_blocklist`
+is the sole authoritative blacklist (D-03); the column stays in place unused (no `DROP COLUMN`,
+additive-only DDL precedent). Phase 20 is also the first reader/writer of `guild_config.silenced`
+(via `set_silenced`), which Phase 18 shipped unread.
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -226,17 +232,30 @@ ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS proactive_opt_out BOOLEAN DEF
 
 -- Phase 18: per-guild configuration seam (CONFIG-01). One row per guild (guild_id alone
 -- is the PK — unlike guild_jams' composite key, this is a single settings row, not a
--- named collection). silenced/is_blocked ship now with false defaults but have NO reader
--- until Phase 20 (D-11). Seeded idempotently for the home guild via
--- seed_guild_config_if_absent (ON CONFLICT DO NOTHING, never DO UPDATE — D-09).
+-- named collection). silenced/is_blocked shipped with false defaults and NO reader until
+-- Phase 20. Seeded idempotently for the home guild via seed_guild_config_if_absent
+-- (ON CONFLICT DO NOTHING, never DO UPDATE — D-09). Phase 20 is the first reader/writer
+-- of `silenced` (via set_silenced, D-11/D-14); `is_blocked` is now DEAD/superseded —
+-- guild_blocklist (below) is the authoritative blacklist (D-03), left in place unused
+-- (no DROP COLUMN — additive-only DDL precedent).
 CREATE TABLE IF NOT EXISTS guild_config (
     guild_id           TEXT PRIMARY KEY,
     ambient_channel_id TEXT,
     configured         BOOLEAN NOT NULL DEFAULT false,
-    silenced           BOOLEAN NOT NULL DEFAULT false,   -- Phase 20 reader only (D-11)
-    is_blocked         BOOLEAN NOT NULL DEFAULT false,   -- Phase 20 reader only (D-11)
+    silenced           BOOLEAN NOT NULL DEFAULT false,   -- Phase 20 reader/writer (D-11/D-14)
+    is_blocked         BOOLEAN NOT NULL DEFAULT false,   -- DEAD — superseded by guild_blocklist (D-03)
     joined_at          TIMESTAMPTZ DEFAULT now(),
     updated_at         TIMESTAMPTZ DEFAULT now()
+);
+
+-- Phase 20 / D-01: the owner kill-switch's persistent blacklist gets its OWN table,
+-- deliberately separate from guild_config, so Phase 21's guild_config purge (MEM-04) can
+-- run as a clean DELETE ... WHERE guild_id = $1 with no "except if blocked" carve-out — a
+-- kicked abuser's block survives the purge and a re-invite is refused (OWNER-04).
+CREATE TABLE IF NOT EXISTS guild_blocklist (
+    guild_id   TEXT PRIMARY KEY,
+    reason     TEXT,
+    blocked_at TIMESTAMPTZ DEFAULT now()
 );
 ```
 

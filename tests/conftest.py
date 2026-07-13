@@ -68,6 +68,6 @@ async def pool():
             " bot_daily_stats, user_profiles,"
             " user_favorites, user_playlists, user_playlist_tracks,"
             " resolution_cache, guild_jams, guild_config,"
-            " user_memories CASCADE"
+            " guild_blocklist, user_memories CASCADE"
         )
     await p.close()

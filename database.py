@@ -217,6 +217,18 @@ CREATE TABLE IF NOT EXISTS guild_config (
 -- channel's first-configure write path, NOT in the column default (D-20/D-12).
 ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS ambient_roasts_enabled BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS vision_roasts_enabled BOOLEAN NOT NULL DEFAULT true;
+
+-- Phase 20 / D-01: the owner blacklist gets its OWN table, deliberately
+-- separate from guild_config. Phase 21's MEM-04 purge deletes guild_config
+-- (and guild_queues/guild_jams/guild-scoped user_memories) freely and must
+-- NEVER touch this table — a kicked abuser's block survives the purge, so a
+-- re-invite is refused. guild_config.is_blocked (above) is left dead/unread
+-- (D-03); this table is the sole source of truth for "is this guild blocked".
+CREATE TABLE IF NOT EXISTS guild_blocklist (
+    guild_id   TEXT PRIMARY KEY,
+    reason     TEXT,
+    blocked_at TIMESTAMPTZ DEFAULT now()
+);
 """
 
 
@@ -642,6 +654,85 @@ async def set_vision_roasts_enabled(pool: asyncpg.Pool, *, guild_id: str, enable
             guild_id,
             enabled,
         )
+
+
+async def set_silenced(pool: asyncpg.Pool, *, guild_id: str, silenced: bool) -> asyncpg.Record | None:
+    """Toggle the owner-controlled silence flag for a guild (`/guilds silence|unsilence`, OWNER-02).
+
+    Mirrors set_ambient_roasts_enabled / set_vision_roasts_enabled verbatim
+    (a plain UPDATE ... RETURNING). Silence is enforced at both OWNER-05 choke
+    points by reading this column back out of GuildConfigService's existing
+    config cache — no new mechanism, no hot-path DB read.
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT).
+        silenced: True to silence the guild, False to unsilence it.
+
+    Returns:
+        The updated Record, or None if no row exists for guild_id (the
+        "row existed?" contract the service-tier setter relies on).
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "UPDATE guild_config SET silenced = $2, updated_at = now()"
+            " WHERE guild_id = $1"
+            " RETURNING " + _GUILD_CONFIG_RETURNING_COLUMNS,
+            guild_id,
+            silenced,
+        )
+
+
+async def load_blocklist(pool: asyncpg.Pool) -> list[asyncpg.Record]:
+    """Return every guild_blocklist row in ONE round-trip (boot load-all, CONFIG-03 / D-02).
+
+    No per-guild filter — mirrors load_all_guild_configs's boot-time
+    load-everything-once discipline. GuildConfigService folds the result into
+    an in-memory `set[str]` so every hot-path block check is O(1), never a
+    Neon round-trip.
+
+    Args:
+        pool: asyncpg connection pool.
+
+    Returns:
+        Every row in guild_blocklist: guild_id, reason, blocked_at.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch("SELECT guild_id, reason, blocked_at FROM guild_blocklist")
+
+
+async def insert_blocklist(pool: asyncpg.Pool, *, guild_id: str, reason: str | None) -> None:
+    """Insert (or update the reason on) a guild_blocklist row (`/guilds block`, OWNER-04).
+
+    Upsert (INSERT ... ON CONFLICT DO UPDATE), mirroring set_proactive_opt_out's
+    shape — a re-block of an already-blocked guild updates the reason instead
+    of erroring or leaving a stale duplicate.
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT) to block.
+        reason:   Optional free-text reason, nullable.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO guild_blocklist (guild_id, reason) VALUES ($1, $2)"
+            " ON CONFLICT (guild_id) DO UPDATE SET reason = EXCLUDED.reason",
+            guild_id,
+            reason,
+        )
+
+
+async def delete_blocklist(pool: asyncpg.Pool, *, guild_id: str) -> None:
+    """Remove a guild_blocklist row (`/guilds unblock`, OWNER-04).
+
+    A no-op (no error) if guild_id was never blocked.
+
+    Args:
+        pool:     asyncpg connection pool.
+        guild_id: Discord guild id (TEXT) to unblock.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM guild_blocklist WHERE guild_id = $1", guild_id)
 
 
 async def increment_daily_stat(pool: asyncpg.Pool, field: str) -> None:
