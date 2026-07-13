@@ -176,7 +176,7 @@ Full phase details, success criteria, and decisions archived in
 **Wave 2** *(blocked on Wave 1)*
 
 - [x] 20-04-PLAN.md — GuildConfigService _blocked set + block/unblock/silence/unsilence/is_* + tests (OWNER-04/02)
-- [ ] 20-05-PLAN.md — events.py ambient TOCTOU pre-send re-check + 2 Gemini call-site threads + regression (OWNER-06/02, RATE-01)
+- [x] 20-05-PLAN.md — events.py ambient TOCTOU pre-send re-check + 2 Gemini call-site threads + regression (OWNER-06/02, RATE-01)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -252,7 +252,7 @@ Full phase details, success criteria, and decisions archived in
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
-| 20. Owner Control Plane & Rate Observability | v1.4 | 4/7 | In Progress|  |
+| 20. Owner Control Plane & Rate Observability | v1.4 | 5/7 | In Progress|  |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |

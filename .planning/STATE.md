@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 20-04-PLAN.md
-last_updated: "2026-07-13T15:26:38.564Z"
+stopped_at: Completed 20-05-PLAN.md
+last_updated: "2026-07-13T15:56:20.229Z"
 last_activity: 2026-07-13 -- Phase 20 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 18
-  completed_plans: 15
+  completed_plans: 16
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 20 (owner-control-plane-rate-observability) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-07-13 -- Phase 20 execution started
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 20 P02 | 12min | 2 tasks | 2 files |
 | Phase 20 P03 | 15min | 3 tasks | 6 files |
 | Phase 20 P04 | 20min | 2 tasks | 2 files |
+| Phase 20 P05 | 21min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 20-02]: decide_interaction_allowed checks is_owner, then has_guild, then blocked-or-silenced (exact D-13 order); all four args required keyword-only, no defaults
 - [Phase 20]: [Phase 20-03]: guild_id kwarg on GeminiService.chat/generate_image is per-session usage tagging only (never a gate/quota); embed() stays untagged (separate 60 RPM limiter, D-09); increment guarded by guild_id is not None, placed right after rate_limiter.acquire() succeeds
 - [Phase 20-04]: GuildConfigService.load_all() restructured (try/except/else) so the blocklist load and config-cache load are fully independent -- neither failure blanks the other
+- [Phase 20]: [Phase 20-05]: Pre-send re-check re-invokes the same silence-aware is_ambient_channel predicate immediately before message.reply in _maybe_fire_proactive_callback and _maybe_fire_vision_roast (D-14 / SC-2) -- a second read of the same cache, not a new mechanism
+- [Phase 20]: [Phase 20-05]: guild_id threaded through the last 2 events.py Gemini call sites (ambient roast, vision roast) completes RATE-01 for this file
 
 ### Pending Todos
 
@@ -131,8 +134,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T15:26:38.548Z
-Stopped at: Completed 20-04-PLAN.md
+Last session: 2026-07-13T15:56:20.221Z
+Stopped at: Completed 20-05-PLAN.md
 Resume file: 
 
 None
