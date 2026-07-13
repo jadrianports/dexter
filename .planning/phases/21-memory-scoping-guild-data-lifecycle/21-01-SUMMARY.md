@@ -98,3 +98,13 @@ None - no external service configuration required.
 ---
 *Phase: 21-memory-scoping-guild-data-lifecycle*
 *Completed: 2026-07-14*
+
+## Self-Check: PASSED
+
+- FOUND: database.py
+- FOUND: services/memory.py
+- FOUND: tests/test_memory.py
+- FOUND: .planning/phases/21-memory-scoping-guild-data-lifecycle/21-01-SUMMARY.md
+- FOUND commit: fd144fc (Task 1)
+- FOUND commit: c318beb (Task 2)
+- FOUND commit: aea2a1e (Task 3)
