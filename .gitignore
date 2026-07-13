@@ -12,3 +12,6 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# Local design notes / scratch — never tracked (leaked a bot token in 2c5a95d)
+dexter-architecture.md

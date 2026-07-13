@@ -4,7 +4,8 @@
 
 Discord bot named "Dexter" (Dex). Plays music from YouTube, chats via Gemini AI, generates images via Imagen. Has a persistent sarcastic personality that tracks user behavior and roasts them.
 
-Read `dexter-architecture.md` for full context, personality samples, and rationale.
+This file is the authoritative spec. (`dexter-architecture.md` is a local, untracked scratch
+doc — gitignored as of Phase 22; do not rely on it and do not re-add it to the repo.)
 
 ---
 
