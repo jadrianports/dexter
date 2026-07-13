@@ -9,7 +9,12 @@ If a test needs a mock the cut-line in logic/guild_config.py is wrong (D-05).
 import inspect
 
 import logic.guild_config as guild_config_module
-from logic.guild_config import AmbientSurface, decide_ambient_channel, is_ambient_channel
+from logic.guild_config import (
+    AmbientSurface,
+    decide_ambient_channel,
+    decide_interaction_allowed,
+    is_ambient_channel,
+)
 
 # ---------------------------------------------------------------------------
 # Purity self-check: the module must not import discord/datetime/random
@@ -170,6 +175,58 @@ class TestDecideAmbientChannel:
         assert decide_ambient_channel(config_row=row, surface=AmbientSurface.ROAST) == 123
         assert decide_ambient_channel(config_row=row, surface=AmbientSurface.PRESENCE) == 123
 
+    # -- silenced coverage (D-14) --------------------------------------------
+
+    def test_silenced_true_silences_roast(self):
+        """silenced=True -> None for ROAST, even on a configured+toggled-on row."""
+        row = {
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "silenced": True,
+        }
+        assert decide_ambient_channel(config_row=row, surface=AmbientSurface.ROAST) is None
+
+    def test_silenced_true_silences_vision(self):
+        """silenced=True -> None for VISION, even on a configured+toggled-on row."""
+        row = {
+            "configured": True,
+            "ambient_channel_id": "500",
+            "vision_roasts_enabled": True,
+            "silenced": True,
+        }
+        assert decide_ambient_channel(config_row=row, surface=AmbientSurface.VISION) is None
+
+    def test_silenced_true_silences_presence(self):
+        """silenced=True -> None for PRESENCE, even on a configured+toggled-on row."""
+        row = {
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "silenced": True,
+        }
+        assert decide_ambient_channel(config_row=row, surface=AmbientSurface.PRESENCE) is None
+
+    def test_silenced_key_omitted_still_resolves_channel(self):
+        """A row omitting 'silenced' entirely still resolves its channel (default-False,
+        backward-compat with every pre-Phase-20 row/mock)."""
+        row = {
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+        }
+        assert decide_ambient_channel(config_row=row, surface=AmbientSurface.ROAST) == 500
+
+    def test_silenced_explicitly_false_still_resolves_channel(self):
+        """silenced=False (explicit) still resolves the channel."""
+        row = {
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "silenced": False,
+        }
+        assert decide_ambient_channel(config_row=row, surface=AmbientSurface.ROAST) == 500
+
 
 # ---------------------------------------------------------------------------
 # is_ambient_channel
@@ -245,3 +302,97 @@ class TestIsAmbientChannel:
             surface=AmbientSurface.ROAST,
         )
         assert result is True
+
+    def test_silenced_row_returns_false_dispatch_through(self):
+        """A silenced row -> False (is_ambient_channel dispatches on decide_ambient_channel,
+        inheriting the D-14 silenced branch for free — never re-derives it)."""
+        result = is_ambient_channel(
+            config_row={
+                "configured": True,
+                "ambient_channel_id": "500",
+                "ambient_roasts_enabled": True,
+                "silenced": True,
+            },
+            channel_id=500,
+            surface=AmbientSurface.ROAST,
+        )
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# decide_interaction_allowed
+# ---------------------------------------------------------------------------
+
+
+class TestDecideInteractionAllowed:
+    """Full branch coverage for decide_interaction_allowed (D-13 / OWNER-05)."""
+
+    def test_owner_always_allowed_even_blocked_and_silenced(self):
+        """is_owner=True -> True regardless of blocked/silenced (T-20-06: owner never
+        locked out, even by self-silencing/blocking the home guild)."""
+        assert (
+            decide_interaction_allowed(is_owner=True, has_guild=True, blocked=True, silenced=True)
+            is True
+        )
+
+    def test_dm_guildless_always_allowed(self):
+        """has_guild=False (DM/guild-less) -> True, even for a non-owner and even with
+        blocked/silenced set (D-13 DM exemption)."""
+        assert (
+            decide_interaction_allowed(
+                is_owner=False, has_guild=False, blocked=True, silenced=True
+            )
+            is True
+        )
+
+    def test_blocked_refuses(self):
+        """Non-owner, has guild, blocked=True, silenced=False -> False."""
+        assert (
+            decide_interaction_allowed(
+                is_owner=False, has_guild=True, blocked=True, silenced=False
+            )
+            is False
+        )
+
+    def test_silenced_refuses(self):
+        """Non-owner, has guild, blocked=False, silenced=True -> False."""
+        assert (
+            decide_interaction_allowed(
+                is_owner=False, has_guild=True, blocked=False, silenced=True
+            )
+            is False
+        )
+
+    def test_neither_flag_allows(self):
+        """Non-owner, has guild, blocked=False, silenced=False -> True (the all-clear case)."""
+        assert (
+            decide_interaction_allowed(
+                is_owner=False, has_guild=True, blocked=False, silenced=False
+            )
+            is True
+        )
+
+    def test_requires_all_kwargs_keyword_only(self):
+        """All four args are required keyword-only with no default -- a positional call or an
+        omitted arg raises TypeError."""
+        try:
+            decide_interaction_allowed(True, True, True, True)  # positional -> TypeError
+            raised = False
+        except TypeError:
+            raised = True
+        assert raised
+
+        try:
+            decide_interaction_allowed(is_owner=True, has_guild=True, blocked=True)  # missing silenced
+            raised = False
+        except TypeError:
+            raised = True
+        assert raised
+
+    def test_source_still_imports_no_discord_datetime_or_random(self):
+        """Adding decide_interaction_allowed must not introduce discord/datetime/random imports
+        (extends the purity self-check at module scope)."""
+        src = inspect.getsource(guild_config_module)
+        assert "import discord" not in src
+        assert "import datetime" not in src
+        assert "import random" not in src
