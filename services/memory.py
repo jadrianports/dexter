@@ -384,6 +384,7 @@ class MemoryService:
                 DISTILL_PROMPT,
                 [{"role": "user", "content": raw_text}],
                 priority=2,
+                guild_id=None,  # D-09: guild-less background distill call, not counted
             )
         except (GeminiRateLimitError, GeminiAPIError) as e:
             log.debug(f"memory.distill: Gemini error, returning [] ({type(e).__name__}: {e})")

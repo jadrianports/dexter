@@ -141,7 +141,14 @@ class AICog(commands.Cog):
 
             # Build prompt and call Gemini
             system_prompt = build_chat_prompt(mood, user_summary, seasonal, memories=memories or None)
-            response = await self.gemini.chat(system_prompt, conversation, priority=1)
+            # RATE-01: guild-scoped /ask counts; a DM /ask (guild_id is None) is
+            # naturally not counted (D-09).
+            response = await self.gemini.chat(
+                system_prompt,
+                conversation,
+                priority=1,
+                guild_id=str(interaction.guild_id) if interaction.guild_id else None,
+            )
 
             if not response:
                 response = pick_random(AI_EMPTY_RESPONSE)
@@ -231,7 +238,12 @@ class AICog(commands.Cog):
                     ),
                 }
             ]
-            result = await self.gemini.chat(system_prompt, conversation, priority=1)
+            result = await self.gemini.chat(
+                system_prompt,
+                conversation,
+                priority=1,
+                guild_id=str(interaction.guild_id) if interaction.guild_id else None,
+            )
             if result:
                 # Personality-voice enforcement (from events.py _generate_ambient_roast)
                 result = result.strip()
@@ -342,7 +354,7 @@ class AICog(commands.Cog):
                 recently_skipped=recently_skipped or None,
                 positive_taste=positive_taste or None,
             )
-            response = await self.gemini.chat(prompt, [], priority=2)
+            response = await self.gemini.chat(prompt, [], priority=2, guild_id=str(guild.id))
 
             if not response:
                 log.info(

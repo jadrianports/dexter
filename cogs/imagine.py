@@ -56,7 +56,11 @@ class ImagineCog(commands.Cog):
         await interaction.response.defer()
 
         try:
-            image_bytes = await self.gemini.generate_image(prompt, priority=1)
+            image_bytes = await self.gemini.generate_image(
+                prompt,
+                priority=1,
+                guild_id=str(interaction.guild_id) if interaction.guild_id else None,
+            )
 
             if image_bytes is None:
                 await interaction.followup.send(pick_random(IMAGE_REFUSAL_MESSAGES))

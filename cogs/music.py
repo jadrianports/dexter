@@ -1185,12 +1185,17 @@ class MusicCog(commands.Cog):
         scenario_content: str,
         fallback_pool: list[str],
         fallback_kwargs: dict,
+        *,
+        guild_id: str | None = None,
     ) -> str:
         """Attempt a priority-2 Gemini roast; fall back to template on any failure.
 
         Mirrors EventsCog._generate_ambient_roast but scoped to music-path earned
         roasts (D-08, D-14). Uses the locked few-shot DEXTER voice (D-06) via
         build_chat_prompt. priority=2 only — never contends with /ask (D-08).
+
+        guild_id: per-session usage tagging ONLY (RATE-01), forwarded to
+            gemini_service.chat — never a gate.
         """
         # Prepare template fallback first (guaranteed path, PERS-04/PERS-09)
         fallback_line = pick_random(fallback_pool)
@@ -1243,7 +1248,7 @@ class MusicCog(commands.Cog):
                 }
             ]
 
-            result = await gemini_service.chat(system_prompt, conversation, priority=2)
+            result = await gemini_service.chat(system_prompt, conversation, priority=2, guild_id=guild_id)
 
             if result:
                 result = result.strip()
@@ -1311,6 +1316,7 @@ class MusicCog(commands.Cog):
                         "title": track.title,
                         "count": count,
                     },
+                    guild_id=str(interaction.guild.id),
                 )
                 await self._post_music_roast(interaction.guild, line)
                 # D-09 path 1: fire-and-forget memory write. create_task keeps the
@@ -1342,6 +1348,7 @@ class MusicCog(commands.Cog):
                     scenario_content=scenario,
                     fallback_pool=MILESTONE_SONG_TEMPLATES,
                     fallback_kwargs={"count": new_total},
+                    guild_id=str(interaction.guild.id),
                 )
                 await self._post_music_roast(interaction.guild, line)
                 # D-09 path 1: fire-and-forget memory write for song-count milestone.
@@ -1381,6 +1388,7 @@ class MusicCog(commands.Cog):
                         "days": new_streak,
                         "record": longest,
                     },
+                    guild_id=str(interaction.guild.id),
                 )
                 await self._post_music_roast(interaction.guild, line)
                 # D-09 path 1: fire-and-forget memory write for streak milestone.
@@ -2127,6 +2135,7 @@ class MusicCog(commands.Cog):
                         build_discover_commentary_prompt(anchor_artist, adjacent_artists),
                         [],
                         priority=2,
+                        guild_id=str(guild.id),
                     )
                 except Exception as gemini_err:
                     log.debug("discover: gemini commentary failed, using fallback (%s)", gemini_err)

@@ -982,7 +982,7 @@ class LibraryCog(commands.Cog):
 
         prompt = build_jam_suggestion_prompt(existing, count=config.JAM_SUGGEST_CANDIDATE_COUNT)
         try:
-            response = await gemini_service.chat(prompt, [], priority=2)
+            response = await gemini_service.chat(prompt, [], priority=2, guild_id=guild_id)
         except Exception as exc:
             log.debug("jam suggest: gemini call failed for jam '%s' (%s)", name, exc)
             response = None
