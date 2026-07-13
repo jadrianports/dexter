@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
-status: executing
-stopped_at: Completed 20-06-PLAN.md
-last_updated: "2026-07-13T16:09:32.199Z"
+status: verifying
+stopped_at: Completed 20-07-PLAN.md
+last_updated: "2026-07-13T16:33:56.864Z"
 last_activity: 2026-07-13 -- Phase 20 execution started
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 18
-  completed_plans: 17
-  percent: 33
+  completed_plans: 18
+  percent: 50
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 20 (owner-control-plane-rate-observability) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-13 -- Phase 20 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 20 P04 | 20min | 2 tasks | 2 files |
 | Phase 20 P05 | 21min | 3 tasks | 3 files |
 | Phase 20 P06 | 18min | 2 tasks | 1 files |
+| Phase 20 P07 | 25min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 20]: [Phase 20-05]: guild_id threaded through the last 2 events.py Gemini call sites (ambient roast, vision roast) completes RATE-01 for this file
 - [Phase 20-06]: interaction_check computes is_owner/has_guild/blocked/silenced and dispatches on decide_interaction_allowed; refusal is sent from INSIDE interaction_check before return False (D-12), never via app_commands.CheckFailure -- returning False alone never reaches on_app_command_error (verified discord.py 2.7.1 mechanic)
 - [Phase 20-06]: on_guild_join block-check-first runs after the boot-race guard and before insert_guild_config_if_absent -- a blocklisted re-invite is left immediately via guild.leave(), no config insert, no welcome, no owner joined notice
+- [Phase 20-07]: Guild names render as plain text with backtick-wrapped ids in /guilds list rows (anti-injection, mirrors bot.py::_build_guild_notice_embed); silence/leave/block echoes use AllowedMentions.none() as defense-in-depth
+- [Phase 20-07]: /guilds block runs the shared teardown THEN the blacklist insert (D-11 order); a guild already absent still gets blacklisted, teardown skipped
 
 ### Pending Todos
 
@@ -137,10 +140,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T16:09:32.190Z
-Stopped at: Completed 20-06-PLAN.md
+Last session: 2026-07-13T16:33:39.792Z
+Stopped at: Completed 20-07-PLAN.md
 Resume file: 
-
-None
 
 - Once approved: `/gsd-plan-phase 18` to plan the Per-Guild Config Foundation phase

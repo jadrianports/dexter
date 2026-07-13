@@ -82,7 +82,7 @@ Full phase details, success criteria, and decisions archived in
 
 - [x] **Phase 18: Per-Guild Config Foundation & CI Gate** - Replace the hardcoded single-channel/single-owner-guild assumption with a real per-guild config seam, behind a green CI gate (completed 2026-07-09)
 - [x] **Phase 19: Onboarding & Admin Setup** - New servers get a welcome nudge and a self-service `/setup`, ambient-silent until configured (completed 2026-07-10)
-- [ ] **Phase 20: Owner Control Plane & Rate Observability** - The owner can list, silence, and force-leave guilds — the abuse kill-switch, with per-guild AI usage visible
+- [x] **Phase 20: Owner Control Plane & Rate Observability** - The owner can list, silence, and force-leave guilds — the abuse kill-switch, with per-guild AI usage visible (completed 2026-07-13)
 - [ ] **Phase 21: Memory Scoping & Guild Data Lifecycle** - Third-party memory stops leaking across guilds and a departed guild's data gets purged (or the documented global-memory fallback ships instead)
 - [ ] **Phase 22: Invite Plumbing** - A correct, least-privilege OAuth2 invite link, in-bot and public
 - [ ] **Phase 23: Portfolio Surface & CI/CD** - Landing page, case-study README, CI+Pages+GHCR — the recruiter-facing deliverable
@@ -181,7 +181,7 @@ Full phase details, success criteria, and decisions archived in
 **Wave 3** *(blocked on Wave 2)*
 
 - [x] 20-06-PLAN.md — bot.py DexterCommandTree.interaction_check choke point + tree_cls + on_guild_join block-check-first (OWNER-05/06/04)
-- [ ] 20-07-PLAN.md — cogs/ops.py /guilds group (list/silence/unsilence/leave/block/unblock) + GuildListPageView (OWNER-01/02/03/04/06, RATE-01)
+- [x] 20-07-PLAN.md — cogs/ops.py /guilds group (list/silence/unsilence/leave/block/unblock) + GuildListPageView (OWNER-01/02/03/04/06, RATE-01)
 
 ### Phase 21: Memory Scoping & Guild Data Lifecycle
 
@@ -252,7 +252,7 @@ Full phase details, success criteria, and decisions archived in
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
-| 20. Owner Control Plane & Rate Observability | v1.4 | 6/7 | In Progress|  |
+| 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete   | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
