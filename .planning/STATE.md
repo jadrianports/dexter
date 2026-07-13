@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
-status: executing
-stopped_at: Completed 21-03-PLAN.md
-last_updated: "2026-07-13T19:30:29.131Z"
+status: verifying
+stopped_at: Completed 21-04-PLAN.md
+last_updated: "2026-07-13T19:45:13.068Z"
 last_activity: 2026-07-13 -- Phase 21 execution started
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 22
-  completed_plans: 21
-  percent: 50
+  completed_plans: 22
+  percent: 67
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 21 (memory-scoping-guild-data-lifecycle) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-13 -- Phase 21 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -71,6 +71,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 21 P01 | 20min | 3 tasks | 3 files |
 | Phase 21 P02 | 18min | 2 tasks | 2 files |
 | Phase 21 P03 | 18min | 3 tasks | 5 files |
+| Phase 21 P04 | 19min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 21-02]: the purge's four-table list is four hardcoded SQL literals, never a loop / never information_schema -- reviewability of the literal list IS the T-21-03 control that keeps guild_blocklist structurally out of reach (OWNER-04)
 - [Phase 21-03]: guild_scoped=bool(guild_id) (not a bare True) on the music-command callback, because _build_roast_line's guild_id param defaults to None -- a bare True with an empty-string guild_id would silently narrow recall to the NULL corpus
 - [Phase 21-03]: /ask's inline comment explaining why it stays un-scoped deliberately avoids the literal substring guild_scoped -- inspect.getsource() includes comments, so a comment containing that literal would fail the MEM-02 source-inspection regression test it protects
+- [Phase 21]: [Phase 21-04]: on_guild_remove docstring rewritten to avoid the literal substring purge_guild_data in prose — Keeps grep -c purge_guild_data bot.py at exactly 1 (the single call), mirroring plan 21-02's identical guild_blocklist-avoidance discipline for its own docstring.
+- [Phase 21]: [Phase 21-04]: PROJECT.md's scoping row explicitly names /ask as staying global and self-scoped — Phase 23's PORT-04 publishes this row verbatim -- an imprecise row omitting /ask would make Dexter's public privacy disclosure false.
 
 ### Pending Todos
 
@@ -150,6 +153,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T19:30:29.123Z
-Stopped at: Completed 21-03-PLAN.md
+Last session: 2026-07-13T19:45:13.056Z
+Stopped at: Completed 21-04-PLAN.md
 Resume file: 
+None

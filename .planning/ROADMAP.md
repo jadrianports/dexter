@@ -83,7 +83,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 18: Per-Guild Config Foundation & CI Gate** - Replace the hardcoded single-channel/single-owner-guild assumption with a real per-guild config seam, behind a green CI gate (completed 2026-07-09)
 - [x] **Phase 19: Onboarding & Admin Setup** - New servers get a welcome nudge and a self-service `/setup`, ambient-silent until configured (completed 2026-07-10)
 - [x] **Phase 20: Owner Control Plane & Rate Observability** - The owner can list, silence, and force-leave guilds — the abuse kill-switch, with per-guild AI usage visible (completed 2026-07-13)
-- [ ] **Phase 21: Memory Scoping & Guild Data Lifecycle** - Third-party memory stops leaking across guilds and a departed guild's data gets purged (or the documented global-memory fallback ships instead)
+- [x] **Phase 21: Memory Scoping & Guild Data Lifecycle** - Third-party memory stops leaking across guilds and a departed guild's data gets purged (or the documented global-memory fallback ships instead) (completed 2026-07-13)
 - [ ] **Phase 22: Invite Plumbing** - A correct, least-privilege OAuth2 invite link, in-bot and public
 - [ ] **Phase 23: Portfolio Surface & CI/CD** - Landing page, case-study README, CI+Pages+GHCR — the recruiter-facing deliverable
 
@@ -210,7 +210,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 21-04-PLAN.md — bot.py on_guild_remove purge wiring (single hook, WR-04 wrapped) + PROJECT.md Key Decisions record (SC-4 / PORT-04) (MEM-04/01/03/05)
+- [x] 21-04-PLAN.md — bot.py on_guild_remove purge wiring (single hook, WR-04 wrapped) + PROJECT.md Key Decisions record (SC-4 / PORT-04) (MEM-04/01/03/05)
 
 ### Phase 22: Invite Plumbing
 
@@ -268,6 +268,6 @@ Full phase details, success criteria, and decisions archived in
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
-| 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 3/4 | In Progress|  |
+| 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
