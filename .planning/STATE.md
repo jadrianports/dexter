@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: verifying
-stopped_at: Completed 20-07-PLAN.md
-last_updated: "2026-07-13T17:01:21.164Z"
+stopped_at: Phase 21 context gathered
+last_updated: "2026-07-13T18:02:16.367Z"
 last_activity: 2026-07-13
 progress:
   total_phases: 6
@@ -140,8 +140,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T16:33:39.792Z
-Stopped at: Completed 20-07-PLAN.md
+Last session: 2026-07-13T18:02:16.342Z
+Stopped at: Phase 21 context gathered
 Resume file: 
 
-- Once approved: `/gsd-plan-phase 18` to plan the Per-Guild Config Foundation phase
+.planning/phases/21-memory-scoping-guild-data-lifecycle/21-CONTEXT.md
