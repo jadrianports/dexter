@@ -104,3 +104,9 @@ None - no external service configuration required.
 ---
 *Phase: 20-owner-control-plane-rate-observability*
 *Completed: 2026-07-13*
+
+## Self-Check: PASSED
+
+All claimed files (database.py, tests/conftest.py, tests/test_database_phase20.py, CLAUDE.md,
+this SUMMARY.md) confirmed present on disk; all claimed commits (34b5105, a094361, 07f8929)
+confirmed present in `git log --oneline --all`.
