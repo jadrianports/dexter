@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Phase 22 context gathered
-last_updated: "2026-07-13T22:07:33.969Z"
-last_activity: 2026-07-13 -- Phase 21 execution started
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-07-13T23:10:33.326Z"
+last_activity: 2026-07-13 -- Phase 22 execution started
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 22
-  completed_plans: 22
+  total_plans: 25
+  completed_plans: 23
   percent: 67
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 21 — memory-scoping-guild-data-lifecycle
+**Current focus:** Phase 22 — invite-plumbing
 
 ## Current Position
 
-Phase: 21 (memory-scoping-guild-data-lifecycle) — EXECUTING
-Plan: 4 of 4
+Phase: 22 (invite-plumbing) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-13 -- Phase 21 execution started
+Last activity: 2026-07-13 -- Phase 22 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -72,6 +72,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 21 P02 | 18min | 2 tasks | 2 files |
 | Phase 21 P03 | 18min | 3 tasks | 5 files |
 | Phase 21 P04 | 19min | 2 tasks | 3 files |
+| Phase 22 P01 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 21-03]: /ask's inline comment explaining why it stays un-scoped deliberately avoids the literal substring guild_scoped -- inspect.getsource() includes comments, so a comment containing that literal would fail the MEM-02 source-inspection regression test it protects
 - [Phase 21]: [Phase 21-04]: on_guild_remove docstring rewritten to avoid the literal substring purge_guild_data in prose — Keeps grep -c purge_guild_data bot.py at exactly 1 (the single call), mirroring plan 21-02's identical guild_blocklist-avoidance discipline for its own docstring.
 - [Phase 21]: [Phase 21-04]: PROJECT.md's scoping row explicitly names /ask as staying global and self-scoped — Phase 23's PORT-04 publishes this row verbatim -- an imprecise row omitting /ask would make Dexter's public privacy disclosure false.
+- [Phase 22-01]: Ten-permission bitfield (309240908864, D-09 amendment) locked with negative-assertion test; logic/invite.py is the one documented exception to the logic/ no-discord-import convention
 
 ### Pending Todos
 
@@ -153,7 +155,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T21:20:58.730Z
-Stopped at: Phase 22 context gathered
+Last session: 2026-07-13T23:10:20.863Z
+Stopped at: Completed 22-01-PLAN.md
 Resume file: 
-.planning/phases/22-invite-plumbing/22-CONTEXT.md
+None

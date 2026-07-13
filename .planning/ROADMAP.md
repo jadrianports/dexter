@@ -229,7 +229,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 1**
 
-- [ ] 22-01-PLAN.md — config constants (`DISCORD_CLIENT_ID`/`INVITE_PERMISSIONS_VALUE`/`INVITE_SCOPES`) + pure `logic/invite.py::build_invite_url()` + D-02 negative-assertion bitfield lock (INVITE-01)
+- [x] 22-01-PLAN.md — config constants (`DISCORD_CLIENT_ID`/`INVITE_PERMISSIONS_VALUE`/`INVITE_SCOPES`) + pure `logic/invite.py::build_invite_url()` + D-02 negative-assertion bitfield lock (INVITE-01)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -280,5 +280,5 @@ Full phase details, success criteria, and decisions archived in
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
-| 22. Invite Plumbing | v1.4 | 0/3 | Planned | - |
+| 22. Invite Plumbing | v1.4 | 1/3 | In Progress|  |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
