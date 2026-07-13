@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-07-13T23:10:33.326Z"
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-07-13T23:26:56.077Z"
 last_activity: 2026-07-13 -- Phase 22 execution started
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 25
-  completed_plans: 23
+  completed_plans: 24
   percent: 67
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 22 (invite-plumbing) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-13 -- Phase 22 execution started
 
@@ -73,6 +73,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 21 P03 | 18min | 3 tasks | 5 files |
 | Phase 21 P04 | 19min | 2 tasks | 3 files |
 | Phase 22 P01 | 12min | 2 tasks | 4 files |
+| Phase 22 P02 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 21]: [Phase 21-04]: on_guild_remove docstring rewritten to avoid the literal substring purge_guild_data in prose — Keeps grep -c purge_guild_data bot.py at exactly 1 (the single call), mirroring plan 21-02's identical guild_blocklist-avoidance discipline for its own docstring.
 - [Phase 21]: [Phase 21-04]: PROJECT.md's scoping row explicitly names /ask as staying global and self-scoped — Phase 23's PORT-04 publishes this row verbatim -- an imprecise row omitting /ask would make Dexter's public privacy disclosure false.
 - [Phase 22-01]: Ten-permission bitfield (309240908864, D-09 amendment) locked with negative-assertion test; logic/invite.py is the one documented exception to the logic/ no-discord-import convention
+- [Phase 22-02]: cogs/invite.py comments avoid the literal substrings ephemeral/guild_only/checks.cooldown so the plan's grep -c == 0 acceptance checks stay exact while still documenting the deliberate omissions in prose — Mirrors the Phase 21 guild_blocklist/purge_guild_data docstring-avoidance discipline
+- [Phase 22-02]: /invite command carries no @app_commands.checks.cooldown and no DM-restriction decorator — zero I/O, static output, DM support is a hard requirement (D-06)
 
 ### Pending Todos
 
@@ -155,7 +158,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T23:10:20.863Z
-Stopped at: Completed 22-01-PLAN.md
+Last session: 2026-07-13T23:26:56.057Z
+Stopped at: Completed 22-02-PLAN.md
 Resume file: 
 None

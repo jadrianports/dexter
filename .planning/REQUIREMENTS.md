@@ -61,7 +61,7 @@ Hybrid scoping: contain third-party exposure, keep self-recall global.
 ### Invite Plumbing (INVITE)
 
 - [x] **INVITE-01**: A least-privilege OAuth2 invite URL exists (explicit `Permissions()` bitfield — no Administrator, no Manage Server/Roles) with `bot` + `applications.commands` scopes
-- [ ] **INVITE-02**: An in-bot `/invite` command returns the live invite URL as the single source of truth
+- [x] **INVITE-02**: An in-bot `/invite` command returns the live invite URL as the single source of truth
 
 ### Portfolio Surface (PORT)
 
@@ -145,7 +145,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | MEM-05 | Phase 21 | Complete |
 | RATE-01 | Phase 20 | Complete |
 | INVITE-01 | Phase 22 | Complete |
-| INVITE-02 | Phase 22 | Pending |
+| INVITE-02 | Phase 22 | Complete |
 | PORT-01 | Phase 23 | Pending |
 | PORT-02 | Phase 23 | Pending |
 | PORT-03 | Phase 23 | Pending |
