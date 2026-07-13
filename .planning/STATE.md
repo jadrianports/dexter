@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: verifying
-stopped_at: Completed 21-04-PLAN.md
-last_updated: "2026-07-13T19:45:13.068Z"
+stopped_at: Phase 22 context gathered
+last_updated: "2026-07-13T21:20:58.763Z"
 last_activity: 2026-07-13 -- Phase 21 execution started
 progress:
   total_phases: 6
@@ -153,7 +153,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T19:45:13.056Z
-Stopped at: Completed 21-04-PLAN.md
+Last session: 2026-07-13T21:20:58.730Z
+Stopped at: Phase 22 context gathered
 Resume file: 
-None
+.planning/phases/22-invite-plumbing/22-CONTEXT.md
