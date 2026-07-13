@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
-status: executing
+status: verifying
 stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-07-13T23:26:56.077Z"
+last_updated: "2026-07-13T23:43:53.995Z"
 last_activity: 2026-07-13 -- Phase 22 execution started
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 25
-  completed_plans: 24
-  percent: 67
+  completed_plans: 25
+  percent: 83
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 22 (invite-plumbing) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-13 -- Phase 22 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -74,6 +74,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 21 P04 | 19min | 2 tasks | 3 files |
 | Phase 22 P01 | 12min | 2 tasks | 4 files |
 | Phase 22 P02 | 12min | 2 tasks | 4 files |
+| Phase 22 P03 | 25min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 22-01]: Ten-permission bitfield (309240908864, D-09 amendment) locked with negative-assertion test; logic/invite.py is the one documented exception to the logic/ no-discord-import convention
 - [Phase 22-02]: cogs/invite.py comments avoid the literal substrings ephemeral/guild_only/checks.cooldown so the plan's grep -c == 0 acceptance checks stay exact while still documenting the deliberate omissions in prose — Mirrors the Phase 21 guild_blocklist/purge_guild_data docstring-avoidance discipline
 - [Phase 22-02]: /invite command carries no @app_commands.checks.cooldown and no DM-restriction decorator — zero I/O, static output, DM support is a hard requirement (D-06)
+- [Phase 22]: [Phase 22-03]: Reworded two pre-existing prose comments (config.py INVITE_SCOPES comment, logic/__init__.py package docstring) that legitimately mentioned oauth_url( in documentation so the new single-invite-URL-constructor scan (T-22-03) doesn't false-positive on prose
 
 ### Pending Todos
 
@@ -158,7 +160,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T23:26:56.057Z
+Last session: 2026-07-13T23:43:53.981Z
 Stopped at: Completed 22-02-PLAN.md
 Resume file: 
 None

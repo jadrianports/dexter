@@ -84,7 +84,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 19: Onboarding & Admin Setup** - New servers get a welcome nudge and a self-service `/setup`, ambient-silent until configured (completed 2026-07-10)
 - [x] **Phase 20: Owner Control Plane & Rate Observability** - The owner can list, silence, and force-leave guilds — the abuse kill-switch, with per-guild AI usage visible (completed 2026-07-13)
 - [x] **Phase 21: Memory Scoping & Guild Data Lifecycle** - Third-party memory stops leaking across guilds and a departed guild's data gets purged (or the documented global-memory fallback ships instead) (completed 2026-07-13)
-- [ ] **Phase 22: Invite Plumbing** - A correct, least-privilege OAuth2 invite link, in-bot and public
+- [x] **Phase 22: Invite Plumbing** - A correct, least-privilege OAuth2 invite link, in-bot and public (completed 2026-07-13)
 - [ ] **Phase 23: Portfolio Surface & CI/CD** - Landing page, case-study README, CI+Pages+GHCR — the recruiter-facing deliverable
 
 ## Phase Details
@@ -234,7 +234,7 @@ Full phase details, success criteria, and decisions archived in
 **Wave 2** *(blocked on Wave 1)*
 
 - [x] 22-02-PLAN.md — `cogs/invite.py` `/invite` (public embed + link button, DM-allowed, no cooldown) + registration at BOTH `bot.py` cog sites + `/help` entry (INVITE-02 / SC-2)
-- [ ] 22-03-PLAN.md — git-tracked-doc drift guard (excl. `.planning/`, D-10) + mandatory positive control + single-URL-constructor source lock (INVITE-02 / SC-3)
+- [x] 22-03-PLAN.md — git-tracked-doc drift guard (excl. `.planning/`, D-10) + mandatory positive control + single-URL-constructor source lock (INVITE-02 / SC-3)
 
 ### Phase 23: Portfolio Surface & CI/CD
 
@@ -280,5 +280,5 @@ Full phase details, success criteria, and decisions archived in
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
-| 22. Invite Plumbing | v1.4 | 2/3 | In Progress|  |
+| 22. Invite Plumbing | v1.4 | 3/3 | Complete   | 2026-07-13 |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
