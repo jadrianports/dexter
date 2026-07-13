@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-07-13T14:19:42.812Z"
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-07-13T14:34:34.492Z"
 last_activity: 2026-07-13 -- Phase 20 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 18
-  completed_plans: 12
+  completed_plans: 13
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 20 (owner-control-plane-rate-observability) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-07-13 -- Phase 20 execution started
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 19 P03 | 20min | 3 tasks | 3 files |
 | Phase 19 P04 | 15min | 3 tasks | 2 files |
 | Phase 20 P01 | 15min | 2 tasks | 4 files |
+| Phase 20 P02 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 19]: [Phase 19-04]: setup_channel reads the cached row once before branching, driving both the first-configure/re-designate decision and (for re-designate) the old->new channel phrasing in the reply
 - [Phase 19]: [Phase 19-04]: cogs/admin.py is a dedicated guild-admin (manage_guild) surface, structurally separate from cogs/ops.py's owner (is_owner) surface (D-04)
 - [Phase 20-01]: guild_blocklist lands as its own table (D-01) with load_blocklist/insert_blocklist/delete_blocklist + set_silenced helpers in database.py; guild_config.is_blocked left in place but dead (D-03), documented in CLAUDE.md
+- [Phase 20-02]: silenced defaults to False via config_row.get('silenced', False) in decide_ambient_channel -- every pre-Phase-20 row/mock stays byte-identical
+- [Phase 20-02]: decide_interaction_allowed checks is_owner, then has_guild, then blocked-or-silenced (exact D-13 order); all four args required keyword-only, no defaults
 
 ### Pending Todos
 
@@ -124,11 +127,11 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T14:19:42.798Z
-Stopped at: Completed 20-01-PLAN.md
+Last session: 2026-07-13T14:34:34.482Z
+Stopped at: Completed 20-02-PLAN.md
 Resume file: 
 
-## Operator Next Steps
+None
 
 - Review the roadmap draft (Phases 18–23) and approve, or give feedback for revision
 - Once approved: `/gsd-plan-phase 18` to plan the Per-Guild Config Foundation phase
