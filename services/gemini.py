@@ -159,6 +159,11 @@ class GeminiService:
         # MUST NOT share _rate_limiter: embedding calls never consume the chat budget
         # (MEM-02 / Critical Rule 1 / A2 / T-11-03b).
         self._embed_limiter = _RateLimiter(max_requests=config.EMBED_RPM_LIMIT)
+        # Per-guild session usage counter (RATE-01 / D-08). In-memory, since-boot,
+        # reset on restart — a triage view for a LIVE session, not durable history.
+        # Deliberately NOT a second limiter/quota (D-09, Critical Rule 1) — purely
+        # additive observability for /guilds list.
+        self._guild_usage: dict[str, int] = {}
 
     @property
     def rpm_usage(self) -> int:
@@ -170,6 +175,14 @@ class GeminiService:
         """Remaining request slots in the sliding window (D-24)."""
         return self._rate_limiter.rpm_headroom()
 
+    def guild_usage(self, guild_id: str | None) -> int:
+        """Return this session's guild-attributable chat/image call count.
+
+        Returns 0 for an unknown or None guild_id. Read-only observability
+        (RATE-01) — never a gate, never a quota (D-09).
+        """
+        return self._guild_usage.get(str(guild_id), 0) if guild_id is not None else 0
+
     async def chat(
         self,
         system_prompt: str,
@@ -178,6 +191,7 @@ class GeminiService:
         *,
         image_bytes: bytes | None = None,
         image_mime_type: str | None = None,
+        guild_id: str | None = None,
     ) -> str | None:
         """Send a chat request to Gemini.
 
@@ -191,6 +205,10 @@ class GeminiService:
                 TEXT_SAFETY_THRESHOLD.
             image_mime_type: The attachment's already-gate-validated content_type
                 (e.g. "image/png"); not re-derived from bytes.
+            guild_id: Per-session usage tagging ONLY (RATE-01) — never a gate.
+                Pass the originating guild's id for a guild-attributable call;
+                pass None (default) for guild-less background calls (daily_batch
+                distill, DM /ask) so they are not counted (D-09).
 
         Returns:
             Response text, or None if empty/blocked. NEVER raises for a safety
@@ -202,6 +220,9 @@ class GeminiService:
             GeminiAPIError: API error (transport/network/server).
         """
         await self._rate_limiter.acquire(priority)
+
+        if guild_id is not None:
+            self._guild_usage[str(guild_id)] = self._guild_usage.get(str(guild_id), 0) + 1
 
         # Log the full context being sent
         log.info(f"── Gemini chat request (priority={priority}) ──")
@@ -255,8 +276,21 @@ class GeminiService:
         log.info(f"Gemini chat response: {len(response.text or '')} chars")
         return response.text if response.text else None
 
-    async def generate_image(self, prompt: str, priority: int = 1) -> bytes | None:
+    async def generate_image(
+        self,
+        prompt: str,
+        priority: int = 1,
+        *,
+        guild_id: str | None = None,
+    ) -> bytes | None:
         """Generate an image using Gemini native image generation.
+
+        Args:
+            prompt: The image generation prompt.
+            priority: 1 = user command, 2 = background task.
+            guild_id: Per-session usage tagging ONLY (RATE-01) — never a gate.
+                Pass None (default) for a guild-less call so it is not counted
+                (D-09).
 
         Returns:
             Image bytes, or None if refused/empty.
@@ -266,6 +300,9 @@ class GeminiService:
             GeminiAPIError: API error.
         """
         await self._rate_limiter.acquire(priority)
+
+        if guild_id is not None:
+            self._guild_usage[str(guild_id)] = self._guild_usage.get(str(guild_id), 0) + 1
 
         try:
             response = await self._client.aio.models.generate_content(
