@@ -103,3 +103,8 @@ None — no external service configuration required.
 ---
 *Phase: 20-owner-control-plane-rate-observability*
 *Completed: 2026-07-14*
+
+## Self-Check: PASSED
+
+All claimed files found on disk (`cogs/ops.py`, `config.py`, `tests/test_guilds_group.py`,
+this SUMMARY.md). All claimed commits (`b976c21`, `2afde69`, `28d89d9`) found in git log.
