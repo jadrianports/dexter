@@ -105,3 +105,13 @@ None - no external service configuration required.
 ---
 *Phase: 21-memory-scoping-guild-data-lifecycle*
 *Completed: 2026-07-14*
+
+## Self-Check: PASSED
+
+- FOUND: database.py
+- FOUND: tests/test_database_phase21.py
+- FOUND: .planning/phases/21-memory-scoping-guild-data-lifecycle/21-02-SUMMARY.md
+- FOUND commit: 0bef393 (Task 1)
+- FOUND commit: 0d81e77 (Task 2)
+- FOUND commit: 596a1d1 (SUMMARY)
+- Full suite: 1000 passed, 124 skipped, 0 failed (no regression)

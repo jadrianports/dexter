@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-07-13T18:53:42.824Z"
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-07-13T19:09:11.912Z"
 last_activity: 2026-07-13 -- Phase 21 execution started
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 22
-  completed_plans: 19
+  completed_plans: 20
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 21 (memory-scoping-guild-data-lifecycle) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-07-13 -- Phase 21 execution started
 
@@ -69,6 +69,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 20 P06 | 18min | 2 tasks | 1 files |
 | Phase 20 P07 | 25min | 3 tasks | 3 files |
 | Phase 21 P01 | 20min | 3 tasks | 3 files |
+| Phase 21 P02 | 18min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,9 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 20-07]: /guilds block runs the shared teardown THEN the blacklist insert (D-11 order); a guild already absent still gets blacklisted, teardown skipped
 - [Phase 21-01]: kind appended before guild_id in search_memories so the pre-existing kind-only SQL shape keeps binding at literal $3 (dynamic $N numbering, order-preserving)
 - [Phase 21-01]: recall() forwards guild_id via a conditionally-built kwargs dict splatted into search_memories, not an unconditional guild_id=X-if-Y-else-None kwarg -- the latter breaks every hand-written fake_search test double on the recall path lacking a guild_id param
+- [Phase 21-02]: purge_guild_data's docstring deliberately omits the literal identifier guild_blocklist -- the T-21-03 invariant check greps inspect.getsource(), which includes the docstring, so even a prose mention fails it; the docstring names the sibling helpers instead and says why
+- [Phase 21-02]: purge_guild_data raises on failure (no internal try/except) -- the best-effort swallow belongs at the bot.py::on_guild_remove call site (21-04), keeping the helper honestly testable
+- [Phase 21-02]: the purge's four-table list is four hardcoded SQL literals, never a loop / never information_schema -- reviewability of the literal list IS the T-21-03 control that keeps guild_blocklist structurally out of reach (OWNER-04)
 
 ### Pending Todos
 
@@ -143,8 +147,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T18:53:42.816Z
-Stopped at: Completed 21-01-PLAN.md
+Last session: 2026-07-13T19:09:11.904Z
+Stopped at: Completed 21-02-PLAN.md
 Resume file: 
 
 None
