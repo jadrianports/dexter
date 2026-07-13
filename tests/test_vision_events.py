@@ -32,9 +32,26 @@ from services.gemini import GeminiAPIError, GeminiRateLimitError
 
 
 def _make_bot() -> MagicMock:
-    """Return a minimal fake bot with a pool (memory_service unused for vision)."""
+    """Return a minimal fake bot with a pool (memory_service unused for vision).
+
+    Phase 20 / D-14: `_maybe_fire_vision_roast` now re-checks the silence-aware
+    `guild_config` cache immediately before `message.reply` (SC-2 pre-send
+    re-check). Without an explicit configured/non-silenced row here, a bare
+    `MagicMock()` `.get(...)` return value is truthy for every key lookup
+    (including `silenced`), which would make the re-check bail on every test.
+    Mirrors `tests/test_proactive_events.py::_make_bot`'s shape.
+    """
     bot = MagicMock()
     bot.pool = MagicMock()
+    bot.guild_config = MagicMock()
+    bot.guild_config.get = MagicMock(
+        return_value={
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "vision_roasts_enabled": True,
+        }
+    )
     return bot
 
 

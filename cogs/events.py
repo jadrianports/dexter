@@ -529,6 +529,20 @@ class EventsCog(commands.Cog):
             pre_recalled_memories=memories,
         )
 
+        # D-14 / SC-2: re-read the silence-aware cache immediately before send.
+        # The opt-out lookup, recall, and generate awaits above can span seconds
+        # — a `/guilds silence` (or a mid-flight toggle-off/channel change)
+        # issued during that window must suppress this now-stale response. This
+        # is a SECOND read of the same cache via the same pure predicate
+        # (Phase 10 D-02) — never re-derive `silenced`/`configured` inline.
+        if not is_ambient_channel(
+            config_row=self.bot.guild_config.get(message.guild.id),
+            channel_id=message.channel.id,
+            surface=AmbientSurface.ROAST,
+        ):
+            _release_reserved_slot()
+            return
+
         try:
             await message.reply(
                 line,
@@ -653,6 +667,18 @@ class EventsCog(commands.Cog):
         line = await self._generate_vision_roast(message.author, image_bytes, _normalize_image_mime(attachment))
         if line is None:
             # VIS-02 silent skip (safety-blocked/empty) — no send, no cooldown mark.
+            return
+
+        # D-14 / SC-2: re-read the silence-aware cache immediately before send —
+        # mirrors the proactive-callback re-check. The opt-out lookup, cadence
+        # gate, attachment read, and generate awaits above can span seconds; a
+        # mid-flight silence/toggle-off/channel-change must suppress this
+        # now-stale response. No cooldown mark on bail.
+        if not is_ambient_channel(
+            config_row=self.bot.guild_config.get(message.guild.id),
+            channel_id=message.channel.id,
+            surface=AmbientSurface.VISION,
+        ):
             return
 
         try:
