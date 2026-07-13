@@ -269,6 +269,36 @@ TEXT_SAFETY_THRESHOLD = "BLOCK_ONLY_HIGH"
 GUILDS_LIST_PAGE_SIZE = 1800
 
 
+# --- Phase 22: Invite Plumbing (INVITE-01/02) ---
+# A Discord client/application ID is PUBLIC BY DESIGN — it is visible in every invite
+# link ever handed out — so committing a default here leaks nothing. This is load-bearing,
+# not cosmetic: the Phase 18 CI gate runs with ZERO secrets and no `.env`, and the 22-03
+# drift-guard test must still resolve a real client ID there (D-04). The env override keeps
+# a fork pointed at its own Discord application.
+DISCORD_CLIENT_ID = int(os.getenv("DISCORD_CLIENT_ID") or "1492588698364018898")
+
+# The ten-permission least-privilege invite bitfield (D-01, amended by D-09 to add the two
+# /autolyrics thread permissions). Each permission is code-proven, not aspirational:
+#   view_channel             - prerequisite for every ambient/message surface
+#   send_messages            - every cog
+#   embed_links               - 78 `embed=` sends across cogs/*.py
+#   attach_files              - cogs/imagine.py:69-74 (discord.File upload)
+#   add_reactions             - cogs/events.py:345,355,379 (👀 / 🫡 / 😐 reactions)
+#   read_message_history      - cogs/music.py:833 (channel.fetch_message for now-playing edit)
+#   connect                   - cogs/music.py:526 (member.voice.channel.connect())
+#   speak                     - voice playback
+#   create_public_threads     - cogs/music.py:938 (/autolyrics thread creation, D-09)
+#   send_messages_in_threads  - cogs/music.py:950,958,965 (/autolyrics thread posts, D-09)
+# The superseded 8-permission value 3263552 (pre-D-09) must NEVER be assigned to a constant.
+# Locked by tests/test_invite_logic.py::test_bitfield_excludes_dangerous_permissions
+# (no administrator/manage_guild/manage_roles/manage_channels/ban_members/kick_members)
+# and test_bitfield_matches_ten_permission_derivation (the magic number is never trusted alone).
+INVITE_PERMISSIONS_VALUE = 309240908864
+
+# oauth_url() takes an Iterable[str] -- a bare string would iterate character-by-character.
+INVITE_SCOPES: tuple[str, ...] = ("bot", "applications.commands")
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
