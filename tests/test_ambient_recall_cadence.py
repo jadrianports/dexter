@@ -150,6 +150,10 @@ async def test_roast_always_recalls_target_scoped():
     call_args = bot.memory_service.recall.call_args[0]
     assert call_args[0] == str(target.id), f"Expected recall scoped to target id {target.id}, got {call_args[0]}"
     assert call_args[0] != str(interaction.user.id), "recall must never be scoped to the invoker for /roast (RAG-01)"
+    # Phase 21 / MEM-01: /roast is an explicit opt-in into guild-scoped recall.
+    assert bot.memory_service.recall.call_args.kwargs.get("guild_scoped") is True, (
+        "/roast recall must pass guild_scoped=True (MEM-01)"
+    )
 
 
 @pytest.mark.asyncio
@@ -183,6 +187,43 @@ async def test_ask_always_recalls_invoker_scoped():
     assert call_args[0] == str(interaction.user.id), (
         f"Expected recall scoped to invoker id {interaction.user.id}, got {call_args[0]}"
     )
+
+
+@pytest.mark.asyncio
+async def test_ask_recall_is_never_guild_scoped():
+    """/ask recall() must NEVER carry a guild_scoped kwarg (MEM-02).
+
+    /ask is a user explicitly and synchronously pulling their OWN memory — no
+    cross-user exposure is possible, so recall stays global. This is the test
+    that fails if someone "consistency-fixes" /ask to match /roast's opt-in.
+    """
+    bot = _make_bot()
+    interaction = _make_interaction(user_id=42)
+
+    bot.message_buffer = MagicMock()
+    bot.message_buffer.get_gemini_history = MagicMock(return_value=[])
+    bot.message_buffer.add = MagicMock()
+
+    gemini_service = MagicMock()
+    gemini_service.chat = AsyncMock(return_value="an answer, reluctantly.")
+    bot.gemini_service = gemini_service
+
+    with (
+        patch("cogs.ai.get_mood", new=AsyncMock(return_value="normal")),
+        patch("cogs.ai.get_user_summary", new=AsyncMock(return_value="User summary")),
+        patch("cogs.ai.get_seasonal_context", return_value=""),
+        patch("cogs.ai.build_chat_prompt", return_value="system prompt"),
+        patch("cogs.ai.increment_daily_stat", new=AsyncMock()),
+    ):
+        from cogs.ai import AICog
+
+        cog = AICog(bot)
+        await cog.ask.callback(cog, interaction, "what is the meaning of life")
+
+    bot.memory_service.recall.assert_awaited_once()
+    call_kwargs = bot.memory_service.recall.call_args.kwargs
+    assert call_kwargs.get("guild_scoped") is not True
+    assert "guild_scoped" not in call_kwargs, "MEM-02: /ask recall must carry NO guild_scoped kwarg at all"
 
 
 # ---------------------------------------------------------------------------
@@ -233,3 +274,57 @@ async def test_pre_recalled_bypasses_internal_recall():
         await cog._generate_ambient_roast(member, "scenario text", ["fallback line"])
 
     bot.memory_service.recall.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ambient_roast_recall_is_guild_scoped():
+    """Ambient voice-join roast (default pre_recalled_memories=None path) recalls
+    with guild_scoped=True (MEM-01) — this surface is an unprompted broadcast to a
+    channel, the exact case guild-scoping exists to close.
+    """
+    bot = _make_bot()
+    bot.gemini_service = MagicMock()
+    bot.gemini_service.chat = AsyncMock(return_value="a generated line")
+
+    member = _make_target(user_id=5, display_name="Scoped")
+    member.guild = MagicMock(spec=discord.Guild)
+    member.guild.id = 100
+
+    with (
+        patch("cogs.events.get_user_summary", new=AsyncMock(return_value="taste summary")),
+        patch("cogs.events.build_chat_prompt", return_value="system prompt"),
+        patch("cogs.events.random.random", return_value=0.0),  # force MEMORY_CALLBACK_CHANCE gate to pass
+    ):
+        cog = cogs.events.EventsCog(bot)
+        await cog._generate_ambient_roast(member, "scenario text", ["fallback line"])
+
+    bot.memory_service.recall.assert_awaited_once()
+    assert bot.memory_service.recall.call_args.kwargs.get("guild_scoped") is True
+
+
+# ---------------------------------------------------------------------------
+# (D) Phase 21 / MEM-01 — per-call-site guild-scoping opt-in lock
+# ---------------------------------------------------------------------------
+
+
+class TestGuildScopedOptIns:
+    """Source-level assertions for surfaces too Discord-heavy to drive
+    behaviorally (proactive callback, music-command callback) — per TESTING.md,
+    Discord glue is structural-review; source assertions are the established
+    idiom in this file and in tests/test_autoqueue_wiring.py.
+    """
+
+    def test_proactive_callback_recall_is_guild_scoped(self):
+        src = inspect.getsource(cogs.events.EventsCog._maybe_fire_proactive_callback)
+        assert "guild_scoped=True" in src
+
+    def test_music_callback_recall_is_guild_scoped(self):
+        src = inspect.getsource(cogs.music.MusicCog._build_roast_line)
+        assert "guild_scoped=" in src
+        assert "guild_id reserved" not in src
+
+    def test_ask_callback_never_mentions_guild_scoped(self):
+        """A second, cheap MEM-02 net that runs even if the behavioral test's
+        mock stack drifts."""
+        src = inspect.getsource(cogs.ai.AICog.ask.callback)
+        assert "guild_scoped" not in src

@@ -120,3 +120,17 @@ class TestScarTwoUntouched:
         src = _try_auto_queue_source()
         assert "if voice_client and not queue.is_playing" not in src
         assert "should_start_playback(" in src
+
+
+# ---------------------------------------------------------------------------
+# Phase 21 / MEM-01 — positive-taste-blend recall opts into guild scoping
+# ---------------------------------------------------------------------------
+
+
+class TestGuildScopedTasteBlend:
+    def test_taste_blend_recall_is_guild_scoped(self):
+        """The both-optional-clauses SQL shape: kind="taste_episode" AND
+        guild_scoped=True both appear on the same recall() call."""
+        src = _try_auto_queue_source()
+        assert 'kind="taste_episode"' in src
+        assert "guild_scoped=True" in src
