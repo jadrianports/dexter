@@ -36,9 +36,9 @@ The foundational seam. Every other category reads from it.
 The stated abuse mitigation. Table stakes, not polish.
 
 - [ ] **OWNER-01**: The owner can list every server Dexter is in, with per-guild AI usage visible
-- [ ] **OWNER-02**: The owner can silence a guild — Dexter stays joined but suppresses ambient behavior and commands
+- [x] **OWNER-02**: The owner can silence a guild — Dexter stays joined but suppresses ambient behavior and commands
 - [ ] **OWNER-03**: The owner can force-leave a guild, with teardown mirroring the `clear_persisted()` discipline (bump `_play_generation`, clear queue + voice state) so no ghost state resurrects on re-invite
-- [ ] **OWNER-04**: Blocked guilds persist in a blacklist; a re-invite is refused via a block-check-first in the guild-join handler
+- [x] **OWNER-04**: Blocked guilds persist in a blacklist; a re-invite is refused via a block-check-first in the guild-join handler
 - [ ] **OWNER-05**: A single choke point enforces the block for slash commands (`CommandTree.interaction_check`) and a single seam enforces it for ambient behavior (the CONFIG-02 resolver) — no per-cog checks to remember
 - [ ] **OWNER-06**: Every owner command enforces an inline `is_owner()` check, and the block check is TOCTOU-safe — evaluated before any `await` in an ambient entry point and re-checked immediately before the final send
 
@@ -133,9 +133,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | ONBOARD-04 | Phase 19 | Complete |
 | ONBOARD-05 | Phase 19 | Complete |
 | OWNER-01 | Phase 20 | Pending |
-| OWNER-02 | Phase 20 | Pending |
+| OWNER-02 | Phase 20 | Complete |
 | OWNER-03 | Phase 20 | Pending |
-| OWNER-04 | Phase 20 | Pending |
+| OWNER-04 | Phase 20 | Complete |
 | OWNER-05 | Phase 20 | Pending |
 | OWNER-06 | Phase 20 | Pending |
 | MEM-01 | Phase 21 | Pending |

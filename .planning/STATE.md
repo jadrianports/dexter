@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Phase 20 context gathered
-last_updated: "2026-07-10T21:00:05.814Z"
-last_activity: 2026-07-10 -- Phase 20 planning complete
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-07-13T14:19:42.812Z"
+last_activity: 2026-07-13 -- Phase 20 execution started
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 18
+  completed_plans: 12
   percent: 33
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 19 — onboarding-admin-setup
+**Current focus:** Phase 20 — owner-control-plane-rate-observability
 
 ## Current Position
 
-Phase: 20
-Plan: Not started
+Phase: 20 (owner-control-plane-rate-observability) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-07-10 -- Phase 20 planning complete
+Last activity: 2026-07-13 -- Phase 20 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 19 P02 | 20min | 3 tasks | 6 files |
 | Phase 19 P03 | 20min | 3 tasks | 3 files |
 | Phase 19 P04 | 15min | 3 tasks | 2 files |
+| Phase 20 P01 | 15min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 19]: [Phase 19-03]: boot backfill runs strictly after seed_home_guild and before queue-persistence wiring in _initialize_once -- reversing this order would backfill-and-welcome the home guild itself as configured=false (D-14 constraint 1)
 - [Phase 19]: [Phase 19-04]: setup_channel reads the cached row once before branching, driving both the first-configure/re-designate decision and (for re-designate) the old->new channel phrasing in the reply
 - [Phase 19]: [Phase 19-04]: cogs/admin.py is a dedicated guild-admin (manage_guild) surface, structurally separate from cogs/ops.py's owner (is_owner) surface (D-04)
+- [Phase 20-01]: guild_blocklist lands as its own table (D-01) with load_blocklist/insert_blocklist/delete_blocklist + set_silenced helpers in database.py; guild_config.is_blocked left in place but dead (D-03), documented in CLAUDE.md
 
 ### Pending Todos
 
@@ -122,9 +124,9 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-10T20:15:37.969Z
-Stopped at: Phase 20 context gathered
-Resume file: .planning/phases/20-owner-control-plane-rate-observability/20-CONTEXT.md
+Last session: 2026-07-13T14:19:42.798Z
+Stopped at: Completed 20-01-PLAN.md
+Resume file: 
 
 ## Operator Next Steps
 

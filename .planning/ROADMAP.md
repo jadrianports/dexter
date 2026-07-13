@@ -169,7 +169,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 1**
 
-- [ ] 20-01-PLAN.md — guild_blocklist table + blocklist/silenced DB helpers + live-DB tests (OWNER-04/02)
+- [x] 20-01-PLAN.md — guild_blocklist table + blocklist/silenced DB helpers + live-DB tests (OWNER-04/02)
 - [ ] 20-02-PLAN.md — pure logic: silenced branch in decide_ambient_channel + decide_interaction_allowed predicate (OWNER-05/06)
 - [ ] 20-03-PLAN.md — GeminiService per-guild session counter + guild_id kwargs + non-events call-site threading (RATE-01)
 
@@ -252,7 +252,7 @@ Full phase details, success criteria, and decisions archived in
 | 17. Vision / Multimodal Roasting | v1.3 | 2/2 | Complete (live-runtime UAT deferred) | 2026-07-02 |
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
-| 20. Owner Control Plane & Rate Observability | v1.4 | 0/7 | Planned | - |
+| 20. Owner Control Plane & Rate Observability | v1.4 | 1/7 | In Progress|  |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
