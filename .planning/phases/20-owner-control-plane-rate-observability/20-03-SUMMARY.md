@@ -109,3 +109,11 @@ None - no external service configuration required.
 ---
 *Phase: 20-owner-control-plane-rate-observability*
 *Completed: 2026-07-13*
+
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/20-owner-control-plane-rate-observability/20-03-SUMMARY.md`
+- FOUND: `72536f3` (Task 1 commit)
+- FOUND: `29d9aeb` (Task 2 commit)
+- FOUND: `3307ba7` (Task 3 commit)
+- FOUND: `78a0735` (SUMMARY commit)
