@@ -608,6 +608,87 @@ class TestSearchMemoriesKindFilter:
         assert pool.conn.last_params == ("u1", embedding, "taste_episode", 5)
 
 
+class TestSearchMemoriesGuildFilter:
+    """database.search_memories: guild_id=None is byte-identical; guild_id=X appends
+    the D-01 grandfather-rule OR-group, independently combinable with kind."""
+
+    def test_no_kind_no_guild_omits_both_clauses(self) -> None:
+        """Byte-identical regression: neither optional clause emitted (T-21-01/02 baseline)."""
+        import asyncio
+
+        import database
+
+        pool = _FakePool()
+        embedding = [0.1] * 768
+
+        asyncio.run(database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5))
+
+        assert "kind =" not in pool.conn.last_sql
+        assert "guild_id" not in pool.conn.last_sql
+        assert pool.conn.last_params == ("u1", embedding, 5)
+
+    def test_kind_only_binds_at_dollar_3(self) -> None:
+        """kind alone still binds at literal $3 (dynamic numbering did not shift it)."""
+        import asyncio
+
+        import database
+
+        pool = _FakePool()
+        embedding = [0.1] * 768
+
+        asyncio.run(
+            database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5, kind="taste_episode")
+        )
+
+        assert "AND kind = $3" in pool.conn.last_sql
+        assert "guild_id" not in pool.conn.last_sql
+        assert pool.conn.last_params == ("u1", embedding, "taste_episode", 5)
+
+    def test_guild_only_appends_grandfather_or_group(self) -> None:
+        """guild_id alone appends (guild_id = $3 OR guild_id IS NULL); WHERE user_id = $1 survives."""
+        import asyncio
+
+        import database
+
+        pool = _FakePool()
+        embedding = [0.1] * 768
+
+        asyncio.run(database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5, guild_id="g1"))
+
+        assert "WHERE user_id = $1" in pool.conn.last_sql
+        assert "guild_id = $" in pool.conn.last_sql
+        assert "OR guild_id IS NULL" in pool.conn.last_sql
+        assert " AND (guild_id" in pool.conn.last_sql
+        assert " OR guild_id = $1" not in pool.conn.last_sql
+        assert pool.conn.last_params == ("u1", embedding, "g1", 5)
+
+    def test_kind_and_guild_combine_with_dynamic_numbering(self) -> None:
+        """kind + guild_id together: kind binds $3, guild_id binds $4 — the auto-queue taste-blend shape."""
+        import asyncio
+
+        import database
+
+        pool = _FakePool()
+        embedding = [0.1] * 768
+
+        asyncio.run(
+            database.search_memories(
+                pool,
+                user_id="u1",
+                query_embedding=embedding,
+                k=5,
+                kind="taste_episode",
+                guild_id="g1",
+            )
+        )
+
+        assert "WHERE user_id = $1" in pool.conn.last_sql
+        assert "AND kind = $3" in pool.conn.last_sql
+        assert "guild_id = $4" in pool.conn.last_sql
+        assert "OR guild_id IS NULL" in pool.conn.last_sql
+        assert pool.conn.last_params == ("u1", embedding, "taste_episode", "g1", 5)
+
+
 class TestRecallKindParam:
     """services.memory.MemoryService.recall: kind threads through to search_memories."""
 

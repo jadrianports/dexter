@@ -1337,6 +1337,7 @@ async def search_memories(
     query_embedding: list[float],
     k: int,
     kind: str | None = None,
+    guild_id: str | None = None,
 ) -> list[asyncpg.Record]:
     """Cosine ANN search scoped to user_id. Returns up to k rows.
 
@@ -1360,6 +1361,18 @@ async def search_memories(
     ``kind="taste_episode"``), narrows the WHERE clause within the existing
     ``user_id = $1`` scope only — it can never widen scope (T-14-03).
 
+    Phase 21 (MEM-01/MEM-03 / D-01): ``guild_id`` is a second optional
+    keyword-only filter, independent of ``kind``. When omitted (``None``, the
+    default) no guild clause is emitted at all — byte-identical to pre-Phase-21.
+    When provided, narrows to ``(guild_id = $N OR guild_id IS NULL)`` — the
+    grandfather rule: rows stamped with this guild PLUS the legacy
+    pre-Phase-21 corpus where ``guild_id`` was never recorded. Both optional
+    clauses use append-time dynamic ``$N`` numbering (params list length at the
+    moment each clause is appended) rather than a hardcoded literal, so adding
+    a third optional clause in the future cannot silently collide or shift the
+    existing ones — ``kind`` is always appended before ``guild_id`` so the
+    kind-only call shape keeps binding at literal ``$3``.
+
     Args:
         pool:            asyncpg connection pool (with pgvector codec registered).
         user_id:         Caller's user_id — scope guard (never cross-user).
@@ -1367,6 +1380,9 @@ async def search_memories(
         k:               Max rows to return (config.MEMORY_TOP_K = 8).
         kind:            Optional exact-match filter on the memory's kind column
                           (e.g. "taste_episode" for D-03's positive-taste blend).
+        guild_id:        Optional guild filter (D-01 grandfather rule): narrows to
+                          this guild's rows plus the legacy ``guild_id IS NULL``
+                          corpus. Never widens scope beyond ``user_id = $1``.
 
     Returns:
         List of asyncpg.Record rows with columns: id, fact, kind, salience, hit_count,
@@ -1374,15 +1390,21 @@ async def search_memories(
         ``kind`` lets callers (e.g. remember()'s dedup branch) gate behaviour on the
         MATCHED row's kind, not the incoming write's kind (CR-13-01 / D-05 firewall).
     """
-    kind_clause = " AND kind = $3" if kind is not None else ""
-    params: list = [user_id, query_embedding] + ([kind] if kind is not None else [])
+    params: list = [user_id, query_embedding]
+    clauses = ""
+    if kind is not None:
+        params.append(kind)
+        clauses += f" AND kind = ${len(params)}"
+    if guild_id is not None:
+        params.append(guild_id)
+        clauses += f" AND (guild_id = ${len(params)} OR guild_id IS NULL)"
     async with pool.acquire() as conn:
         return await conn.fetch(
             "SELECT id, fact, kind, salience, hit_count, created_at, last_seen_at,"
             "       last_surfaced_at, surface_count,"
             "       1 - (embedding <=> $2) AS similarity"
             " FROM user_memories"
-            f" WHERE user_id = $1{kind_clause}"
+            f" WHERE user_id = $1{clauses}"
             " ORDER BY embedding <=> $2"
             " LIMIT $" + str(len(params) + 1),
             *params,
