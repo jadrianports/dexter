@@ -1,5 +1,6 @@
 """Tests for GeminiService with mocked API calls."""
 
+import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -185,3 +186,98 @@ class TestGeminiSafetySettings:
             service = GeminiService(api_key="fake-key")
             with pytest.raises(GeminiAPIError):
                 await service.chat(system_prompt="test", conversation=[])
+
+
+# ──────────────────────── Phase 20-03: RATE-01 guild_id usage counter ────────────────────────
+
+
+def _mock_image_response(image_bytes: bytes = b"\x89PNG\r\n"):
+    """Return a MagicMock response shaped like a successful generate_image call."""
+    part = MagicMock()
+    part.inline_data.data = image_bytes
+    content = MagicMock()
+    content.parts = [part]
+    candidate = MagicMock()
+    candidate.content = content
+    response = MagicMock()
+    response.candidates = [candidate]
+    return response
+
+
+class TestGeminiGuildUsageCounter:
+    """RATE-01 / D-08 / D-09: guild-attributable chat/image calls increment a
+    per-guild session counter; guild-less calls and embed() are excluded."""
+
+    @pytest.mark.asyncio
+    async def test_chat_with_guild_id_increments_usage(self):
+        mock_client, _ = _mock_service_and_generate()
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+
+            assert service.guild_usage("g1") == 0
+            await service.chat(system_prompt="test", conversation=[], guild_id="g1")
+            assert service.guild_usage("g1") == 1
+            await service.chat(system_prompt="test", conversation=[], guild_id="g1")
+            assert service.guild_usage("g1") == 2
+
+    @pytest.mark.asyncio
+    async def test_chat_without_guild_id_not_counted(self):
+        mock_client, _ = _mock_service_and_generate()
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+
+            await service.chat(system_prompt="test", conversation=[], guild_id=None)
+            await service.chat(system_prompt="test", conversation=[])  # default None
+            assert service.guild_usage(None) == 0
+            assert service._guild_usage == {}
+
+    @pytest.mark.asyncio
+    async def test_two_guild_ids_track_independently(self):
+        mock_client, _ = _mock_service_and_generate()
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+
+            await service.chat(system_prompt="test", conversation=[], guild_id="g1")
+            await service.chat(system_prompt="test", conversation=[], guild_id="g2")
+            await service.chat(system_prompt="test", conversation=[], guild_id="g1")
+
+            assert service.guild_usage("g1") == 2
+            assert service.guild_usage("g2") == 1
+
+    def test_guild_usage_unseen_guild_returns_zero(self):
+        with patch("services.gemini.genai"):
+            service = GeminiService(api_key="fake-key")
+            assert service.guild_usage("never-seen") == 0
+            assert service.guild_usage(None) == 0
+
+    @pytest.mark.asyncio
+    async def test_generate_image_with_guild_id_increments_usage(self):
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(return_value=_mock_image_response())
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+
+            assert service.guild_usage("g2") == 0
+            result = await service.generate_image("a cat", guild_id="g2")
+            assert result == b"\x89PNG\r\n"
+            assert service.guild_usage("g2") == 1
+
+    @pytest.mark.asyncio
+    async def test_generate_image_without_guild_id_not_counted(self):
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(return_value=_mock_image_response())
+        with patch("services.gemini.genai") as mock_genai:
+            mock_genai.Client.return_value = mock_client
+            service = GeminiService(api_key="fake-key")
+
+            await service.generate_image("a cat")
+            assert service._guild_usage == {}
+
+    def test_embed_signature_has_no_guild_id_param(self):
+        # D-09: embed() lives on the separate 60 RPM limiter and is never tagged.
+        sig = inspect.signature(GeminiService.embed)
+        assert "guild_id" not in sig.parameters
