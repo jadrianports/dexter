@@ -91,6 +91,46 @@ class TestPurgeGuildDataStructure:
 
 
 # ---------------------------------------------------------------------------
+# WR-02 (21-REVIEW.md) — lock the single wiring point tying the well-tested
+# purge helper to a real guild departure. `database.purge_guild_data` itself
+# is thoroughly covered above; nothing previously asserted that
+# `bot.py::on_guild_remove` actually calls it. Source-inspection idiom
+# mirrors tests/test_ambient_recall_cadence.py::TestGuildScopedOptIns and
+# tests/test_autoqueue_wiring.py::TestGuildScopedTasteBlend — the
+# established pattern for Discord-glue surfaces too heavy to drive
+# behaviorally.
+# ---------------------------------------------------------------------------
+
+
+class TestOnGuildRemoveWiring:
+    """A future edit that silently drops, comments out, or reorders past a
+    `return` this call would otherwise pass the full test suite with zero
+    warning — this is the highest-blast-radius new code path in the phase
+    (an unconditional data purge on every guild departure)."""
+
+    def _on_guild_remove_source(self) -> str:
+        import bot as bot_module
+
+        return inspect.getsource(bot_module.on_guild_remove)
+
+    def test_on_guild_remove_calls_purge_guild_data(self) -> None:
+        src = self._on_guild_remove_source()
+        assert "purge_guild_data" in src, (
+            "bot.py::on_guild_remove must call database.purge_guild_data (MEM-04) "
+            "— a departed guild's data must not resurface on re-invite"
+        )
+
+    def test_on_guild_remove_purge_is_wrapped_in_try_except(self) -> None:
+        """D-03 / WR-04 discipline: the purge is best-effort and must never crash
+        guild removal — a failure logs a warning and is swallowed."""
+        src = self._on_guild_remove_source()
+        assert "try:" in src and "except Exception" in src, (
+            "on_guild_remove's purge call must be wrapped in try/except Exception"
+        )
+        assert "log.warning" in src, "a failed purge must log a warning, not raise or silently vanish"
+
+
+# ---------------------------------------------------------------------------
 # Live-DB integration tests (21-02 Task 2)
 # ---------------------------------------------------------------------------
 
