@@ -547,6 +547,7 @@ async def _initialize_once() -> None:
         "cogs.ops",
         "cogs.memory",
         "cogs.admin",
+        "cogs.invite",
     ):
         if _ext not in bot.extensions:
             await bot.load_extension(_ext)
@@ -1386,6 +1387,7 @@ async def first_run(guild_id: str | None = None):
     await bot.load_extension("cogs.library")
     await bot.load_extension("cogs.ops")
     await bot.load_extension("cogs.memory")
+    await bot.load_extension("cogs.invite")
     if os.getenv("GEMINI_API_KEY"):
         await bot.load_extension("cogs.ai")
         await bot.load_extension("cogs.imagine")

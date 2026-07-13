@@ -20,6 +20,7 @@ COMMANDS_INFO = [
     ("/ask <question>", "Ask Dexter anything (AI-powered)"),
     ("/imagine <prompt>", "Generate an image"),
     ("/help", "Show this help message"),
+    ("/invite", "Get Dexter's invite link"),
 ]
 
 ADMIN_COMMANDS_INFO = [

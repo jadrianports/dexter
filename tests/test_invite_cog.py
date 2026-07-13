@@ -10,11 +10,14 @@ Tests:
 - test_invite_command_has_no_cooldown            — no app_commands.checks.cooldown
 - test_invite_command_falls_back_to_application_id — DISCORD_CLIENT_ID=0 -> bot.application_id
 - test_cog_does_not_construct_a_url_itself       — no literal oauth2 URL / oauth_url( in the cog (D-03)
+- test_invite_cog_registered_at_both_bot_load_sites — Phase 8 scar: bot.py dual cog-registration
+- test_invite_listed_in_help_commands            — /invite discoverable via /help (D-06)
 """
 
 from __future__ import annotations
 
 import inspect
+import pathlib
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -131,3 +134,30 @@ def test_cog_does_not_construct_a_url_itself():
     src = inspect.getsource(invite_module)
     assert "discord.com/oauth2" not in src
     assert "oauth_url(" not in src
+
+
+# ---------------------------------------------------------------------------
+# Wiring-regression tests (source-inspection, no live bot)
+# ---------------------------------------------------------------------------
+
+
+def test_invite_cog_registered_at_both_bot_load_sites():
+    """Phase 8 scar: bot.py has TWO cog-registration sites (the
+    _initialize_once list-form loop and the --first-run sequential
+    fallback). If they drift, --first-run syncs a different command set than
+    the running bot exposes — Phase 8 UAT surfaced /leaderboard, /stats, and
+    the library commands missing this exact way. cogs.invite must appear in
+    both."""
+    src = pathlib.Path("bot.py").read_text(encoding="utf-8")
+    assert src.count("cogs.invite") >= 2
+    assert '"cogs.invite"' in src
+    assert 'await bot.load_extension("cogs.invite")' in src
+
+
+def test_invite_listed_in_help_commands():
+    """D-06: /invite is discoverable from /help, as a Utility command (not
+    an admin one)."""
+    from cogs.help import ADMIN_COMMANDS_INFO, COMMANDS_INFO
+
+    assert any(cmd.startswith("/invite") for cmd, _ in COMMANDS_INFO)
+    assert not any(cmd.startswith("/invite") for cmd, _ in ADMIN_COMMANDS_INFO)
