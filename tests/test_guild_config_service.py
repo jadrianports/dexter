@@ -34,6 +34,7 @@ class _FakeConn:
     def __init__(self, rows=None, raise_on_fetch=None):
         self._rows = rows if rows is not None else []
         self._raise_on_fetch = raise_on_fetch
+        self.execute_calls: list = []
 
     async def fetch(self, sql, *params):
         if self._raise_on_fetch is not None:
@@ -44,7 +45,47 @@ class _FakeConn:
         return None
 
     async def execute(self, sql, *params):
+        self.execute_calls.append((sql, params))
         return "INSERT 0 1"
+
+
+class _MultiTableConn:
+    """A fake conn whose `fetch` returns different rows depending on which
+    table the query targets -- keyed on a substring of the SQL text so
+    `load_all()` can populate BOTH the config cache and `_blocked` in one
+    call (Phase 20 / 20-04 Task 2)."""
+
+    def __init__(self, *, config_rows=None, blocklist_rows=None, raise_on_blocklist=None):
+        self._config_rows = config_rows if config_rows is not None else []
+        self._blocklist_rows = blocklist_rows if blocklist_rows is not None else []
+        self._raise_on_blocklist = raise_on_blocklist
+        self.execute_calls: list = []
+
+    async def fetch(self, sql, *params):
+        if "guild_blocklist" in sql:
+            if self._raise_on_blocklist is not None:
+                raise self._raise_on_blocklist
+            return self._blocklist_rows
+        return self._config_rows
+
+    async def fetchrow(self, sql, *params):
+        return None
+
+    async def execute(self, sql, *params):
+        self.execute_calls.append((sql, params))
+        return "INSERT 0 1"
+
+
+class _MultiTableSpyPool:
+    """Counts every .acquire() call, backed by _MultiTableConn."""
+
+    def __init__(self, **kwargs):
+        self.conn = _MultiTableConn(**kwargs)
+        self.acquire_count = 0
+
+    def acquire(self):
+        self.acquire_count += 1
+        return _FakePoolCM(self.conn)
 
 
 class _FakePoolCM:
@@ -134,7 +175,7 @@ def test_no_round_trip_after_load_all():
     service = GuildConfigService(pool, _FakeBot())
 
     asyncio.run(service.load_all())
-    assert pool.acquire_count == 1  # exactly the load_all fetch
+    assert pool.acquire_count == 2  # the config fetch + the blocklist fetch (Phase 20)
 
     # Exercise both cache-only reads several times.
     channel = _make_channel(channel_id=500)
@@ -145,8 +186,8 @@ def test_no_round_trip_after_load_all():
     assert service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST) is channel
     assert service.resolve_ambient_channel(guild, surface=AmbientSurface.ROAST) is channel
 
-    # Still exactly one pool access -- everything after load_all was cache-only.
-    assert pool.acquire_count == 1
+    # Still exactly two pool accesses -- everything after load_all was cache-only.
+    assert pool.acquire_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +364,148 @@ def test_resolve_announce_channel_falls_back_to_first_writable_text_channel():
     guild.text_channels = [unwritable, writable]
 
     assert service.resolve_announce_channel(guild) is writable
+
+
+# ---------------------------------------------------------------------------
+# Blocked-set (D-01/D-02/D-03) -- Phase 20 / 20-04
+# ---------------------------------------------------------------------------
+
+
+def test_is_blocked_after_load_all_zero_extra_round_trips():
+    """load_all populates BOTH the config cache and `_blocked`; is_blocked
+    afterward does zero additional pool round-trips (CONFIG-03 / D-02)."""
+    config_rows = [{"guild_id": "100", "ambient_channel_id": "500", "configured": True}]
+    blocklist_rows = [{"guild_id": "g-blocked", "reason": "spam", "blocked_at": None}]
+    pool = _MultiTableSpyPool(config_rows=config_rows, blocklist_rows=blocklist_rows)
+    service = GuildConfigService(pool, _FakeBot())
+
+    asyncio.run(service.load_all())
+    assert pool.acquire_count == 2  # exactly the config fetch + the blocklist fetch
+
+    assert service.is_blocked("g-blocked") is True
+    assert service.is_blocked("g-clean") is False
+
+    # Zero additional round-trips from is_blocked.
+    assert pool.acquire_count == 2
+
+
+def test_block_guild_and_unblock_guild_flip_is_blocked_with_one_write_each():
+    """block_guild writes DB then adds to the set; unblock_guild deletes then
+    discards (D-02) -- each is exactly one write."""
+    pool = _SpyPool(rows=[])
+    service = GuildConfigService(pool, _FakeBot())
+    asyncio.run(service.load_all())
+
+    assert service.is_blocked("g-new") is False
+
+    asyncio.run(service.block_guild(guild_id="g-new", reason="spam"))
+    assert service.is_blocked("g-new") is True
+    assert len(pool.conn.execute_calls) == 1
+
+    asyncio.run(service.unblock_guild(guild_id="g-new"))
+    assert service.is_blocked("g-new") is False
+    assert len(pool.conn.execute_calls) == 2
+
+
+def test_load_all_blocklist_failure_leaves_blocked_empty_config_cache_intact():
+    """A blocklist-load failure independently empties `_blocked` WITHOUT
+    blanking a successfully-loaded config cache (T-20-12 / fail-open on
+    blocklist, fail-closed on config -- each subsystem keeps its own
+    direction)."""
+    config_rows = [{"guild_id": "100", "ambient_channel_id": "500", "configured": True}]
+    pool = _MultiTableSpyPool(
+        config_rows=config_rows,
+        raise_on_blocklist=RuntimeError("guild_blocklist table missing"),
+    )
+    service = GuildConfigService(pool, _FakeBot())
+
+    asyncio.run(service.load_all())
+
+    assert service._blocked == set()
+    assert service.is_blocked("100") is False
+    assert service.get("100") is not None
+    assert service.get("100")["configured"] is True
+
+
+# ---------------------------------------------------------------------------
+# Silence (D-14) -- Phase 20 / 20-04
+# ---------------------------------------------------------------------------
+
+
+def test_silence_guild_returns_true_and_flips_is_silenced(monkeypatch):
+    """silence_guild returns True on a real row and is_silenced then reads
+    True off the push-invalidated config cache."""
+    rows = [{"guild_id": "100", "ambient_channel_id": "500", "configured": True, "silenced": False}]
+    pool = _SpyPool(rows=rows)
+    service = GuildConfigService(pool, _FakeBot())
+    asyncio.run(service.load_all())
+
+    assert service.is_silenced("100") is False
+
+    silenced_row = {
+        "guild_id": "100",
+        "ambient_channel_id": "500",
+        "configured": True,
+        "silenced": True,
+    }
+
+    async def _fake_set_silenced(_pool, *, guild_id, silenced):
+        assert guild_id == "100"
+        assert silenced is True
+        return silenced_row
+
+    monkeypatch.setattr("services.guild_config.database.set_silenced", _fake_set_silenced)
+
+    result = asyncio.run(service.silence_guild(guild_id="100"))
+
+    assert result is True
+    assert service.is_silenced("100") is True
+
+
+def test_unsilence_guild_returns_true_and_flips_is_silenced_false(monkeypatch):
+    """unsilence_guild mirrors silence_guild's write-then-invalidate contract."""
+    rows = [{"guild_id": "100", "ambient_channel_id": "500", "configured": True, "silenced": True}]
+    pool = _SpyPool(rows=rows)
+    service = GuildConfigService(pool, _FakeBot())
+    asyncio.run(service.load_all())
+
+    assert service.is_silenced("100") is True
+
+    unsilenced_row = {
+        "guild_id": "100",
+        "ambient_channel_id": "500",
+        "configured": True,
+        "silenced": False,
+    }
+
+    async def _fake_set_silenced(_pool, *, guild_id, silenced):
+        assert silenced is False
+        return unsilenced_row
+
+    monkeypatch.setattr("services.guild_config.database.set_silenced", _fake_set_silenced)
+
+    result = asyncio.run(service.unsilence_guild(guild_id="100"))
+
+    assert result is True
+    assert service.is_silenced("100") is False
+
+
+def test_silence_guild_returns_false_when_no_row_exists(monkeypatch):
+    """A missing guild_config row -> set_silenced returns None -> silence_guild
+    returns False and is_silenced stays False (no-op, no false success)."""
+    pool = _SpyPool(rows=[])
+    service = GuildConfigService(pool, _FakeBot())
+    asyncio.run(service.load_all())
+
+    async def _fake_set_silenced_none(_pool, *, guild_id, silenced):
+        return None
+
+    monkeypatch.setattr("services.guild_config.database.set_silenced", _fake_set_silenced_none)
+
+    result = asyncio.run(service.silence_guild(guild_id="missing"))
+
+    assert result is False
+    assert service.is_silenced("missing") is False
 
 
 if __name__ == "__main__":
