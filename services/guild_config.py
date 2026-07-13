@@ -55,6 +55,11 @@ class GuildConfigService:
         self.pool = pool
         self._bot = bot
         self._cache: dict[str, asyncpg.Record] = {}
+        self._blocked: set[str] = set()
+        """The in-memory blocked-guild-id set (D-01/D-02/D-03), boot-loaded from
+        the dedicated ``guild_blocklist`` table by ``load_all()``. Read by
+        ``is_blocked`` as an O(1) set test -- never a Neon round-trip. Mutated
+        write-then-invalidate by ``block_guild``/``unblock_guild``."""
         self.home_guild_id: str | None = None
         """The home guild's id (D-24), set only by ``seed_home_guild`` — even on
         an ``ON CONFLICT DO NOTHING`` no-op, since the seed still resolved the
@@ -86,9 +91,21 @@ class GuildConfigService:
                     color=0xFF0000,
                 )
                 await self._bot.log_to_discord(embed)
-            return
+        else:
+            self._cache = {str(row["guild_id"]): row for row in rows}
 
-        self._cache = {str(row["guild_id"]): row for row in rows}
+        # Blocklist load is INDEPENDENT of the config-cache load above (D-02/D-03,
+        # Phase 20 T-20-12): its own try/except so a blocklist-load failure never
+        # blanks the config cache, and vice-versa. An empty `_blocked` on failure
+        # means "nothing blocked" -- the safer fail-OPEN default for this one read
+        # only (the config cache keeps its own fail-CLOSED rule, D-07).
+        try:
+            blocklist_rows = await database.load_blocklist(self.pool)
+        except Exception as exc:
+            self._blocked = set()
+            log.error("guild_config: blocklist load failed, _blocked left empty (fail-open): %s", exc)
+        else:
+            self._blocked = {str(row["guild_id"]) for row in blocklist_rows}
 
     def get(self, guild_id) -> asyncpg.Record | None:
         """Cache-only accessor — no I/O, ever. Returns None on a cache miss."""
@@ -101,6 +118,63 @@ class GuildConfigService:
         and Phase 20's kill-switch call it after their own writes.
         """
         self._cache[str(record["guild_id"])] = record
+
+    # -------------------------------------------------------------------------
+    # Blocklist (D-01/D-02/D-03) -- own table, own set, write-then-invalidate.
+    # -------------------------------------------------------------------------
+
+    async def block_guild(self, *, guild_id: str, reason: str | None) -> None:
+        """Block a guild (`/guilds block`, OWNER-04): write DB THEN mutate the set (D-02).
+
+        Delegates to ``database.insert_blocklist`` (upsert). Does NOT touch
+        ``_cache``/``_refresh_cache_entry`` -- the blocklist is its own table
+        with its own in-memory set, independent of the config cache (D-03).
+        """
+        await database.insert_blocklist(self.pool, guild_id=str(guild_id), reason=reason)
+        self._blocked.add(str(guild_id))
+
+    async def unblock_guild(self, *, guild_id: str) -> None:
+        """Unblock a guild (`/guilds unblock`, OWNER-04): delete THEN discard (D-02)."""
+        await database.delete_blocklist(self.pool, guild_id=str(guild_id))
+        self._blocked.discard(str(guild_id))
+
+    def is_blocked(self, guild_id) -> bool:
+        """O(1) set membership test -- no await, no pool access (CONFIG-03 / D-02)."""
+        return str(guild_id) in self._blocked
+
+    # -------------------------------------------------------------------------
+    # Silence (D-14) -- writes guild_config.silenced, reads via the config cache.
+    # -------------------------------------------------------------------------
+
+    async def silence_guild(self, *, guild_id: str) -> bool:
+        """Silence a guild (`/guilds silence`, OWNER-02). Mirrors
+        ``set_ambient_roasts_enabled`` verbatim: write then push-invalidate.
+
+        Returns:
+            True if a guild_config row existed and was updated, False if no
+            row exists for guild_id (WR-02-style contract) -- the caller must
+            not report success on a no-op.
+        """
+        row = await database.set_silenced(self.pool, guild_id=guild_id, silenced=True)
+        if row is None:
+            return False
+        self._refresh_cache_entry(row)
+        return True
+
+    async def unsilence_guild(self, *, guild_id: str) -> bool:
+        """Unsilence a guild (`/guilds unsilence`, OWNER-02). Same contract as
+        ``silence_guild``.
+        """
+        row = await database.set_silenced(self.pool, guild_id=guild_id, silenced=False)
+        if row is None:
+            return False
+        self._refresh_cache_entry(row)
+        return True
+
+    def is_silenced(self, guild_id) -> bool:
+        """Cache-only read (D-14) -- never a pool query. False on a cache miss."""
+        row = self.get(guild_id)
+        return bool(row and row.get("silenced", False))
 
     # -------------------------------------------------------------------------
     # Home-guild seed (CONFIG-05 / D-08/D-09)
