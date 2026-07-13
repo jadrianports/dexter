@@ -182,7 +182,11 @@ class EventsCog(commands.Cog):
             ]
 
             # Priority 2 only — never contend with user /ask (priority 1)
-            result = await gemini_service.chat(system_prompt, conversation, priority=2)
+            # RATE-01: tag the guild for per-guild usage observability (D-09 —
+            # usage tagging only, never a gate/quota).
+            result = await gemini_service.chat(
+                system_prompt, conversation, priority=2, guild_id=str(member.guild.id)
+            )
 
             if result:
                 # Enforce voice rules: lowercase, strip to <=500 chars
@@ -562,12 +566,15 @@ class EventsCog(commands.Cog):
             return None
 
         try:
+            # RATE-01: tag the guild for per-guild usage observability (D-09 —
+            # usage tagging only, never a gate/quota).
             result = await gemini_service.chat(
                 build_vision_prompt(),
                 [{"role": "user", "content": "react to this image in one line."}],
                 priority=2,
                 image_bytes=image_bytes,
                 image_mime_type=mime_type,
+                guild_id=str(member.guild.id),
             )
         except (GeminiRateLimitError, GeminiAPIError) as e:
             # Transport failure only (rate-limit / API-down) -> template fallback.
