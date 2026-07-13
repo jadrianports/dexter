@@ -47,10 +47,10 @@ The stated abuse mitigation. Table stakes, not polish.
 Hybrid scoping: contain third-party exposure, keep self-recall global.
 
 - [ ] **MEM-01**: `/roast @user`, ambient roasts, and proactive callbacks recall only memories scoped to the current guild — a third party's memories never travel between servers
-- [ ] **MEM-02**: `/ask` continues to recall the **invoker's own** memory globally (self-scoped — no cross-user exposure is possible)
-- [ ] **MEM-03**: Legacy memories written with `guild_id = NULL` (e.g. `daily_batch`) are handled by an explicit, tested backward-compat rule — the existing memory corpus is not silently made unrecallable
+- [x] **MEM-02**: `/ask` continues to recall the **invoker's own** memory globally (self-scoped — no cross-user exposure is possible)
+- [x] **MEM-03**: Legacy memories written with `guild_id = NULL` (e.g. `daily_batch`) are handled by an explicit, tested backward-compat rule — the existing memory corpus is not silently made unrecallable
 - [ ] **MEM-04**: When Dexter leaves or is removed from a guild, that guild's data is purged (`guild_config`, `guild_queues`, `guild_jams`, guild-scoped `user_memories`) so stale context cannot resurface
-- [ ] **MEM-05**: Guild-scoped search does not corrupt cross-kind dedup or `expires_at` semantics — the Phase 13 CR-01 scar is locked by regression test
+- [x] **MEM-05**: Guild-scoped search does not corrupt cross-kind dedup or `expires_at` semantics — the Phase 13 CR-01 scar is locked by regression test
 
 > **Needs research at plan time.** This category touches `services/memory.py::search_memories`/`recall()` — the subsystem whose `user_id`-only scoping caused the Phase 13 CR-01 blocker. The `guild_id = NULL` backward-compat rule, dedup-search scoping, and `MEMORY_MAX_PER_USER` eviction semantics must all be resolved before implementation.
 
@@ -139,10 +139,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 | OWNER-05 | Phase 20 | Complete |
 | OWNER-06 | Phase 20 | Complete |
 | MEM-01 | Phase 21 | Pending |
-| MEM-02 | Phase 21 | Pending |
-| MEM-03 | Phase 21 | Pending |
+| MEM-02 | Phase 21 | Complete |
+| MEM-03 | Phase 21 | Complete |
 | MEM-04 | Phase 21 | Pending |
-| MEM-05 | Phase 21 | Pending |
+| MEM-05 | Phase 21 | Complete |
 | RATE-01 | Phase 20 | Complete |
 | INVITE-01 | Phase 22 | Pending |
 | INVITE-02 | Phase 22 | Pending |

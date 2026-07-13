@@ -201,7 +201,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 1**
 
-- [ ] 21-01-PLAN.md — search_memories optional guild clause (D-01 grandfather rule) + recall(guild_scoped=) keyword-only opt-in + MEM-05 dedup call-shape lock (MEM-02/03/05)
+- [x] 21-01-PLAN.md — search_memories optional guild clause (D-01 grandfather rule) + recall(guild_scoped=) keyword-only opt-in + MEM-05 dedup call-shape lock (MEM-02/03/05)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -268,6 +268,6 @@ Full phase details, success criteria, and decisions archived in
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
-| 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 0/TBD | Not started | - |
+| 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 1/4 | In Progress|  |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Phase 21 context gathered
-last_updated: "2026-07-13T18:36:53.181Z"
-last_activity: 2026-07-13 -- Phase 21 planning complete
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-07-13T18:53:42.824Z"
+last_activity: 2026-07-13 -- Phase 21 execution started
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 22
+  completed_plans: 19
   percent: 50
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 20 — owner-control-plane-rate-observability
+**Current focus:** Phase 21 — memory-scoping-guild-data-lifecycle
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
+Phase: 21 (memory-scoping-guild-data-lifecycle) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-07-13 -- Phase 21 planning complete
+Last activity: 2026-07-13 -- Phase 21 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -68,6 +68,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 20 P05 | 21min | 3 tasks | 3 files |
 | Phase 20 P06 | 18min | 2 tasks | 1 files |
 | Phase 20 P07 | 25min | 3 tasks | 3 files |
+| Phase 21 P01 | 20min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 20-06]: on_guild_join block-check-first runs after the boot-race guard and before insert_guild_config_if_absent -- a blocklisted re-invite is left immediately via guild.leave(), no config insert, no welcome, no owner joined notice
 - [Phase 20-07]: Guild names render as plain text with backtick-wrapped ids in /guilds list rows (anti-injection, mirrors bot.py::_build_guild_notice_embed); silence/leave/block echoes use AllowedMentions.none() as defense-in-depth
 - [Phase 20-07]: /guilds block runs the shared teardown THEN the blacklist insert (D-11 order); a guild already absent still gets blacklisted, teardown skipped
+- [Phase 21-01]: kind appended before guild_id in search_memories so the pre-existing kind-only SQL shape keeps binding at literal $3 (dynamic $N numbering, order-preserving)
+- [Phase 21-01]: recall() forwards guild_id via a conditionally-built kwargs dict splatted into search_memories, not an unconditional guild_id=X-if-Y-else-None kwarg -- the latter breaks every hand-written fake_search test double on the recall path lacking a guild_id param
 
 ### Pending Todos
 
@@ -140,8 +143,8 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-13T18:02:16.342Z
-Stopped at: Phase 21 context gathered
+Last session: 2026-07-13T18:53:42.816Z
+Stopped at: Completed 21-01-PLAN.md
 Resume file: 
 
-.planning/phases/21-memory-scoping-guild-data-lifecycle/21-CONTEXT.md
+None
