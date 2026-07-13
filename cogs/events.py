@@ -164,6 +164,7 @@ class EventsCog(commands.Cog):
                                 str(member.id),
                                 str(member.guild.id),
                                 scenario,  # formatted scenario is the recall anchor
+                                guild_scoped=True,
                             )
                         except Exception as _mem_err:
                             log.debug("memory.recall failed (non-fatal): %s", _mem_err)
@@ -511,7 +512,9 @@ class EventsCog(commands.Cog):
         # live-SQL number — accuracy firewall unaffected).
         anchor = message.content.strip() or "this user's music taste and history"
         try:
-            memories = await memory_service.recall(user_id, str(message.guild.id), anchor)
+            memories = await memory_service.recall(
+                user_id, str(message.guild.id), anchor, guild_scoped=True
+            )
         except Exception as _mem_err:
             log.debug("proactive callback: memory.recall failed (non-fatal): %s", _mem_err)
             memories = []

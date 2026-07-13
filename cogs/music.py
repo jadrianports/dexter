@@ -1221,8 +1221,10 @@ class MusicCog(commands.Cog):
             user_context = user_summary or "No data on this user yet."
 
             # Phase 11 / MEM-06: occasional recall for stat×episode callback (D-04).
-            # scenario_content is the recall anchor; guild_id is reserved in recall()
-            # (ANN scopes to user_id only — personal memories carry cross-server).
+            # scenario_content is the recall anchor. Phase 21 / MEM-01: this is an
+            # unprompted ambient broadcast surface, so recall opts into guild
+            # scoping using the function's own guild_id param (now threaded
+            # through instead of a placeholder empty string).
             # Cadence gate keeps recalls rare; degrade to [] on any error (non-fatal).
             music_memories: list[str] = []
             if random.random() < config.MEMORY_CALLBACK_CHANCE:
@@ -1231,8 +1233,9 @@ class MusicCog(commands.Cog):
                     try:
                         music_memories = await _memory_svc.recall(
                             user_id,
-                            "",  # guild_id reserved — ANN scopes to user_id only
+                            guild_id or "",
                             scenario_content,
+                            guild_scoped=bool(guild_id),
                         )
                     except Exception as _mem_err:
                         log.debug("memory.recall failed (non-fatal): %s", _mem_err)
