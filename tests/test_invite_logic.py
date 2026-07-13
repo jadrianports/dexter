@@ -13,6 +13,7 @@ If a test needs a mock the cut-line in config.py / logic/invite.py is wrong.
 import discord
 
 import config
+from logic.invite import build_invite_url
 
 # ---------------------------------------------------------------------------
 # Task 1: config.py constants (D-01/D-02/D-04/D-09)
@@ -86,3 +87,54 @@ def test_client_id_is_a_positive_int():
 
 def test_scopes_constant_is_the_expected_tuple():
     assert config.INVITE_SCOPES == ("bot", "applications.commands")
+
+
+# ---------------------------------------------------------------------------
+# Task 2: logic/invite.py::build_invite_url (D-03/D-07)
+# ---------------------------------------------------------------------------
+
+
+def test_url_contains_expected_scopes():
+    url = build_invite_url(
+        client_id=config.DISCORD_CLIENT_ID,
+        permissions_value=config.INVITE_PERMISSIONS_VALUE,
+    )
+    assert "scope=bot+applications.commands" in url
+
+
+def test_url_contains_locked_permissions_value():
+    url = build_invite_url(
+        client_id=config.DISCORD_CLIENT_ID,
+        permissions_value=config.INVITE_PERMISSIONS_VALUE,
+    )
+    assert "permissions=309240908864" in url
+    assert f"client_id={config.DISCORD_CLIENT_ID}" in url
+
+
+def test_url_is_the_literal_oauth2_endpoint():
+    """No shortener, no vanity redirect (D-07)."""
+    url = build_invite_url(
+        client_id=config.DISCORD_CLIENT_ID,
+        permissions_value=config.INVITE_PERMISSIONS_VALUE,
+    )
+    assert url.startswith("https://discord.com/oauth2/authorize?")
+
+
+def test_scopes_are_overridable_but_default_to_the_config_tuple():
+    """Passing an explicit scopes= changes the emitted scope= param."""
+    url = build_invite_url(
+        client_id=config.DISCORD_CLIENT_ID,
+        permissions_value=config.INVITE_PERMISSIONS_VALUE,
+        scopes=("bot",),
+    )
+    assert "scope=bot" in url
+    assert "applications.commands" not in url
+
+
+def test_builder_is_deterministic():
+    """Pure function: identical args -> identical output, no clock/RNG/network."""
+    kwargs = {
+        "client_id": config.DISCORD_CLIENT_ID,
+        "permissions_value": config.INVITE_PERMISSIONS_VALUE,
+    }
+    assert build_invite_url(**kwargs) == build_invite_url(**kwargs)
