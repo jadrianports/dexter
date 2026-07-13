@@ -118,3 +118,16 @@ None - no external service configuration required.
 ---
 *Phase: 21-memory-scoping-guild-data-lifecycle*
 *Completed: 2026-07-14*
+
+## Self-Check: PASSED
+
+- FOUND: cogs/ai.py
+- FOUND: cogs/events.py
+- FOUND: cogs/music.py
+- FOUND: tests/test_ambient_recall_cadence.py
+- FOUND: tests/test_autoqueue_wiring.py
+- FOUND: .planning/phases/21-memory-scoping-guild-data-lifecycle/21-03-SUMMARY.md
+- FOUND commit: 077f07e (Task 1)
+- FOUND commit: f4bb63e (Task 2)
+- FOUND commit: a3278c7 (Task 3)
+- FOUND commit: c540f94 (plan metadata)
