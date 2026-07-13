@@ -37,6 +37,15 @@ def _make_bot() -> MagicMock:
     Phase 19 / D-22: the row also carries both toggle keys, both True by
     default, so ROAST and VISION surfaces resolve identically unless a test
     overrides one explicitly.
+
+    Phase 20 / D-14: the row deliberately has NO `silenced` key. Every fire
+    test below (and every pre-existing test in this file) relies on
+    `is_ambient_channel`/`decide_ambient_channel` defaulting a missing
+    `silenced` key to `False` (fail-open, matching the column's own
+    `DEFAULT false`) — this is the "default-False contract" the Phase 20
+    pre-send re-check (added to `_maybe_fire_proactive_callback` /
+    `_maybe_fire_vision_roast`) must not disturb. Confirmed by every existing
+    fire test in this file staying green unchanged.
     """
     bot = MagicMock()
     bot.pool = MagicMock()
@@ -162,6 +171,111 @@ async def test_daily_counter_increments_only_on_fire():
         await cog._maybe_fire_proactive_callback(message2)
 
     assert str(message2.author.id) not in cog._proactive_daily_counts
+
+
+# ---------------------------------------------------------------------------
+# (C2) Phase 20 / D-14 / SC-2: TOCTOU pre-send re-check — silenced mid-flight
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_proactive_silenced_mid_flight_no_reply_and_slot_released():
+    """A guild silenced during the recall+generate awaits must suppress the
+    stale in-flight response (SC-2). Simulates the mid-flight change by having
+    `guild_config.get` return an already-silenced row at the pre-send re-check
+    inside `_maybe_fire_proactive_callback` (the gate passed and memories were
+    recalled as if the guild were still live; the re-check is what catches
+    the change). Asserts no reply AND the reserved daily-cap slot is released
+    (no leak — the user id is absent from `_proactive_daily_counts`)."""
+    bot = _make_bot()
+    bot.memory_service.recall = AsyncMock(return_value=["a recalled fact"])
+    bot.guild_config.get = MagicMock(
+        return_value={
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "vision_roasts_enabled": True,
+            "silenced": True,
+        }
+    )
+    message = _make_message()
+    cog = EventsCog(bot)
+
+    with (
+        patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
+        patch("cogs.events.random.random", return_value=0.0),
+        patch.object(cog, "_generate_ambient_roast", new=AsyncMock(return_value="dex remembers stuff")),
+    ):
+        await cog._maybe_fire_proactive_callback(message)
+
+    message.reply.assert_not_awaited()
+    assert str(message.author.id) not in cog._proactive_daily_counts
+
+
+@pytest.mark.asyncio
+async def test_proactive_always_silenced_entry_gate_blocks():
+    """A guild silenced BEFORE on_message even runs never reaches the glue at
+    all — the entry gate (`roast_channel_ok`, computed via `is_ambient_channel`
+    over the same silenced row) is already False, so
+    `_maybe_fire_proactive_callback` is never invoked from `on_message`."""
+    bot = _make_bot()
+    bot.message_buffer = MagicMock()
+    bot.message_buffer.add = MagicMock()
+    bot.guild_config.get = MagicMock(
+        return_value={
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "vision_roasts_enabled": True,
+            "silenced": True,
+        }
+    )
+    message = _make_message(channel_id=500)
+    cog = EventsCog(bot)
+
+    with (
+        patch.object(cog, "_maybe_fire_proactive_callback", new=AsyncMock()) as mock_fire,
+        patch.object(cog, "_handle_message_reactions", new=AsyncMock()),
+        patch.object(cog, "_maybe_fire_vision_roast", new=AsyncMock()),
+    ):
+        await cog.on_message(message)
+
+    mock_fire.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_vision_silenced_mid_flight_no_reply():
+    """Mirrors the proactive silenced-mid-flight test for the vision-roast
+    path: the pre-send re-check inside `_maybe_fire_vision_roast` bails when
+    the guild has gone silent during the opt-out/cadence/read/generate awaits
+    — no reply, no cooldown mark."""
+    bot = _make_bot()
+    bot.guild_config.get = MagicMock(
+        return_value={
+            "configured": True,
+            "ambient_channel_id": "500",
+            "ambient_roasts_enabled": True,
+            "vision_roasts_enabled": True,
+            "silenced": True,
+        }
+    )
+    message = _make_message()
+    attachment = MagicMock()
+    attachment.content_type = "image/png"
+    attachment.size = 1024
+    attachment.read = AsyncMock(return_value=b"fake image bytes")
+    message.attachments = [attachment]
+    cog = EventsCog(bot)
+
+    with (
+        patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
+        patch("cogs.events.random.random", return_value=0.0),
+        patch.object(cog, "_generate_vision_roast", new=AsyncMock(return_value="a vision line")),
+    ):
+        await cog._maybe_fire_vision_roast(message)
+
+    message.reply.assert_not_awaited()
+    assert message.author.id not in cog._vision_roast_cooldowns
 
 
 # ---------------------------------------------------------------------------
