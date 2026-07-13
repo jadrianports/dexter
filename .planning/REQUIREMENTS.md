@@ -56,7 +56,7 @@ Hybrid scoping: contain third-party exposure, keep self-recall global.
 
 ### Rate-Limit Observability (RATE)
 
-- [ ] **RATE-01**: Every Gemini call is tagged with its originating `guild_id`, and per-guild usage counters are surfaced in the owner's server-list view — so a budget hog is visible and actionable via the kill-switch
+- [x] **RATE-01**: Every Gemini call is tagged with its originating `guild_id`, and per-guild usage counters are surfaced in the owner's server-list view — so a budget hog is visible and actionable via the kill-switch
 
 ### Invite Plumbing (INVITE)
 
@@ -143,7 +143,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | MEM-03 | Phase 21 | Pending |
 | MEM-04 | Phase 21 | Pending |
 | MEM-05 | Phase 21 | Pending |
-| RATE-01 | Phase 20 | Pending |
+| RATE-01 | Phase 20 | Complete |
 | INVITE-01 | Phase 22 | Pending |
 | INVITE-02 | Phase 22 | Pending |
 | PORT-01 | Phase 23 | Pending |
