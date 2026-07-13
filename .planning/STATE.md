@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Open House
 status: verifying
 stopped_at: Completed 20-07-PLAN.md
-last_updated: "2026-07-13T16:33:56.864Z"
-last_activity: 2026-07-13 -- Phase 20 execution started
+last_updated: "2026-07-13T17:01:21.164Z"
+last_activity: 2026-07-13
 progress:
   total_phases: 6
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 20 (owner-control-plane-rate-observability) — EXECUTING
-Plan: 7 of 7
+Phase: 21
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-13 -- Phase 20 execution started
+Last activity: 2026-07-13
 
 Progress: [░░░░░░░░░░] 0%
 
