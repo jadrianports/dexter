@@ -517,6 +517,109 @@ class OpsCog(commands.Cog):
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
+    async def _force_leave_teardown(self, target_guild: discord.Guild) -> None:
+        """The OWNER-03 force-leave teardown, mirroring /stop's template verbatim.
+
+        Resolves ALL state via target_guild — NEVER interaction.guild (Pitfall 3),
+        since the owner invokes this from their own guild (or a DM) against a
+        guild they are not necessarily sitting in. Sequence: bump
+        _play_generation -> queue.clear() (which itself re-bumps
+        _play_generation again — intentional, Pitfall 2, do NOT "fix") ->
+        clear_persisted -> stop+disconnect voice -> guild.leave().
+        """
+        music_cog = self.bot.cogs.get("MusicCog")
+        voice_client = target_guild.voice_client
+        if music_cog is not None:
+            queue = music_cog.get_queue(target_guild.id)
+            queue._play_generation += 1  # invalidate any pending after-callbacks
+            queue.clear()
+        if hasattr(self.bot, "queue_persistence"):
+            await self.bot.queue_persistence.clear_persisted(target_guild.id)
+        if voice_client:
+            voice_client.stop()
+            await voice_client.disconnect()
+        await target_guild.leave()
+
+    @guilds.command(name="leave", description="(Owner only) Force-leave a guild")
+    @app_commands.describe(guild_id="the guild id to leave")
+    async def guilds_leave(self, interaction: discord.Interaction, guild_id: str) -> None:
+        """/guilds leave — standalone force-leave, no blacklist (OWNER-03/D-11)."""
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("not authorized.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        gid = self._parse_guild_id(guild_id)
+        if gid is None:
+            await interaction.followup.send("that's not a valid guild id.", ephemeral=True)
+            return
+
+        target = self.bot.get_guild(gid)  # NEVER interaction.guild (Pitfall 3)
+        if target is None:
+            await interaction.followup.send("i'm not in that guild (or that id's wrong).", ephemeral=True)
+            return
+
+        name = target.name
+        await self._force_leave_teardown(target)
+        await interaction.followup.send(
+            f"left {name} (`{gid}`). down to {len(self.bot.guilds)} guilds now.",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @guilds.command(name="block", description="(Owner only) Force-leave and blacklist a guild")
+    @app_commands.describe(guild_id="the guild id to block", reason="optional reason")
+    async def guilds_block(self, interaction: discord.Interaction, guild_id: str, reason: str | None = None) -> None:
+        """/guilds block — teardown THEN blacklist insert (OWNER-04/D-11).
+
+        A guild may be blocked even if bot.get_guild(gid) is already None
+        (the bot is already gone) — in that case the teardown is skipped but
+        the blocklist insert still happens (block a guild you're not in is
+        valid; the point is refusing a future re-invite).
+        """
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("not authorized.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        gid = self._parse_guild_id(guild_id)
+        if gid is None:
+            await interaction.followup.send("that's not a valid guild id.", ephemeral=True)
+            return
+
+        target = self.bot.get_guild(gid)  # NEVER interaction.guild (Pitfall 3)
+        if target is not None:
+            await self._force_leave_teardown(target)
+
+        # Teardown (if any) THEN blacklist insert, in that order (D-11).
+        await self.bot.guild_config.block_guild(guild_id=str(gid), reason=reason)
+        await interaction.followup.send(
+            f"blocked and gone. `{gid}` won't get back in.",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @guilds.command(name="unblock", description="(Owner only) Remove a guild from the blocklist")
+    @app_commands.describe(guild_id="the guild id to unblock")
+    async def guilds_unblock(self, interaction: discord.Interaction, guild_id: str) -> None:
+        """/guilds unblock — deletes the blocklist entry; does NOT re-join (D-11)."""
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message("not authorized.", ephemeral=True)
+            return
+
+        gid = self._parse_guild_id(guild_id)
+        if gid is None:
+            await interaction.response.send_message("that's not a valid guild id.", ephemeral=True)
+            return
+
+        await self.bot.guild_config.unblock_guild(guild_id=str(gid))
+        await interaction.response.send_message(
+            f"unblocked `{gid}`. it can re-invite now, but i'm not rejoining on my own.",
+            ephemeral=True,
+        )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(OpsCog(bot))
