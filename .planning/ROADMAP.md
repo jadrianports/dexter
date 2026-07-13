@@ -206,7 +206,7 @@ Full phase details, success criteria, and decisions archived in
 **Wave 2** *(blocked on Wave 1)*
 
 - [x] 21-02-PLAN.md — purge_guild_data 4-table transaction (never guild_blocklist) + live-DB integration tests (MEM-04/03)
-- [ ] 21-03-PLAN.md — 5 recall call-site guild_scoped opt-ins + /ask stays-global regression lock (MEM-01/02)
+- [x] 21-03-PLAN.md — 5 recall call-site guild_scoped opt-ins + /ask stays-global regression lock (MEM-01/02)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -268,6 +268,6 @@ Full phase details, success criteria, and decisions archived in
 | 18. Per-Guild Config Foundation & CI Gate | v1.4 | 7/7 | Complete    | 2026-07-09 |
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
-| 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 2/4 | In Progress|  |
+| 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 3/4 | In Progress|  |
 | 22. Invite Plumbing | v1.4 | 0/TBD | Not started | - |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |

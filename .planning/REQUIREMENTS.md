@@ -46,7 +46,7 @@ The stated abuse mitigation. Table stakes, not polish.
 
 Hybrid scoping: contain third-party exposure, keep self-recall global.
 
-- [ ] **MEM-01**: `/roast @user`, ambient roasts, and proactive callbacks recall only memories scoped to the current guild — a third party's memories never travel between servers
+- [x] **MEM-01**: `/roast @user`, ambient roasts, and proactive callbacks recall only memories scoped to the current guild — a third party's memories never travel between servers
 - [x] **MEM-02**: `/ask` continues to recall the **invoker's own** memory globally (self-scoped — no cross-user exposure is possible)
 - [x] **MEM-03**: Legacy memories written with `guild_id = NULL` (e.g. `daily_batch`) are handled by an explicit, tested backward-compat rule — the existing memory corpus is not silently made unrecallable
 - [x] **MEM-04**: When Dexter leaves or is removed from a guild, that guild's data is purged (`guild_config`, `guild_queues`, `guild_jams`, guild-scoped `user_memories`) so stale context cannot resurface
@@ -138,7 +138,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | OWNER-04 | Phase 20 | Complete |
 | OWNER-05 | Phase 20 | Complete |
 | OWNER-06 | Phase 20 | Complete |
-| MEM-01 | Phase 21 | Pending |
+| MEM-01 | Phase 21 | Complete |
 | MEM-02 | Phase 21 | Complete |
 | MEM-03 | Phase 21 | Complete |
 | MEM-04 | Phase 21 | Complete |
