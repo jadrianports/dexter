@@ -97,3 +97,7 @@ None - no external service configuration required.
 ---
 *Phase: 22-invite-plumbing*
 *Completed: 2026-07-14*
+
+## Self-Check: PASSED
+
+All created/modified files found on disk; all three commits (`a9383fa`, `a1ad124`, `b27a10a`) verified present in `git log --oneline --all`.
