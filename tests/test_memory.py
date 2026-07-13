@@ -1287,6 +1287,197 @@ class TestRememberService:
             database.search_memories = orig_search
 
 
+class TestRememberDedupCallShapeUnchanged:
+    """MEM-05 regression lock: remember()'s k=1 dedup search call shape is
+    byte-identical to pre-Phase-21 — no guild_id, no kind, no **kwargs escape
+    hatch ever threads into the CR-13-01-scarred dedup path (D-02).
+    """
+
+    def _make_service(self):
+        from services.memory import MemoryService
+
+        mock_gemini = MagicMock()
+        mock_gemini.embed = AsyncMock(return_value=[[0.1] * 768])
+        mock_pool = MagicMock()
+        return MemoryService(mock_pool, mock_gemini)
+
+    def test_dedup_search_call_shape_is_strict(self) -> None:
+        """A strict stub with EXACTLY (pool, *, user_id, query_embedding, k) — no
+        kind, no guild_id, no **kwargs — must not raise TypeError. If a future
+        edit threads a scoping kwarg into the dedup search, this fails loudly."""
+        import asyncio
+
+        import database
+
+        svc = self._make_service()
+        received_kwargs: list[dict] = []
+
+        async def strict_search(pool, *, user_id, query_embedding, k):
+            received_kwargs.append({"user_id": user_id, "query_embedding": query_embedding, "k": k})
+            return []
+
+        async def fake_insert(pool, **kwargs):
+            return 1
+
+        async def fake_count(pool, user_id):
+            return 1  # under cap
+
+        orig_search = database.search_memories
+        orig_insert = database.insert_memory
+        orig_count = database.count_user_memories
+        database.search_memories = strict_search
+        database.insert_memory = fake_insert
+        database.count_user_memories = fake_count
+        try:
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="a distinct new fact",
+                    kind="daily_batch",
+                    salience=0.3,
+                )
+            )
+        finally:
+            database.search_memories = orig_search
+            database.insert_memory = orig_insert
+            database.count_user_memories = orig_count
+
+        assert len(received_kwargs) == 1
+        assert set(received_kwargs[0].keys()) == {"user_id", "query_embedding", "k"}
+        assert received_kwargs[0]["k"] == 1
+
+    def test_remember_source_never_threads_guild_scoped_or_guild_id_into_dedup_search(self) -> None:
+        """Source-level guard: remember() must not contain 'guild_scoped', and the
+        dedup search_memories(...) call region must not contain 'guild_id='."""
+        import inspect
+
+        from services.memory import MemoryService
+
+        source = inspect.getsource(MemoryService.remember)
+        assert "guild_scoped" not in source
+
+        start = source.index("search_memories(")
+        end = source.index(")", start)
+        call_region = source[start:end]
+        assert "guild_id" not in call_region
+
+    def test_taste_episode_matched_row_refreshes_expiry(self) -> None:
+        """D-05 semantics regression: dedup hit on a matched row whose kind IS in
+        MEMORY_DECAY_DAYS_BY_KIND still calls refresh_memory_expiry — unaffected
+        by the guild-scoping work in this phase."""
+        import asyncio
+        from datetime import timezone
+
+        import database
+
+        now = datetime.now(timezone.utc)
+        near_dup_row = {
+            "id": 42,
+            "fact": "keeps replaying the same album",
+            "kind": "taste_episode",
+            "salience": 0.4,
+            "hit_count": 1,
+            "created_at": now,
+            "last_seen_at": now,
+            "last_surfaced_at": None,
+            "surface_count": 0,
+            "similarity": 0.95,
+        }
+
+        svc = self._make_service()
+        refresh_calls: list = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k):
+            return [_DictRecord(near_dup_row)]
+
+        async def fake_bump_hit(pool, memory_id):
+            pass
+
+        async def fake_refresh(pool, memory_id, expires_at):
+            refresh_calls.append(memory_id)
+
+        orig_search = database.search_memories
+        orig_bump = database.bump_memory_hit
+        orig_refresh = database.refresh_memory_expiry
+        database.search_memories = fake_search
+        database.bump_memory_hit = fake_bump_hit
+        database.refresh_memory_expiry = fake_refresh
+        try:
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="keeps replaying the same album",
+                    kind="taste_episode",
+                    salience=0.4,
+                )
+            )
+        finally:
+            database.search_memories = orig_search
+            database.bump_memory_hit = orig_bump
+            database.refresh_memory_expiry = orig_refresh
+
+        assert refresh_calls == [42]
+
+    def test_daily_batch_matched_row_does_not_refresh_expiry(self) -> None:
+        """D-05 semantics regression: dedup hit on a matched row whose kind is NOT
+        in MEMORY_DECAY_DAYS_BY_KIND (a Phase 11 kind) must NOT refresh expiry."""
+        import asyncio
+        from datetime import timezone
+
+        import database
+
+        now = datetime.now(timezone.utc)
+        near_dup_row = {
+            "id": 7,
+            "fact": "asked about lofi again",
+            "kind": "daily_batch",
+            "salience": 0.3,
+            "hit_count": 1,
+            "created_at": now,
+            "last_seen_at": now,
+            "last_surfaced_at": None,
+            "surface_count": 0,
+            "similarity": 0.95,
+        }
+
+        svc = self._make_service()
+        refresh_calls: list = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k):
+            return [_DictRecord(near_dup_row)]
+
+        async def fake_bump_hit(pool, memory_id):
+            pass
+
+        async def fake_refresh(pool, memory_id, expires_at):
+            refresh_calls.append(memory_id)
+
+        orig_search = database.search_memories
+        orig_bump = database.bump_memory_hit
+        orig_refresh = database.refresh_memory_expiry
+        database.search_memories = fake_search
+        database.bump_memory_hit = fake_bump_hit
+        database.refresh_memory_expiry = fake_refresh
+        try:
+            asyncio.run(
+                svc.remember(
+                    user_id="u1",
+                    guild_id="g1",
+                    fact_text="asked about lofi again",
+                    kind="daily_batch",
+                    salience=0.3,
+                )
+            )
+        finally:
+            database.search_memories = orig_search
+            database.bump_memory_hit = orig_bump
+            database.refresh_memory_expiry = orig_refresh
+
+        assert refresh_calls == []
+
+
 # ---------------------------------------------------------------------------
 # TestIsSensitive (11-05 Task 1)
 # ---------------------------------------------------------------------------
