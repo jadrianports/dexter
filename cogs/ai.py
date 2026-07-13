@@ -131,6 +131,11 @@ class AICog(commands.Cog):
             _memory_svc = getattr(self.bot, "memory_service", None)
             if _memory_svc is not None:
                 try:
+                    # MEM-02 / D-02: deliberately stays global — no guild-scoping
+                    # kwarg here. /ask is a user explicitly and synchronously
+                    # pulling their OWN memory — no cross-user exposure is
+                    # possible. Do not "fix" this to match /roast's opt-in;
+                    # that would regress MEM-02.
                     memories = await _memory_svc.recall(
                         str(interaction.user.id),
                         str(interaction.guild_id),
@@ -221,6 +226,7 @@ class AICog(commands.Cog):
                     str(target.id),
                     str(interaction.guild_id),
                     scenario,  # roast scenario string is the recall anchor
+                    guild_scoped=True,
                 )
             except Exception as _mem_err:
                 log.debug("memory.recall failed (non-fatal): %s", _mem_err)
@@ -338,6 +344,7 @@ class AICog(commands.Cog):
                             str(guild.id),
                             _AUTO_QUEUE_TASTE_ANCHOR,
                             kind="taste_episode",
+                            guild_scoped=True,
                         )
                     except Exception as e:
                         log.debug(
