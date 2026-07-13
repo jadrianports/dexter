@@ -205,3 +205,60 @@ def test_canonical_url_resolves_without_env_secrets(monkeypatch):
         scopes=config.INVITE_SCOPES,
     )
     assert "permissions=309240908864" in url
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — single-constructor invariant (D-03/D-07, T-22-03)
+# ---------------------------------------------------------------------------
+
+# Test files legitimately contain fake/expected URLs (this module's own
+# positive control is one) and this very file contains the URL_PATTERN regex
+# source, so `tests/` is excluded from the scan just like `.planning/`.
+_TESTS_PREFIX = "tests/"
+
+# A small, hardcoded, reviewable literal tuple — deliberately NOT a clever
+# dynamic heuristic. Per the Phase 21 T-21-03 precedent, the reviewability of
+# the literal list IS the control.
+_CONSTRUCTOR_MARKERS = ("oauth_url(", "discord.com/oauth2/authorize")
+
+# The single sanctioned module allowed to contain either marker.
+_ALLOWED_CONSTRUCTOR = "logic/invite.py"
+
+
+def _tracked_python_files(root: Path) -> list[Path]:
+    """Every git-tracked `.py` file, excluding `tests/` and `.planning/`."""
+    out = subprocess.run(["git", "ls-files"], capture_output=True, text=True, cwd=root, check=True)
+    files = []
+    for rel in out.stdout.splitlines():
+        if rel.startswith(PLANNING_PREFIX) or rel.startswith(_TESTS_PREFIX):
+            continue
+        if Path(rel).suffix == ".py":
+            files.append(root / rel)
+    return files
+
+
+def test_logic_invite_is_the_only_url_constructor():
+    """D-03/D-07 single-source-of-truth invariant (T-22-03): the only tracked,
+    non-test Python file containing either `oauth_url(` or the literal
+    `discord.com/oauth2/authorize` is `logic/invite.py`. If a future phase
+    (e.g. Phase 23's site generator) needs an invite URL, it MUST import
+    `build_invite_url` — it physically cannot hand-build a second one without
+    turning CI red."""
+    root = _repo_root()
+    offenders: list[str] = []
+    for path in _tracked_python_files(root):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        rel = str(PurePosixPath(path.relative_to(root).as_posix()))
+        if rel == _ALLOWED_CONSTRUCTOR:
+            continue
+        if any(marker in text for marker in _CONSTRUCTOR_MARKERS):
+            offenders.append(rel)
+    assert offenders == [], f"second invite-URL constructor found outside {_ALLOWED_CONSTRUCTOR}: {offenders}"
+
+
+def test_config_holds_no_url_literal():
+    """`config.py` holds the bitfield int and the client id — never the URL
+    itself. The URL is only ever assembled by `logic/invite.py`."""
+    root = _repo_root()
+    text = (root / "config.py").read_text(encoding="utf-8")
+    assert "discord.com/oauth2" not in text

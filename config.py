@@ -295,7 +295,8 @@ DISCORD_CLIENT_ID = int(os.getenv("DISCORD_CLIENT_ID") or "1492588698364018898")
 # and test_bitfield_matches_ten_permission_derivation (the magic number is never trusted alone).
 INVITE_PERMISSIONS_VALUE = 309240908864
 
-# oauth_url() takes an Iterable[str] -- a bare string would iterate character-by-character.
+# discord.py's OAuth2 URL builder takes an Iterable[str] -- a bare string
+# would iterate character-by-character.
 INVITE_SCOPES: tuple[str, ...] = ("bot", "applications.commands")
 
 
