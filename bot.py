@@ -21,6 +21,7 @@ import config
 import database
 from database import init_db
 from logic import taste as logic_taste
+from logic.guild_config import decide_interaction_allowed
 from logic.health import determine_health_status
 from models.message_buffer import MessageBuffer
 from models.server_state import ServerState
@@ -75,6 +76,51 @@ class DexterBot(commands.AutoShardedBot):
         await super().close()
 
 
+class DexterCommandTree(app_commands.CommandTree):
+    """Single pre-dispatch choke point for block/silence enforcement (OWNER-05).
+
+    CRITICAL mechanic (verified against installed discord.py 2.7.1): a False
+    return from interaction_check does NOT dispatch to bot.tree.error --
+    CommandTree._call does a bare `return` before the try/except that feeds
+    on_error. The D-12 ephemeral refusal MUST therefore be sent from INSIDE
+    this method before returning False -- never raise the app_commands check
+    failure exception and expect on_app_command_error to handle it (it never
+    fires for a plain interaction_check False).
+    """
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        is_owner = await interaction.client.is_owner(interaction.user)
+
+        guild_config = getattr(interaction.client, "guild_config", None)
+        if guild_config is None:
+            # Boot-race: the service itself is structurally absent. This is
+            # distinct from D-07's fail-closed "guild has no config row" --
+            # a missing SERVICE must fail OPEN or a boot race bricks every
+            # slash command bot-wide (Pitfall 5 / T-20-15).
+            return True
+
+        has_guild = interaction.guild is not None
+        guild_id = str(interaction.guild.id) if has_guild else None
+        blocked = guild_config.is_blocked(guild_id) if has_guild else False
+        silenced = guild_config.is_silenced(guild_id) if has_guild else False
+
+        allowed = decide_interaction_allowed(
+            is_owner=is_owner,
+            has_guild=has_guild,
+            blocked=blocked,
+            silenced=silenced,
+        )
+        if not allowed:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "i've been muted in this server. not my call.",
+                    ephemeral=True,
+                )
+            return False
+
+        return True
+
+
 def create_bot() -> DexterBot:
     """Create and configure the bot instance."""
     intents = discord.Intents.default()
@@ -88,6 +134,7 @@ def create_bot() -> DexterBot:
         intents=intents,
         activity=discord.Activity(type=discord.ActivityType.listening, name="music"),
         owner_id=config.OWNER_ID or None,  # wire configured owner so /sync auth works (WR-07)
+        tree_cls=DexterCommandTree,
     )
 
     return bot
