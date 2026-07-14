@@ -185,9 +185,7 @@ class EventsCog(commands.Cog):
             # Priority 2 only — never contend with user /ask (priority 1)
             # RATE-01: tag the guild for per-guild usage observability (D-09 —
             # usage tagging only, never a gate/quota).
-            result = await gemini_service.chat(
-                system_prompt, conversation, priority=2, guild_id=str(member.guild.id)
-            )
+            result = await gemini_service.chat(system_prompt, conversation, priority=2, guild_id=str(member.guild.id))
 
             if result:
                 # Enforce voice rules: lowercase, strip to <=500 chars
@@ -512,9 +510,7 @@ class EventsCog(commands.Cog):
         # live-SQL number — accuracy firewall unaffected).
         anchor = message.content.strip() or "this user's music taste and history"
         try:
-            memories = await memory_service.recall(
-                user_id, str(message.guild.id), anchor, guild_scoped=True
-            )
+            memories = await memory_service.recall(user_id, str(message.guild.id), anchor, guild_scoped=True)
         except Exception as _mem_err:
             log.debug("proactive callback: memory.recall failed (non-fatal): %s", _mem_err)
             memories = []

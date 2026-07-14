@@ -44,12 +44,6 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      # NOTE (Pitfall 7): davey/PyNaCl are native-extension packages (Discord voice
-      # E2E encryption). PyNaCl ships manylinux wheels and should install cleanly;
-      # davey has less prebuilt-wheel track record. If the very first CI run fails
-      # here with a compiler-not-found error, add a step before this one:
-      #   - run: sudo apt-get update && sudo apt-get install -y build-essential libsodium-dev
-      # Do not add that step preemptively — only if a real run proves it's needed.
       - run: pip install -r requirements.txt
       - run: pip install -r requirements-dev.txt
 

@@ -330,47 +330,24 @@ class TestDecideInteractionAllowed:
     def test_owner_always_allowed_even_blocked_and_silenced(self):
         """is_owner=True -> True regardless of blocked/silenced (T-20-06: owner never
         locked out, even by self-silencing/blocking the home guild)."""
-        assert (
-            decide_interaction_allowed(is_owner=True, has_guild=True, blocked=True, silenced=True)
-            is True
-        )
+        assert decide_interaction_allowed(is_owner=True, has_guild=True, blocked=True, silenced=True) is True
 
     def test_dm_guildless_always_allowed(self):
         """has_guild=False (DM/guild-less) -> True, even for a non-owner and even with
         blocked/silenced set (D-13 DM exemption)."""
-        assert (
-            decide_interaction_allowed(
-                is_owner=False, has_guild=False, blocked=True, silenced=True
-            )
-            is True
-        )
+        assert decide_interaction_allowed(is_owner=False, has_guild=False, blocked=True, silenced=True) is True
 
     def test_blocked_refuses(self):
         """Non-owner, has guild, blocked=True, silenced=False -> False."""
-        assert (
-            decide_interaction_allowed(
-                is_owner=False, has_guild=True, blocked=True, silenced=False
-            )
-            is False
-        )
+        assert decide_interaction_allowed(is_owner=False, has_guild=True, blocked=True, silenced=False) is False
 
     def test_silenced_refuses(self):
         """Non-owner, has guild, blocked=False, silenced=True -> False."""
-        assert (
-            decide_interaction_allowed(
-                is_owner=False, has_guild=True, blocked=False, silenced=True
-            )
-            is False
-        )
+        assert decide_interaction_allowed(is_owner=False, has_guild=True, blocked=False, silenced=True) is False
 
     def test_neither_flag_allows(self):
         """Non-owner, has guild, blocked=False, silenced=False -> True (the all-clear case)."""
-        assert (
-            decide_interaction_allowed(
-                is_owner=False, has_guild=True, blocked=False, silenced=False
-            )
-            is True
-        )
+        assert decide_interaction_allowed(is_owner=False, has_guild=True, blocked=False, silenced=False) is True
 
     def test_requires_all_kwargs_keyword_only(self):
         """All four args are required keyword-only with no default -- a positional call or an

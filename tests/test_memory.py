@@ -636,9 +636,7 @@ class TestSearchMemoriesGuildFilter:
         pool = _FakePool()
         embedding = [0.1] * 768
 
-        asyncio.run(
-            database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5, kind="taste_episode")
-        )
+        asyncio.run(database.search_memories(pool, user_id="u1", query_embedding=embedding, k=5, kind="taste_episode"))
 
         assert "AND kind = $3" in pool.conn.last_sql
         assert "guild_id" not in pool.conn.last_sql
@@ -837,9 +835,7 @@ class TestRecallGuildScoped:
         orig_search = database.search_memories
         database.search_memories = fake_search
         try:
-            asyncio.run(
-                svc.recall("user1", "guild1", "test query", kind="taste_episode", guild_scoped=True)
-            )
+            asyncio.run(svc.recall("user1", "guild1", "test query", kind="taste_episode", guild_scoped=True))
         finally:
             database.search_memories = orig_search
 
