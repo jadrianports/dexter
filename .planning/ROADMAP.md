@@ -280,5 +280,5 @@ Full phase details, success criteria, and decisions archived in
 | 19. Onboarding & Admin Setup | v1.4 | 4/4 | Complete    | 2026-07-10 |
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
-| 22. Invite Plumbing | v1.4 | 3/3 | Complete   | 2026-07-13 |
+| 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
 | 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |

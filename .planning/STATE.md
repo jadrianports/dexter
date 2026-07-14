@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: Open House
 status: verifying
 stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-07-13T23:43:53.995Z"
-last_activity: 2026-07-13 -- Phase 22 execution started
+last_updated: "2026-07-14T00:28:28.545Z"
+last_activity: 2026-07-14
 progress:
   total_phases: 6
   completed_phases: 5
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 22 (invite-plumbing) — EXECUTING
-Plan: 3 of 3
+Phase: 23
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-07-13 -- Phase 22 execution started
+Last activity: 2026-07-14
 
 Progress: [░░░░░░░░░░] 0%
 
