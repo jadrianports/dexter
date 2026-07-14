@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 23-03-PLAN.md
-last_updated: "2026-07-14T10:48:43.219Z"
+stopped_at: Completed 23-04-PLAN.md
+last_updated: "2026-07-14T11:03:23.656Z"
 last_activity: 2026-07-14 -- Phase 23 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 32
-  completed_plans: 28
+  completed_plans: 29
   percent: 83
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 23 (portfolio-surface-ci-cd) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-07-14 -- Phase 23 execution started
 
@@ -77,6 +77,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 22 P03 | 25min | 2 tasks | 3 files |
 | Phase 23 P01 | 12min | 2 tasks | 4 files |
 | Phase 23 P03 | 25min | 3 tasks | 12 files |
+| Phase 23 P04 | 15min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 23]: [Phase 23-03]: Astro entity-escapes & in interpolated href attributes -- confirmed empirically, fixed with set:html on a raw HTML fragment for the invite CTA anchors (UI-SPEC HARD VERIFICATION GATE)
 - [Phase 23]: [Phase 23-03]: tests/test_site_drift_guard.py rebuilds the D-02 guard to scan built site/dist/**/*.html via filesystem rglob (never git ls-files) -- closes the vacuous-pass hole Astro's SSG choice opened; reuses _canonical_url/_collect_offenders from tests/test_invite_drift_guard.py, no second regex
 - [Phase 23]: [Phase 23-03]: site/package.json engines field (>=22.12.0, Astro's own scaffold output) is the CI Node version source of truth for plan 23-04, not a hardcoded guess from research
+- [Phase 23]: [Phase 23-04]: Real-run proof of pages.yml/release.yml (push, tag, curl, observe skipped gate) deferred to the orchestrator's consolidated phase-end push -- this plan is commit-only, so CICD-02/CICD-03 are structurally correct + locally YAML-validated but not yet evidence-complete
+- [Phase 23]: [Phase 23-04]: setup-python@v6 pinned for the NEW ci.yml site: job only; the pre-existing test: job's checkout@v4/setup-python@v5 pins left untouched per plan instruction (D-13 baseline signal preserved)
 
 ### Pending Todos
 
@@ -166,7 +169,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-14T10:48:43.211Z
-Stopped at: Completed 23-03-PLAN.md
+Last session: 2026-07-14T11:03:23.645Z
+Stopped at: Completed 23-04-PLAN.md
 Resume file: 
 None
