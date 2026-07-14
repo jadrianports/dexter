@@ -13,5 +13,9 @@ venv/
 dist/
 build/
 
+# Node / Astro site (Phase 23) — dependency tree and build output, never committed
+node_modules/
+site/dist/
+
 # Local design notes / scratch — never tracked (leaked a bot token in 2c5a95d)
 dexter-architecture.md

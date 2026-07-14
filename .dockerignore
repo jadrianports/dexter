@@ -35,3 +35,8 @@ tests/
 
 # Claude tooling
 .claude/
+
+# Node / Astro portfolio site (Phase 23) — zero runtime relevance to the bot;
+# the npm dependency tree must never reach a published GHCR layer (T-23-SUPPLY)
+site/
+**/node_modules/
