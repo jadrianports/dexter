@@ -123,3 +123,7 @@ None from this plan directly. Two pre-existing acknowledged-deferred items (Page
 ---
 *Phase: 23-portfolio-surface-ci-cd*
 *Completed: 2026-07-14*
+
+## Self-Check: PASSED
+
+All 3 created/modified workflow files found on disk; all 4 commit hashes (`5d2e927`, `163993f`, `7f8b229`, `172386b`) found in git log.
