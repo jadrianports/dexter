@@ -268,22 +268,39 @@ new production hosting** — the 24/7 deploy stays parked.
 
 ### Sequencing — the hard prerequisite
 
-- **D-13 (user-selected): the 140-commit push is the FIRST TASK of the phase, before any Phase 23
+- **D-13 (user-selected): the 143-commit push is the FIRST TASK of the phase, before any Phase 23
   code is written.** This is a **hard blocker**, not bookkeeping.
-  **The situation:** the repo (`github.com/jadrianports/dexter`, already **PUBLIC**) is **140 commits
-  behind** local `main`. The entire v1.3 + v1.4 stack is unpushed. Consequently **`ci.yml` has never
-  actually executed.** Phases 19–22 were described as executing "behind a green CI gate" — but that
-  gate has only ever existed as a file on disk. `ci.yml` itself carries a comment (Pitfall 7)
-  predicting the native `davey`/PyNaCl build may fail on the first real run.
-  **Therefore:** push first, watch the first-ever CI run, and fix whatever breaks (native-extension
-  builds, the pgvector service container, a Ruff rule) **while it is an isolated failure** — not
-  tangled with a brand-new Astro build job, a Pages deploy, and a GHCR publish. Everything downstream
-  in this phase (the CI badge, Pages, GHCR) depends on a **known-green baseline**.
-  **The planner must sequence a CI-repair contingency**, because a red first run is a realistic
-  outcome, not a hypothetical.
-  *(Rejected: pushing at the end with the phase's work included — if CI is red for a pre-existing
-  Phase 18 reason, it is discovered entangled with three new workflow jobs, and the bisect is the
-  worst possible way to learn the gate never worked.)*
+
+  > **CORRECTION (2026-07-14, same session).** An earlier draft of this decision claimed *"`ci.yml`
+  > has never actually executed."* **That was false** — Claude inferred it from the unpushed-commit
+  > count without checking the run history, and the user challenged it. **Verified via
+  > `gh run list`: CI has run three times (2026-07-09/10), one failure, then green.** The failure was
+  > the unrelated import-time-exit bug, fixed by `e99a678`/`be0da7d`, and recorded green by
+  > `efb4b60` (*"test(18): record CI gate UAT result (green on main)"*). The decision below stands,
+  > but on the corrected, weaker premise.
+
+  **The actual situation:** the repo (`github.com/jadrianports/dexter`, already **PUBLIC**) has
+  `origin/main` parked at **Phase 18's tip (2026-07-10)**. The **143 unpushed commits are Phases 19,
+  20, 21, and 22** — none of which CI has ever seen. The gate exists and is **proven working**; it
+  simply has not been run against four phases of subsequent work, **including Phase 21's surgery on
+  the memory subsystem** (the `search_memories` / `recall()` path that produced the Phase 13 CR-01
+  blocker) and Phase 22's new drift-guard test.
+  **Therefore:** push first, watch the run, and fix whatever breaks (a Ruff rule, the pgvector
+  service container, a live-DB test that only passes locally) **while it is an isolated failure** —
+  not tangled with a brand-new Astro build job, a Pages deploy, and a GHCR publish. Everything
+  downstream in this phase (the CI badge, Pages, GHCR) depends on a **known-green baseline at HEAD**,
+  and today's green badge would be reporting on Phase 18, not on the code being promoted.
+  **The planner must still sequence a CI-repair contingency** — four unexercised phases through a
+  gate is a realistic red, not a hypothetical.
+
+  **Struck, on the corrected evidence:** `ci.yml`'s Pitfall-7 comment warns the native
+  `davey`/PyNaCl install may fail on the first real run. **It did not** — the install worked on the
+  GitHub runner. That risk is **retired**; do not plan around it, and consider removing the stale
+  comment.
+
+  *(Rejected: pushing at the end with the phase's work included — if CI is red for a Phase 19–22
+  reason, it is discovered entangled with three new workflow jobs, and bisecting that is the worst
+  possible way to find out.)*
 
 - **D-14 (user-selected): the landing page lives at the default `jadrianports.github.io/dexter`.**
   Zero cost, zero DNS. **Pages footgun the researcher must lock down:** a project-page subpath
@@ -470,9 +487,10 @@ None — `todo.match-phase 23` returned zero matches.
   that's usually offline without having been told.
 
 - **The push is the phase's true first task.** Everything recruiter-facing here (a badge that reflects
-  a real run, a live Pages URL, a pullable image) is a claim about GitHub — and GitHub has never seen
-  140 of these commits. A red first CI run is a realistic outcome; D-13 sequences it where it is cheap
-  to fix.
+  a real run, a live Pages URL, a pullable image) is a claim about GitHub — and GitHub's `main` is
+  still parked at Phase 18. A CI badge today would be truthfully reporting on code four phases old.
+  A red run when Phases 19–22 finally land is a realistic outcome; D-13 sequences it where it is cheap
+  to fix. (See D-13's correction block — an earlier draft overstated this as "CI has never run.")
 
 - **Two surfaces, one story, zero duplication.** The landing page shows and links; the README explains.
   Architecture detail lives in exactly one place (D-05). The invite URL is generated in exactly one

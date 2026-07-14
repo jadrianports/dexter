@@ -227,10 +227,25 @@ records rather than obscures.
 ## Sequencing & extras
 
 **Claude surfaced, unprompted:** the repo (`github.com/jadrianports/dexter`, already **PUBLIC**) is
-**140 commits behind** local `main` — the entire v1.3 + v1.4 stack is unpushed, which means **`ci.yml` has
-never actually executed.** Phases 19–22 were described as running "behind a green CI gate" that has only
-ever existed as a file on disk, and `ci.yml`'s own Pitfall-7 comment predicts the native `davey`/PyNaCl
-build may fail on the first real run. That made "when do we push" a design decision rather than bookkeeping.
+**143 commits behind** local `main`, which makes "when do we push" a design decision rather than
+bookkeeping.
+
+> **⚠ CORRECTION — Claude got this wrong and the user caught it.** Claude initially asserted that
+> **"`ci.yml` has never actually executed"**, inferring it from the unpushed-commit count without
+> checking the run history. The user pushed back (*"wdym ci.yml has never run i thought we already push
+> to origin/main?"*). **Verification via `git fetch` + `gh run list` proved Claude wrong:** `origin/main`
+> is parked at **Phase 18's tip (2026-07-10)**, and CI has run **three times** there — one failure
+> (the unrelated import-time-exit bug, fixed by `e99a678`/`be0da7d`), then two greens, with
+> `efb4b60` explicitly recording *"CI gate UAT result (green on main)"*.
+>
+> **Corrected premise:** the gate exists and is **proven working**. The 143 unpushed commits are
+> **Phases 19–22**, which CI has simply never seen — including Phase 21's memory-subsystem surgery and
+> Phase 22's new drift-guard test. The push-first decision **stands**, but on this weaker, accurate
+> footing rather than on the false claim.
+>
+> **Also struck:** Claude cited `ci.yml`'s Pitfall-7 warning that the native `davey`/PyNaCl build might
+> fail on the first real run. It **did not** — the install worked on the GitHub runner. That risk is
+> retired.
 
 ### Q1 — When does the 140-commit push happen?
 
