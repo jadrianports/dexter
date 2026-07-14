@@ -1,14 +1,24 @@
 ---
+// site/src/pages/index.astro
+//
+// The locked single-scroll composition (D-05): Hero -> Demo -> Features ->
+// Boundaries -> CTA -> Footer. Do not reorder, do not add sections (no
+// on-page architecture section -- that story lives in the README case study,
+// PORT-03, so two copies on two surfaces don't drift against each other).
 import Layout from "../layouts/Layout.astro";
 import Hero from "../components/Hero.astro";
+import DemoMock from "../components/DemoMock.astro";
+import Features from "../components/Features.astro";
+import Boundaries from "../components/Boundaries.astro";
 import Cta from "../components/Cta.astro";
 import Footer from "../components/Footer.astro";
 ---
 
 <Layout title="dexter — a discord bot with opinions">
   <Hero />
-  <!-- Demo, Features, and Boundaries sections land in plan 23-06 (wave 6) --
-       this plan builds the chassis (Layout + Hero + Cta + Footer) only. -->
+  <DemoMock />
+  <Features />
+  <Boundaries />
   <Cta />
   <Footer />
 </Layout>
