@@ -1,17 +1,20 @@
 ---
+import Layout from "../layouts/Layout.astro";
+import { INVITE_URL } from "../config";
 
+// HARD VERIFICATION GATE (23-UI-SPEC.md "Invite URL Sourcing"): Astro's compiler
+// HTML-entity-escapes `&` inside interpolated attribute values (href={INVITE_URL}
+// would render `&amp;` in place of `&`), which would make the D-02 byte-comparison
+// drift scan report permanent false-positive drift on every build. Confirmed
+// empirically at execution time (grep -cF for the raw canonical URL returned 0;
+// the built HTML contained `&amp;` instead). Fixed with `set:html` on a small raw
+// HTML fragment for just the anchor, which bypasses escaping entirely — the
+// scanner's literal byte comparison is preserved rather than loosened.
+const ctaHtml = `<a href="${INVITE_URL}" class="cta-button">add to discord</a>`;
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="Dexter">
+  <Fragment set:html={ctaHtml} />
+  <p>Real content lands in plans 23-05/23-06.</p>
+  <Fragment set:html={ctaHtml} />
+</Layout>
