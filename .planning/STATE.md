@@ -4,13 +4,13 @@ milestone: v1.4
 milestone_name: Open House
 status: executing
 stopped_at: Completed 23-05-PLAN.md
-last_updated: "2026-07-14T11:26:35.727Z"
+last_updated: "2026-07-14T12:59:07.841Z"
 last_activity: 2026-07-14 -- Phase 23 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 32
-  completed_plans: 30
+  completed_plans: 31
   percent: 83
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 23 (portfolio-surface-ci-cd) — EXECUTING
-Plan: 5 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-07-14 -- Phase 23 execution started
 
@@ -79,6 +79,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 23 P03 | 25min | 3 tasks | 12 files |
 | Phase 23 P04 | 15min | 3 tasks | 3 files |
 | Phase 23 P05 | 25min | 3 tasks | 9 files |
+| Phase 23-portfolio-surface-ci-cd P07 | 35min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 23]: [Phase 23-04]: setup-python@v6 pinned for the NEW ci.yml site: job only; the pre-existing test: job's checkout@v4/setup-python@v5 pins left untouched per plan instruction (D-13 baseline signal preserved)
 - [Phase 23]: [Phase 23-05]: no box-shadow CSS declaration exists anywhere (not even 'none') -- the plan's own build-time verify regex backtracks around a bare 'none' value and false-flags it; omitting the property entirely satisfies both the regex and a plain grep
 - [Phase 23]: [Phase 23-05]: index.astro rewired to compose Layout > Hero > Cta > Footer (not in the plan's files_modified list) -- necessary so the task's own dist/index.html verification has real content to scan instead of 23-03's placeholder
+- [Phase 23-portfolio-surface-ci-cd]: [Phase 23-07]: docs/demo.gif deliberately withheld (not rendered) while site/src/data/demo-transcript.ts still carries {{DEXTER_DEMO_LINE_*}} placeholder tokens -- render_demo_gif.py validated end-to-end against a scratch output, PORT-02/CICD gif render tracked as blocked-on-human in 23-HUMAN-UAT.md — Rendering the current build would ship a public, permanently-cached README asset visibly showing placeholder tokens on a page whose entire thesis is honest disclosure -- worse than shipping no GIF (T-23-HONEST)
+- [Phase 23-portfolio-surface-ci-cd]: [Phase 23-07]: README.md rewritten as an architecture case study; drift guard proven NON-VACUOUS (README.md now in tracked-doc scan, canonical URL found, zero offenders) — PORT-03/PORT-04 delivered; the moment a tracked doc carries the invite URL, tests/test_invite_drift_guard.py stops passing vacuously and starts enforcing something real
 
 ### Pending Todos
 
@@ -172,7 +175,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-14T11:26:35.717Z
+Last session: 2026-07-14T12:59:07.826Z
 Stopped at: Completed 23-05-PLAN.md
 Resume file: 
 None

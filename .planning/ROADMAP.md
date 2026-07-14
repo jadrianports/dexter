@@ -85,7 +85,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 20: Owner Control Plane & Rate Observability** - The owner can list, silence, and force-leave guilds — the abuse kill-switch, with per-guild AI usage visible (completed 2026-07-13)
 - [x] **Phase 21: Memory Scoping & Guild Data Lifecycle** - Third-party memory stops leaking across guilds and a departed guild's data gets purged (or the documented global-memory fallback ships instead) (completed 2026-07-13)
 - [x] **Phase 22: Invite Plumbing** - A correct, least-privilege OAuth2 invite link, in-bot and public (completed 2026-07-13)
-- [ ] **Phase 23: Portfolio Surface & CI/CD** - Landing page, case-study README, CI+Pages+GHCR — the recruiter-facing deliverable
+- [x] **Phase 23: Portfolio Surface & CI/CD** - Landing page, case-study README, CI+Pages+GHCR — the recruiter-facing deliverable (completed 2026-07-14)
 
 ## Phase Details
 
@@ -277,7 +277,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 7** *(blocked on Wave 6)*
 
-- [ ] 23-07-PLAN.md — Playwright→GIF pipeline + README architecture case study (5 badges, mermaid, 4 callouts, boundaries, invite link) + 23-HUMAN-UAT.md
+- [x] 23-07-PLAN.md — Playwright→GIF pipeline + README architecture case study (5 badges, mermaid, 4 callouts, boundaries, invite link) + 23-HUMAN-UAT.md
 
 **UI hint**: yes
 
@@ -310,4 +310,4 @@ Full phase details, success criteria, and decisions archived in
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
 | 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
-| 23. Portfolio Surface & CI/CD | v1.4 | 6/7 | In Progress|  |
+| 23. Portfolio Surface & CI/CD | v1.4 | 7/7 | Complete   | 2026-07-14 |
