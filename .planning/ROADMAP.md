@@ -2,7 +2,7 @@
 
 ## Overview
 
-Dexter is a sarcastic, personality-driven Discord bot: a reliable YouTube music player with a Gemini-powered personality (`/ask`, `/imagine`), unprompted "alive" behavior (roasts, reactions, lyrics, history), hardened and scaled to run 24/7 on PostgreSQL behind an `AutoShardedBot`. v1.0 (Phases 1–4) shipped the bot; v1.1 (Phases 5–8) re-targeted the deploy substrate (Koyeb + Neon), killed playback latency, and added player UX + social/ops features. v1.2 "Sharper & Smarter" (Phases 9–12) hardened the reliability gaps, covered the untested critical paths with real tests, gave Dex a durable RAG long-term memory (pgvector on Neon + Gemini embeddings) for callback roasts, and rounded out the music/UX. v1.3 "Taste Brain" (Phases 13–17) turned listening history into semantic taste memory that powers a smarter DJ, wired RAG into `/roast`/`/ask` with a `/memory` view+forget escape hatch, added proactive memory callbacks, and closed with vision/multimodal roasting — all on existing infra, zero new dependencies. v1.4 "Open House" (Phases 18–23) retrofits the single-community bot into a publicly-invitable, multi-tenant-robust portfolio piece: a per-guild config seam replaces the hardcoded single-channel assumption, onboarding + admin `/setup` makes a fresh server "just work" ambient-silent-until-configured, an owner control plane gives the recruiter-facing risk (full-savage personality on public servers) a real reactive kill-switch, memory scoping contains third-party leakage across guilds, invite plumbing ships a least-privilege OAuth2 URL, and a portfolio surface (landing page + case-study README + CI/CD) is the recruiter-facing deliverable — all without changing the on-demand, owner-run hosting model.
+Dexter is a sarcastic, personality-driven Discord bot: a reliable YouTube music player with a Gemini-powered personality (`/ask`, `/imagine`), unprompted "alive" behavior (roasts, reactions, lyrics, history), hardened and scaled to run 24/7 on PostgreSQL behind an `AutoShardedBot`. v1.0 (Phases 1–4) shipped the bot; v1.1 (Phases 5–8) re-targeted the deploy substrate (Koyeb + Neon), killed playback latency, and added player UX + social/ops features. v1.2 "Sharper & Smarter" (Phases 9–12) hardened the reliability gaps, covered the untested critical paths with real tests, gave Dex a durable RAG long-term memory (pgvector on Neon + Gemini embeddings) for callback roasts, and rounded out the music/UX. v1.3 "Taste Brain" (Phases 13–17) turned listening history into semantic taste memory that powers a smarter DJ, wired RAG into `/roast`/`/ask` with a `/memory` view+forget escape hatch, added proactive memory callbacks, and closed with vision/multimodal roasting — all on existing infra, zero new dependencies. v1.4 "Open House" (Phases 18–23) retrofits the single-community bot into a publicly-invitable, multi-tenant-robust portfolio piece: a per-guild config seam replaces the hardcoded single-channel assumption, onboarding + admin `/setup` makes a fresh server "just work" ambient-silent-until-configured, an owner control plane gives the recruiter-facing risk (full-savage personality on public servers) a real reactive kill-switch, memory scoping contains third-party leakage across guilds, invite plumbing ships a least-privilege OAuth2 URL, and a portfolio surface (landing page + case-study README + CI/CD) is the recruiter-facing deliverable — all without changing the on-demand, owner-run hosting model. v1.5 "Deep Cuts" (Phases 24–28) cleans the deploy story down to one honest Docker path, deepens the taste brain (salience reinforcement + vision-sourced memories), adds real DJ muscle (radio mode, skip-voting, spike-gated crossfade), and closes out the remaining portfolio release steps — the landing-page redesign already shipped.
 
 ## Milestones
 
@@ -11,6 +11,7 @@ Dexter is a sarcastic, personality-driven Discord bot: a reliable YouTube music 
 - ✅ **v1.2 Sharper & Smarter** — Phases 9–12 (shipped code 2026-06-30) — see [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Taste Brain** — Phases 13–17 (shipped code 2026-07-03) — see [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 - ✅ **v1.4 Open House** — Phases 18–23 (shipped code 2026-07-14) — see [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
+- 🚧 **v1.5 Deep Cuts** — Phases 24–28 (in progress — roadmap drafted 2026-07-15)
 
 ## Phases
 
@@ -95,9 +96,80 @@ Full phase details, success criteria, and decisions archived in
 
 </details>
 
+### 🚧 v1.5 Deep Cuts (Phases 24–28) — IN PROGRESS
+
+**Milestone Goal:** Clean the deploy story down to one honest Docker path, deepen the taste brain (durable memory + vision-sourced memories), add real DJ muscle (radio, skip-voting, crossfade), and finish the recruiter-facing surface. Continues phase numbering at Phase 24. Hosting model unchanged — the 24/7 deploy stays parked; this milestone makes Docker the clean, honest run path, not a 24/7 standup.
+
+- [ ] **Phase 24: Hosting Honesty & Docker** - Purge every dead cloud-host reference and replace the Koyeb deploy doc with a verified Docker run guide
+- [ ] **Phase 25: Smarter Memory** - Salience reinforcement (surfaced memories gain durability) + vision-sourced memory facts, additive on the existing pgvector store
+- [ ] **Phase 26: Radio Mode & Skip Democracy** - Endless taste-brain-driven radio mode + vote-gated `/skip` so the queue isn't one user's toy
+- [ ] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions, contingent on a plan-time spike proving playback-engine safety; descopes to a fast-follow if the spike shows instability
+- [ ] **Phase 28: Portfolio Finish & Release** - Verify the shipped landing-page redesign and close out the remaining owner-performed release steps
+
+## Phase Details
+
+### Phase 24: Hosting Honesty & Docker
+**Goal**: Dexter's deploy story is one honest, working Docker path — every dead cloud-host reference (Render, Koyeb, Oracle) is gone from code and docs, and a documented `docker compose up` run against Neon is verified to boot cleanly.
+**Depends on**: Nothing (first phase of v1.5; independent, low-risk cleanup — mostly comments, config, and docs plus one local-boot verification)
+**Requirements**: HOST-01, HOST-02, HOST-03, HOST-04
+**Success Criteria** (what must be TRUE):
+  1. Grepping the repo (code comments, `config.py`, `Dockerfile`, `docker-compose.yml`, `.env.example`, docs) for "Render", "Koyeb", or "Oracle" turns up zero live hosting-target references — only the host-agnostic `$PORT` read and Docker/residential-host framing remain.
+  2. `docs/DEPLOY-KOYEB.md` no longer exists; a new Docker run guide documents `docker compose up` on a local/residential machine — env setup, the Neon `DATABASE_URL`, and how to verify the bot is alive.
+  3. `docker compose up` builds the image and boots Dexter locally against Neon end-to-end: clean startup log, `/health` responds, no new silent failures appear in `dexter.log`.
+  4. *(blocked-on-human, HOST-04)* The owner deletes the dashboard-side Render service so the repo stops auto-deploying and the CI/CD failure emails stop — there is no Render config in the repo to remove; the connection lives in the Render dashboard.
+**Plans**: TBD
+
+### Phase 25: Smarter Memory
+**Goal**: Dexter's long-term memory gets more durable and richer — memories that keep proving relevant survive the daily decay sweep longer, and a vision roast now leaves behind a lasting memory of its own.
+**Depends on**: Nothing new (additive on the existing Phase 11/13 pgvector `user_memories` store; no new tables, no schema fork)
+**Requirements**: MEM-06, MEM-07
+**Success Criteria** (what must be TRUE):
+  1. A memory that has been recalled/surfaced multiple times shows measurably reinforced salience/expiry compared to an equally-old, never-surfaced memory — the daily decay sweep evicts the unsurfaced one first.
+  2. A vision roast persists a distilled, number-free fact into `user_memories` under its own memory kind, gated by the same sensitivity/PII + accuracy-firewall checks every other kind goes through — no raw counts or SQL-known numbers get embedded (Critical Rule 12/13).
+  3. Both changes are additive: zero new tables, zero schema fork, kind-agnostic `MemoryService` untouched — every pre-existing memory kind's salience baseline, decay, and dedup behavior stays byte-identical when the new reinforcement/vision-kind paths aren't exercised.
+**Plans**: TBD
+
+### Phase 26: Radio Mode & Skip Democracy
+**Goal**: Dexter can DJ a room indefinitely off the taste brain, and skipping a track stops being one user's unilateral call.
+**Depends on**: Nothing new (radio mode reads the existing taste-brain substrate from Phases 13/14; skip-voting is additive over the existing queue/playback engine)
+**Requirements**: DJ-01, DJ-02
+**Success Criteria** (what must be TRUE):
+  1. A user can start radio/endless mode seeded from a track or an artist, and the queue keeps refilling off the taste brain — no manual `/play` needed — until a user stops it.
+  2. Stopping radio mode returns the bot to normal manual queueing with no leftover auto-refill behavior.
+  3. With more than one listener in voice, `/skip` requires reaching a configurable vote threshold (or listener majority) before the track actually skips, and Dexter narrates the running tally in response to each vote.
+  4. A solo listener's `/skip` still skips instantly — vote-gating doesn't regress the single-listener case.
+**Plans**: TBD
+
+### Phase 27: Crossfade Playback (Spike-Gated)
+**Goal**: Track transitions blend smoothly into each other — contingent on a plan-time research spike proving the existing playback engine (generation counter, `/skip`, prefetch) can support it safely. If the spike shows engine instability, this phase closes by formally descoping DJ-03 to a fast-follow instead of forcing a broken feature (standing Descope Rule).
+**Depends on**: Phase 26 (shares the same playback-engine surface; sequencing after the other music-engine changes contains the spike risk to its own phase rather than compounding it with radio/skip-voting work)
+**Requirements**: DJ-03
+**Success Criteria** (what must be TRUE):
+  1. A plan-time research spike prototypes crossfade against the real generation-counter/`/skip`/prefetch playback engine and produces an explicit go/no-go verdict *before* full implementation starts.
+  2. **If go:** the tail of the outgoing track audibly blends into the head of the incoming track, and firing `/skip` mid-crossfade does not double-play audio, orphan an FFmpeg process, or desync the generation counter.
+  3. **If no-go:** DJ-03 is formally moved to Future Requirements as DJ-F2 with the spike's findings documented in REQUIREMENTS.md/ROADMAP.md, and the phase closes clean rather than shipping an unstable engine change.
+
+**Spike required**: yes — this phase cannot proceed past a plan-time research spike (`/skip`-mid-crossfade + generation-counter safety proof); a failed spike descopes DJ-03 per the standing Descope Rule (REQUIREMENTS.md) rather than forcing the workaround. Prior art exists (custom PCM-mixing `AudioSource` — `veloura-audio`, `discord-ext-music`); crossfade forfeits opus-copy during the fade and needs an `audioop`→`numpy` note for Python 3.13.
+
+**Plans**: TBD
+
+### Phase 28: Portfolio Finish & Release
+**Goal**: The recruiter-facing portfolio surface reaches its finished, live state. The landing-page redesign already shipped (`c7fd22e`) — what remains is confirming it's still true and completing the owner-performed release steps.
+**Depends on**: Nothing new (independent of the music/memory/hosting work; sequenced last as the milestone close-out)
+**Requirements**: PORT-05 (already complete), PORT-02, CICD-02, CICD-03
+**Success Criteria** (what must be TRUE):
+  1. The `/site` landing page shows proper-case copy in its own voice, a working (non-broken) staged demo animation, and a distinct "after hours" visual identity — **already shipped** (`c7fd22e`); this phase confirms it's still true at milestone close. (PORT-05)
+  2. *(blocked-on-human, PORT-02)* The demo mock shows two verbatim real Dexter personality lines in place of the `{{DEXTER_DEMO_LINE}}` placeholder tokens — needs a live bot; no invented lines.
+  3. *(blocked-on-human, CICD-02)* GitHub Pages is enabled (`Settings → Pages → Source = GitHub Actions`) and the landing page is live at its public URL.
+  4. *(blocked-on-human, CICD-03)* GHCR package visibility is set and the first `v*`-tag `release.yml` run publishes the image.
+
+**UI hint**: yes (this phase concerns the `/site` landing page — no new build work is expected since PORT-05 already shipped; the annotation is flagged for downstream consistency only, verification/owner-action is the actual remaining scope)
+
+**Plans**: TBD
+
 ## Progress
 
-**Execution Order:** Phases executed in numeric order: 1 → 2 → 2.5 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23
+**Execution Order:** Phases execute in numeric order: 1 → 2 → 2.5 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -125,3 +197,8 @@ Full phase details, success criteria, and decisions archived in
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
 | 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
 | 23. Portfolio Surface & CI/CD | v1.4 | 7/7 | Complete   | 2026-07-14 |
+| 24. Hosting Honesty & Docker | v1.5 | 0/TBD | Not started | - |
+| 25. Smarter Memory | v1.5 | 0/TBD | Not started | - |
+| 26. Radio Mode & Skip Democracy | v1.5 | 0/TBD | Not started | - |
+| 27. Crossfade Playback (spike-gated) | v1.5 | 0/TBD | Not started | - |
+| 28. Portfolio Finish & Release | v1.5 | 0/TBD | Not started | - |

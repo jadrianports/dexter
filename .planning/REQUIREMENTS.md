@@ -65,29 +65,27 @@ Explicitly excluded.
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HOST-01 | Phase [N] | Pending |
-| HOST-02 | Phase [N] | Pending |
-| HOST-03 | Phase [N] | Pending |
-| HOST-04 | Phase [N] | Pending (blocked-on-human) |
-| MEM-06 | Phase [N] | Pending |
-| MEM-07 | Phase [N] | Pending |
-| DJ-01 | Phase [N] | Pending |
-| DJ-02 | Phase [N] | Pending |
-| DJ-03 | Phase [N] | Pending (spike-gated) |
-| PORT-05 | Phase [N] | Complete (`c7fd22e`) |
-| PORT-02 | Phase [N] | Pending (blocked-on-human) |
-| CICD-02 | Phase [N] | Pending (blocked-on-human) |
-| CICD-03 | Phase [N] | Pending (blocked-on-human) |
+| HOST-01 | Phase 24 | Pending |
+| HOST-02 | Phase 24 | Pending |
+| HOST-03 | Phase 24 | Pending |
+| HOST-04 | Phase 24 | Pending (blocked-on-human) |
+| MEM-06 | Phase 25 | Pending |
+| MEM-07 | Phase 25 | Pending |
+| DJ-01 | Phase 26 | Pending |
+| DJ-02 | Phase 26 | Pending |
+| DJ-03 | Phase 27 | Pending (spike-gated) |
+| PORT-05 | Phase 28 | Complete (`c7fd22e`) |
+| PORT-02 | Phase 28 | Pending (blocked-on-human) |
+| CICD-02 | Phase 28 | Pending (blocked-on-human) |
+| CICD-03 | Phase 28 | Pending (blocked-on-human) |
 
 **Coverage:**
 - v1.5 requirements: 13 total (1 already complete, 4 blocked-on-human)
-- Mapped to phases: filled by roadmap
-- Unmapped: filled by roadmap
+- Mapped to phases: 13/13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-15*
-*Last updated: 2026-07-15 at milestone start*
+*Last updated: 2026-07-15 at roadmap creation — all 13 requirements mapped to Phases 24–28*

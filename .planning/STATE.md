@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
 status: planning
-last_updated: "2026-07-14T18:12:17.529Z"
-last_activity: 2026-07-14
+last_updated: "2026-07-15T00:00:00.000Z"
+last_activity: 2026-07-15
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,33 +20,49 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** none — v1.4 "Open House" shipped + archived (tag `v1.4`). Next: `/gsd-new-milestone` (fresh REQUIREMENTS.md). Candidate directions in PROJECT.md → Current Milestone.
+**Current focus:** Phase 24 (Hosting Honesty & Docker) — v1.5 "Deep Cuts" roadmap drafted, awaiting approval, then `/gsd-plan-phase 24`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-14 — Milestone v1.5 started
+Phase: 24 of 28 (Hosting Honesty & Docker)
+Plan: 0 of TBD in current phase
+Status: Roadmap drafted — ready to plan
+Last activity: 2026-07-15 — v1.5 "Deep Cuts" roadmap created (5 phases: 24–28), 13/13 requirements mapped
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
 
+- Total plans completed (v1.4): 32/32 (Phases 18–23) — milestone shipped 2026-07-14
 - Total plans completed (v1.3): 18/18 (Phases 13–17) — milestone shipped 2026-07-03
 - v1.0 + v1.1 + v1.2: 52 plans shipped across Phases 1-12 — full per-plan timings archived in milestones/v1.1-ROADMAP.md and milestones/v1.2-ROADMAP.md
-- v1.4 (Phases 18–23): not yet planned — no timings yet
+- v1.5 (Phases 24–28): not yet planned — no timings yet
 
-**By Phase (v1.4) — roadmap only, plans TBD:**
+**By Phase (v1.4) — shipped, see milestones/v1.4-ROADMAP.md for full per-plan timings:**
 
 | Phase | Plans |
 |-------|-------|
-| 18. Per-Guild Config Foundation | 0/TBD |
-| 19. Onboarding & Admin Setup | 0/TBD |
-| 20. Owner Control Plane & Rate Observability | 0/TBD |
-| 21. Memory Scoping & Guild Data Lifecycle | 0/TBD |
-| 22. Invite Plumbing | 0/TBD |
-| 23. Portfolio Surface & CI/CD | 0/TBD |
+| 18. Per-Guild Config Foundation | 7/7 |
+| 19. Onboarding & Admin Setup | 4/4 |
+| 20. Owner Control Plane & Rate Observability | 7/7 |
+| 21. Memory Scoping & Guild Data Lifecycle | 4/4 |
+| 22. Invite Plumbing | 3/3 |
+| 23. Portfolio Surface & CI/CD | 7/7 |
+
+**By Phase (v1.5) — roadmap only, plans TBD:**
+
+| Phase | Plans |
+|-------|-------|
+| 24. Hosting Honesty & Docker | 0/TBD |
+| 25. Smarter Memory | 0/TBD |
+| 26. Radio Mode & Skip Democracy | 0/TBD |
+| 27. Crossfade Playback (spike-gated) | 0/TBD |
+| 28. Portfolio Finish & Release | 0/TBD |
+
+**v1.4 per-plan timing detail (archived from execution):**
+
 | Phase 18 P01 | 40min | 3 tasks | 82 files |
 | Phase 18 P02 | 25min | 3 tasks | 4 files |
 | Phase 18 P03 | 15min | 2 tasks | 2 files |
@@ -82,65 +98,23 @@ Last activity: 2026-07-14 — Milestone v1.5 started
 
 ### Decisions
 
-The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-milestone implementation decision) is preserved in **PROJECT.md Key Decisions** and `milestones/v1.1/v1.2/v1.3-ROADMAP.md`. This milestone's own decisions live in **REQUIREMENTS.md Key Decisions (this milestone)**. Enduring cross-milestone invariants worth carrying forward:
+The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-milestone implementation decision) is preserved in **PROJECT.md Key Decisions** and `milestones/v1.1/v1.2/v1.3/v1.4-ROADMAP.md`. This milestone's own decisions live in **REQUIREMENTS.md Key Decisions (this milestone)**. Enduring cross-milestone invariants worth carrying forward:
 
-- `MemoryService.recall/remember/distill` is kind-agnostic — new memory kinds/scoping dimensions should be additive where possible (Phase 11/13; tested again in Phase 21's guild-scoping work).
-- Accuracy firewall: qualitative narrative flows through vector memory; any number that drives a ranking decision comes from live SQL, never embedded text (Phase 11).
-- Rate budgets: shared 15 RPM chat limiter (priority tiers) vs a separate ~60 RPM embed limiter — background work never starves user commands. v1.4 adds `guild_id` tagging for observability (RATE-01), not a new limiter.
+- `MemoryService.recall/remember/distill` is kind-agnostic — new memory kinds/scoping dimensions should be additive where possible (Phase 11/13; tested again in Phase 21's guild-scoping work). MEM-07's vision-sourced fact should follow the Phase 13 `taste_episode` precedent (new kind, not a new table).
+- Accuracy firewall: qualitative narrative flows through vector memory; any number that drives a ranking decision comes from live SQL, never embedded text (Phase 11). Applies to MEM-07's distilled fact same as every other kind.
+- Rate budgets: shared 15 RPM chat limiter (priority tiers) vs a separate ~60 RPM embed limiter — background work never starves user commands.
 - Gemini 2.5 defaults `safety_settings` OFF — set them explicitly on every user-content `generate_content` call (Phase 17).
 - Pure-logic TDD seam (`logic/*.py`): all decision logic mock-free-tested before Discord wiring; glue stays untested-by-design.
-- **v1.4 sequencing lock (from research + roadmap):** Phase 18 (config seam) blocks everything; Phase 19 (onboarding, preventive) before Phase 20 (owner control plane, reactive); Phase 21 (memory scoping) sequenced after Phase 20 because MEM-04's purge hangs off the force-leave/`on_guild_remove` hook; Phase 22 (invite) sequenced after Phase 20 so the abuse mitigation is real before promoting invites; Phase 23 (portfolio) is strictly last — it needs a real second-guild walkthrough to be honest.
-- **Standing Descope Rule (REQUIREMENTS.md):** if plan-time research proves a requirement infeasible, descope rather than force it — applies with particular force to MEM-01/03/05, whose documented zero-code fallback is "keep memory global + disclose."
+- **Standing Descope Rule (REQUIREMENTS.md):** if plan-time research proves a requirement infeasible, descope rather than force it — governs DJ-03's crossfade spike gate this milestone (descopes to DJ-F2 on a failed spike).
+- **v1.5 sequencing lock (from roadmap creation):** Phase 24 (hosting/Docker cleanup) first — independent, low-risk, comments+docs+one verify; Phase 25 (smarter memory) additive over existing RAG infra, no dependency on 24; Phase 26 (radio + skip-voting) before Phase 27 (crossfade) so the playback-engine spike risk is contained to its own phase rather than compounding with the other music-engine work; Phase 28 (portfolio finish) last as milestone close-out — mostly blocked-on-human, PORT-05 already shipped (`c7fd22e`).
 - [Phase 18]: Ruff adopted as the single lint+format tool (D-14); config files committed separately from the mechanical cleanup pass so the repo-wide reformat stays its own atomic commit (D-16).
 - [Phase 18]: seed_guild_config_if_absent uses ON CONFLICT DO NOTHING (never DO UPDATE) so a stale DEXTER_CHANNEL_ID never overrides a later /setup write (D-09)
-- [Phase 18]: Extracted pure logic/guild_config.py decision seam (decide_ambient_channel + is_ambient_channel) mirroring logic/proactive.py; mock-free tested, no discord/asyncio/datetime/random imports — Locks the silent-until-configured invariant structurally so no future ambient surface can forget to guard itself (D-01/D-05)
-- [Phase 18]: GuildConfigService constructed unconditionally (no gemini-key guard) and both resolve_ambient_channel + resolve_announce_channel are synchronous (cache-only / no-await bodies) (18-04)
-- [Phase 18]: [Phase 18] bot.py boot wiring (18-05): GuildConfigService constructed + load_all()'d right after log_to_discord is wired, before Gemini-gated services; home-guild seed reads config.DEXTER_CHANNEL_ID via bot.get_channel, silent INFO skip on unset/unresolvable (D-10); _resolve_dexter_channel deleted, both bot.py ambient sites now call resolve_ambient_channel synchronously — Keeps the home guild's behavior unchanged while making every other guild ambient-silent by construction; cogs/events.py's remaining call sites are a sibling plan (18-06)
-- [Phase 18-06]: cogs/events.py ambient surfaces (3 voice sites + 2 on_message gates) consolidated onto the Phase 18 guild_config seam; DEXTER_CHANNEL_ID fully removed from cogs/ — Completes CONFIG-02/04 wiring for the events.py surface; tests updated to mock bot.guild_config.get() instead of patching the retired env var
-- [Phase 18-07]: Single combined GitHub Actions lint+test job (not split) with pgvector/pgvector:pg16 service container; pull_request (never pull_request_target) + top-level permissions: contents: read + zero secrets.* as the standing CI least-privilege posture
-- [Phase 19]: [Phase 19-01]: insert_guild_config_if_absent (D-14) never sets configured=true; configure_guild_first_time is the separate upsert that turns vision off on first /setup channel write
-- [Phase 19]: [Phase 19-01]: redesignate_guild_channel is a plain UPDATE touching only ambient_channel_id, never resets configured or either toggle an admin has since changed (D-03/D-20)
-- [Phase 19-02]: AmbientSurface required keyword-only (no default) on decide_ambient_channel/is_ambient_channel/resolve_ambient_channel -- a future ambient surface cannot resolve a channel without naming itself, TypeError on omission (D-22)
-- [Phase 19-02]: on_message's shared in_ambient_channel boolean retired for two independent surface-keyed booleans (roast_channel_ok/vision_channel_ok) since ambient_roasts_enabled and vision_roasts_enabled can now disagree per guild; the CONFIG-04 reaction-gating hole is closed
-- [Phase 19-02]: GuildConfigService.home_guild_id set unconditionally at the end of seed_home_guild, even on ON CONFLICT DO NOTHING -- the seed still resolves which guild is home regardless of insert-vs-conflict (D-24)
-- [Phase 19]: [Phase 19-03]: should_welcome_guild(inserted_row=) is the ONLY welcome-decision signal for on_guild_join and the boot backfill loop -- never bot.guild_config.get(), which would welcome-spam on a cache-miss race
-- [Phase 19]: [Phase 19-03]: boot backfill runs strictly after seed_home_guild and before queue-persistence wiring in _initialize_once -- reversing this order would backfill-and-welcome the home guild itself as configured=false (D-14 constraint 1)
-- [Phase 19]: [Phase 19-04]: setup_channel reads the cached row once before branching, driving both the first-configure/re-designate decision and (for re-designate) the old->new channel phrasing in the reply
-- [Phase 19]: [Phase 19-04]: cogs/admin.py is a dedicated guild-admin (manage_guild) surface, structurally separate from cogs/ops.py's owner (is_owner) surface (D-04)
 - [Phase 20-01]: guild_blocklist lands as its own table (D-01) with load_blocklist/insert_blocklist/delete_blocklist + set_silenced helpers in database.py; guild_config.is_blocked left in place but dead (D-03), documented in CLAUDE.md
-- [Phase 20-02]: silenced defaults to False via config_row.get('silenced', False) in decide_ambient_channel -- every pre-Phase-20 row/mock stays byte-identical
-- [Phase 20-02]: decide_interaction_allowed checks is_owner, then has_guild, then blocked-or-silenced (exact D-13 order); all four args required keyword-only, no defaults
-- [Phase 20]: [Phase 20-03]: guild_id kwarg on GeminiService.chat/generate_image is per-session usage tagging only (never a gate/quota); embed() stays untagged (separate 60 RPM limiter, D-09); increment guarded by guild_id is not None, placed right after rate_limiter.acquire() succeeds
-- [Phase 20-04]: GuildConfigService.load_all() restructured (try/except/else) so the blocklist load and config-cache load are fully independent -- neither failure blanks the other
-- [Phase 20]: [Phase 20-05]: Pre-send re-check re-invokes the same silence-aware is_ambient_channel predicate immediately before message.reply in _maybe_fire_proactive_callback and _maybe_fire_vision_roast (D-14 / SC-2) -- a second read of the same cache, not a new mechanism
-- [Phase 20]: [Phase 20-05]: guild_id threaded through the last 2 events.py Gemini call sites (ambient roast, vision roast) completes RATE-01 for this file
-- [Phase 20-06]: interaction_check computes is_owner/has_guild/blocked/silenced and dispatches on decide_interaction_allowed; refusal is sent from INSIDE interaction_check before return False (D-12), never via app_commands.CheckFailure -- returning False alone never reaches on_app_command_error (verified discord.py 2.7.1 mechanic)
-- [Phase 20-06]: on_guild_join block-check-first runs after the boot-race guard and before insert_guild_config_if_absent -- a blocklisted re-invite is left immediately via guild.leave(), no config insert, no welcome, no owner joined notice
-- [Phase 20-07]: Guild names render as plain text with backtick-wrapped ids in /guilds list rows (anti-injection, mirrors bot.py::_build_guild_notice_embed); silence/leave/block echoes use AllowedMentions.none() as defense-in-depth
-- [Phase 20-07]: /guilds block runs the shared teardown THEN the blacklist insert (D-11 order); a guild already absent still gets blacklisted, teardown skipped
-- [Phase 21-01]: kind appended before guild_id in search_memories so the pre-existing kind-only SQL shape keeps binding at literal $3 (dynamic $N numbering, order-preserving)
-- [Phase 21-01]: recall() forwards guild_id via a conditionally-built kwargs dict splatted into search_memories, not an unconditional guild_id=X-if-Y-else-None kwarg -- the latter breaks every hand-written fake_search test double on the recall path lacking a guild_id param
-- [Phase 21-02]: purge_guild_data's docstring deliberately omits the literal identifier guild_blocklist -- the T-21-03 invariant check greps inspect.getsource(), which includes the docstring, so even a prose mention fails it; the docstring names the sibling helpers instead and says why
-- [Phase 21-02]: purge_guild_data raises on failure (no internal try/except) -- the best-effort swallow belongs at the bot.py::on_guild_remove call site (21-04), keeping the helper honestly testable
-- [Phase 21-02]: the purge's four-table list is four hardcoded SQL literals, never a loop / never information_schema -- reviewability of the literal list IS the T-21-03 control that keeps guild_blocklist structurally out of reach (OWNER-04)
-- [Phase 21-03]: guild_scoped=bool(guild_id) (not a bare True) on the music-command callback, because _build_roast_line's guild_id param defaults to None -- a bare True with an empty-string guild_id would silently narrow recall to the NULL corpus
-- [Phase 21-03]: /ask's inline comment explaining why it stays un-scoped deliberately avoids the literal substring guild_scoped -- inspect.getsource() includes comments, so a comment containing that literal would fail the MEM-02 source-inspection regression test it protects
-- [Phase 21]: [Phase 21-04]: on_guild_remove docstring rewritten to avoid the literal substring purge_guild_data in prose — Keeps grep -c purge_guild_data bot.py at exactly 1 (the single call), mirroring plan 21-02's identical guild_blocklist-avoidance discipline for its own docstring.
-- [Phase 21]: [Phase 21-04]: PROJECT.md's scoping row explicitly names /ask as staying global and self-scoped — Phase 23's PORT-04 publishes this row verbatim -- an imprecise row omitting /ask would make Dexter's public privacy disclosure false.
+- [Phase 21-02]: purge_guild_data's four-table list is four hardcoded SQL literals, never a loop / never information_schema — reviewability of the literal list IS the T-21-03 control that keeps guild_blocklist structurally out of reach (OWNER-04)
 - [Phase 22-01]: Ten-permission bitfield (309240908864, D-09 amendment) locked with negative-assertion test; logic/invite.py is the one documented exception to the logic/ no-discord-import convention
-- [Phase 22-02]: cogs/invite.py comments avoid the literal substrings ephemeral/guild_only/checks.cooldown so the plan's grep -c == 0 acceptance checks stay exact while still documenting the deliberate omissions in prose — Mirrors the Phase 21 guild_blocklist/purge_guild_data docstring-avoidance discipline
-- [Phase 22-02]: /invite command carries no @app_commands.checks.cooldown and no DM-restriction decorator — zero I/O, static output, DM support is a hard requirement (D-06)
-- [Phase 22]: [Phase 22-03]: Reworded two pre-existing prose comments (config.py INVITE_SCOPES comment, logic/__init__.py package docstring) that legitimately mentioned oauth_url( in documentation so the new single-invite-URL-constructor scan (T-22-03) doesn't false-positive on prose
-- [Phase 23-01]: D-13 discharged clean on first CI run — 1160 DB-inclusive tests pass against real pgvector container, no repair needed
-- [Phase 23]: [Phase 23-03]: Astro entity-escapes & in interpolated href attributes -- confirmed empirically, fixed with set:html on a raw HTML fragment for the invite CTA anchors (UI-SPEC HARD VERIFICATION GATE)
-- [Phase 23]: [Phase 23-03]: tests/test_site_drift_guard.py rebuilds the D-02 guard to scan built site/dist/**/*.html via filesystem rglob (never git ls-files) -- closes the vacuous-pass hole Astro's SSG choice opened; reuses _canonical_url/_collect_offenders from tests/test_invite_drift_guard.py, no second regex
-- [Phase 23]: [Phase 23-03]: site/package.json engines field (>=22.12.0, Astro's own scaffold output) is the CI Node version source of truth for plan 23-04, not a hardcoded guess from research
-- [Phase 23]: [Phase 23-04]: Real-run proof of pages.yml/release.yml (push, tag, curl, observe skipped gate) deferred to the orchestrator's consolidated phase-end push -- this plan is commit-only, so CICD-02/CICD-03 are structurally correct + locally YAML-validated but not yet evidence-complete
-- [Phase 23]: [Phase 23-04]: setup-python@v6 pinned for the NEW ci.yml site: job only; the pre-existing test: job's checkout@v4/setup-python@v5 pins left untouched per plan instruction (D-13 baseline signal preserved)
-- [Phase 23]: [Phase 23-05]: no box-shadow CSS declaration exists anywhere (not even 'none') -- the plan's own build-time verify regex backtracks around a bare 'none' value and false-flags it; omitting the property entirely satisfies both the regex and a plain grep
-- [Phase 23]: [Phase 23-05]: index.astro rewired to compose Layout > Hero > Cta > Footer (not in the plan's files_modified list) -- necessary so the task's own dist/index.html verification has real content to scan instead of 23-03's placeholder
-- [Phase 23-portfolio-surface-ci-cd]: [Phase 23-07]: docs/demo.gif deliberately withheld (not rendered) while site/src/data/demo-transcript.ts still carries {{DEXTER_DEMO_LINE_*}} placeholder tokens -- render_demo_gif.py validated end-to-end against a scratch output, PORT-02/CICD gif render tracked as blocked-on-human in 23-HUMAN-UAT.md — Rendering the current build would ship a public, permanently-cached README asset visibly showing placeholder tokens on a page whose entire thesis is honest disclosure -- worse than shipping no GIF (T-23-HONEST)
 - [Phase 23-portfolio-surface-ci-cd]: [Phase 23-07]: README.md rewritten as an architecture case study; drift guard proven NON-VACUOUS (README.md now in tracked-doc scan, canonical URL found, zero offenders) — PORT-03/PORT-04 delivered; the moment a tracked doc carries the invite URL, tests/test_invite_drift_guard.py stops passing vacuously and starts enforcing something real
+
+> Full v1.4 per-phase decision log (30+ entries) preserved in milestones/v1.4-ROADMAP.md and prior STATE.md git history — trimmed here to keep this digest under the size guideline.
 
 ### Pending Todos
 
@@ -148,23 +122,24 @@ None.
 
 ### Blockers/Concerns
 
-- [Parked] The 24/7 live deploy remains parked behind the YouTube datacenter-IP block. Not scoped to v1.4 — hosting model is intentionally unchanged this milestone (owner's PC, on demand).
-- [Watch] MEM category (Phase 21) touches `services/memory.py::search_memories`/`recall()` — the exact subsystem whose `user_id`-only scoping caused the Phase 13 CR-01 blocker. Needs research at plan time; may descope per the standing Descope Rule.
-- [Watch] `tree_cls`/`CommandTree.interaction_check` exact constructor kwarg (Phase 20) is MEDIUM confidence per research — verify against the installed discord.py version before implementation.
+- [Parked] The 24/7 live deploy remains parked behind the YouTube datacenter-IP block. Not scoped to v1.5 — hosting model is intentionally unchanged this milestone (Docker becomes the honest local run path, not a 24/7 standup).
+- [Watch] DJ-03 crossfade (Phase 27) is spike-gated — plan-time research must prove `/skip`-mid-crossfade + generation-counter safety before implementation proceeds; descope to DJ-F2 per the standing Descope Rule if the spike shows engine instability.
+- [Watch] MEM-06/MEM-07 (Phase 25) touch the same `user_memories`/decay-sweep subsystem that carried the Phase 13 CR-01 scar and the Phase 21 guild-scoping surgery — verify salience-reinforcement math and the new vision-kind write path don't regress existing kinds' decay behavior.
 
 ## Deferred Items
 
-Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open items from the pre-close artifact audit (17 UAT gaps, 16 `human_needed` verification, 3 stale CONTEXT markers) **plus 3 blocked-on-human v1.4 requirements**. All are `human_needed` live-Discord checks, manual GitHub-UI toggles, or stale planning markers — **zero code gaps** (code-complete, CI green at HEAD `006da2a`). The live-Discord tail resumes when a Pi / always-on residential host exists (DEPLOY-F1); the 3 pending reqs resume when the owner performs the manual GitHub steps. Supersedes the v1.3-close deferral list (all its items are re-captured below).
+Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open items from the pre-close artifact audit (17 UAT gaps, 16 `human_needed` verification, 3 stale CONTEXT markers) **plus 3 blocked-on-human v1.4 requirements** (PORT-02, CICD-02, CICD-03 — all carried forward into v1.5 as the same requirement IDs, now mapped to Phase 28). All are `human_needed` live-Discord checks, manual GitHub-UI toggles, or stale planning markers — **zero code gaps** (code-complete, CI green at HEAD `006da2a`). The live-Discord tail resumes when a Pi / always-on residential host exists (DEPLOY-F1); the blocked-on-human reqs resume when the owner performs the manual GitHub-UI / live-bot steps.
 
-### Blocked-on-human v1.4 requirements (3)
+### Blocked-on-human v1.5 requirements (4, incl. 3 carried from v1.4)
 
 | Req | Item | Status |
 |-----|------|--------|
+| HOST-04 | Delete the dashboard-side Render service so the repo stops auto-deploying and CI/CD failure emails stop | Blocked on owner Render-UI step |
 | PORT-02 | Demo GIF needs two verbatim real Dexter personality lines (placeholder tokens intact; no invented lines) | Blocked on live bot capture |
 | CICD-02 | Enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first `pages.yml` run | Blocked on owner GitHub-UI toggle |
 | CICD-03 | GHCR package-visibility flip + first `v*` tag `release.yml` run | Blocked on owner GitHub-UI toggle |
 
-### Live-Discord / verification tail (33)
+### Live-Discord / verification tail (33, carried from v1.4 close)
 
 | Category | Item | Status |
 |----------|------|--------|
@@ -177,15 +152,15 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 | requirement | DEPLOY-02/03/05/08 — standing live-UAT, restart persistence, keepalive cron (carried v1.1) | Blocked on 24/7 host |
 | planning | Phases 13/14/15 — 3 stale `*-CONTEXT.md` open-question markers (all resolved during research/planning; code shipped + verified) | Doc-only, no action |
 
-> Phases 08 & 23 `*-HUMAN-UAT.md` show `partial` with 0 pending scenarios (marker-only, nothing actually open). Prior-milestone detail in MILESTONES.md v1.2 "Known Gaps" + v1.3 entry.
+> Phases 08 & 23 `*-HUMAN-UAT.md` show `partial` with 0 pending scenarios (marker-only, nothing actually open). Prior-milestone detail in MILESTONES.md v1.2/v1.3/v1.4 "Known Gaps" entries.
 
 ## Session Continuity
 
-Last session: 2026-07-14T12:59:07.826Z
-Stopped at: Completed 23-05-PLAN.md
-Resume file: 
-None
+Last session: 2026-07-15
+Stopped at: v1.5 "Deep Cuts" roadmap created (5 phases: 24–28), REQUIREMENTS.md traceability filled, STATE.md updated
+Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Review the roadmap draft (`.planning/ROADMAP.md`) and approve, or provide feedback for revision.
+- Once approved: `/gsd-plan-phase 24` to start planning Hosting Honesty & Docker.
