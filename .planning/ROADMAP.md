@@ -269,7 +269,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 23-05-PLAN.md — global.css design tokens + self-hosted mono + Layout/Hero/Cta/Footer (both invite CTAs)
+- [x] 23-05-PLAN.md — global.css design tokens + self-hosted mono + Layout/Hero/Cta/Footer (both invite CTAs)
 
 **Wave 6** *(blocked on Wave 5)*
 
@@ -310,4 +310,4 @@ Full phase details, success criteria, and decisions archived in
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
 | 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
-| 23. Portfolio Surface & CI/CD | v1.4 | 4/7 | In Progress|  |
+| 23. Portfolio Surface & CI/CD | v1.4 | 5/7 | In Progress|  |
