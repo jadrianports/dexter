@@ -291,7 +291,7 @@ def stats_embed(
 
     # Phase-6 pipeline instrumentation (PERF-06 / D-18)
     # Rendered only when perf_metrics is provided (guard ensures backward-compat).
-    # No Oracle/CPU label — baselines against actual run environment (D-19).
+    # No host-CPU label — baselines against actual run environment (D-19).
     if perf_metrics:
         embed.add_field(
             name="cache hit rate",

@@ -38,7 +38,7 @@ def setup_logger(name: str = "dexter") -> logging.Logger:
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
-    # Console handler — always on; stdout so Docker/Koyeb log viewers capture output (K-16)
+    # Console handler — always on; stdout so Docker/container log viewers capture output (K-16)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)

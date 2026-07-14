@@ -213,12 +213,12 @@ _sync_retry_active: bool = False
 
 
 async def _run_health_server() -> None:
-    """Minimal HTTP health check endpoint for Koyeb WEB service.
+    """Minimal HTTP health check endpoint, host-agnostic.
 
-    Koyeb free tier requires a WEB service (not Worker) and performs HTTP
-    health checks. Also enables UptimeRobot pings to prevent 1-hour sleep.
-    Binds to 0.0.0.0 so Koyeb's health checker can reach it (not localhost).
-    Returns the minimal {"status":"ok"} — no internal state exposed (T-05-01).
+    A lightweight HTTP endpoint any host or uptime pinger can hit to confirm
+    the process is alive. Binds to 0.0.0.0 so an external health checker can
+    reach it (not localhost). Returns the minimal {"status":"ok"} — no
+    internal state exposed (T-05-01).
     """
 
     async def health(request: _aio_web.Request) -> _aio_web.Response:
@@ -249,9 +249,9 @@ async def _run_health_server() -> None:
     runner = _aio_web.AppRunner(app)
     await runner.setup()
     try:
-        # Render injects $PORT and routes its public URL to it; default 8000 keeps
-        # Railway / PC / local working unchanged. The /health route + an external
-        # pinger (UptimeRobot) is what keeps a Render free web service from sleeping.
+        # $PORT is read for host portability; default 8000 keeps local/Docker
+        # runs unchanged. The /health route lets an optional external uptime
+        # pinger confirm the process is alive.
         _health_port = int(os.environ.get("PORT", "8000"))
         site = _aio_web.TCPSite(runner, "0.0.0.0", _health_port)
         await site.start()
@@ -261,7 +261,7 @@ async def _run_health_server() -> None:
         await asyncio.Event().wait()
     finally:
         # WR-03: release the bound port + aiohttp resources on cancel/shutdown.
-        # Latent leak only on in-process restart; harmless under Koyeb SIGTERM-exit.
+        # Latent leak only on in-process restart; harmless under a normal SIGTERM exit.
         await runner.cleanup()
 
 
@@ -575,9 +575,9 @@ async def _initialize_once() -> None:
     if not taste_distill_batch.is_running():
         taste_distill_batch.start()
 
-    # K-02: Minimal HTTP health endpoint for Koyeb WEB service.
-    # No before_loop guard — endpoint must be up early so Koyeb's health check
-    # passes on first deploy.
+    # K-02: Minimal HTTP health endpoint, host-agnostic.
+    # No before_loop guard — endpoint must be up early so an external health
+    # check passes on first boot.
     # WR-02: on_ready can re-fire (per-shard / reconnect / init retry); launch
     # the server only once — a second bind on :8000 would raise "address in use".
     global _health_server_task
@@ -586,8 +586,8 @@ async def _initialize_once() -> None:
 
         def _on_health_server_done(task) -> None:
             # WR-01: surface a startup failure (e.g. port bind) to the error log;
-            # a bare ensure_future would swallow it and Koyeb's health check would
-            # just time out with no actionable cause in the logs.
+            # a bare ensure_future would swallow it and an external health check
+            # would just time out with no actionable cause in the logs.
             if task.cancelled():
                 return
             exc = task.exception()
