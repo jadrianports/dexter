@@ -249,7 +249,36 @@ Full phase details, success criteria, and decisions archived in
   4. A tagged release publishes Dexter's Docker image to GHCR, pullable by a future always-on host with zero build step (CICD-03 — no prod auto-deploy, there is no prod host this milestone).
   5. The README/landing page honestly discloses the 100-guild verification wall, the on-demand hosting caveat (Dexter is offline unless the owner is running it), the full-savage-personality + reactive-kill-switch tradeoff, and whatever memory-scoping decision Phase 21 actually shipped.
 
-**Plans**: TBD
+**Plans**: 7 plans (7 waves — strictly sequential; D-13's push gates everything, and each later wave consumes the prior wave's files)
+
+**Wave 1**
+
+- [ ] 23-01-PLAN.md — D-13: ruff-format + retire the stale Pitfall-7 comment, push Phases 19–22 (147 commits), watch CI, repair to green at HEAD
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 23-02-PLAN.md — Human gates: package legitimacy (astro/playwright), the verbatim Dexter demo lines (D-06), GitHub Pages enablement
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 23-03-PLAN.md — Astro scaffold + `base: '/dexter'` + `site/src/config.ts` invite fence + **D-02 built-artifact drift guard** + ignore-file hygiene
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 23-04-PLAN.md — ci.yml site job (unprivileged scan) + pages.yml (workflow_run-gated deploy) + release.yml (multi-arch GHCR on `v*`)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 23-05-PLAN.md — global.css design tokens + self-hosted mono + Layout/Hero/Cta/Footer (both invite CTAs)
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 23-06-PLAN.md — Demo mock (verbatim transcript) + Features + PORT-04 Boundaries + locked single-scroll composition
+
+**Wave 7** *(blocked on Wave 6)*
+
+- [ ] 23-07-PLAN.md — Playwright→GIF pipeline + README architecture case study (5 badges, mermaid, 4 callouts, boundaries, invite link) + 23-HUMAN-UAT.md
+
 **UI hint**: yes
 
 ## Progress
@@ -281,4 +310,4 @@ Full phase details, success criteria, and decisions archived in
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
 | 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
-| 23. Portfolio Surface & CI/CD | v1.4 | 0/TBD | Not started | - |
+| 23. Portfolio Surface & CI/CD | v1.4 | 0/7 | Planned | - |
