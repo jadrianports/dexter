@@ -51,3 +51,45 @@ jobs:
       - run: ruff format --check .
 
       - run: pytest -q
+
+  # Phase 23 / D-02, D-03: builds the Astro portfolio site and byte-checks the
+  # invite URL in the SHIPPED artifact. Stays unprivileged (contents: read is
+  # enough) and runs on every push AND every PR — it is a gate, not a deploy.
+  # The privileged Pages deploy lives in its own pages.yml (D-03) because
+  # actions/deploy-pages needs elevated Pages/OIDC permissions this
+  # PR-triggered workflow must never grant (T-18-CIPRIV).
+  site:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python deps (drift scan needs pytest + config.py/logic/invite.py's discord import)
+        working-directory: .
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Drift-scan the built artifact
+        working-directory: .
+        env:
+          # D-02: without this, a missing dist/ silently SKIPS the test and CI
+          # stays green forever while the shipped page carries a wrong invite URL.
+          SITE_DIST_REQUIRED: "1"
+        run: pytest -q tests/test_site_drift_guard.py
