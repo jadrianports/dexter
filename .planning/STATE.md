@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
-status: executing
-stopped_at: Phase 23 complete — v1.4 code-complete, pending milestone close
-last_updated: "2026-07-14T13:29:44.247Z"
-last_activity: 2026-07-14 -- Phase 23 executed, verified, pushed (CI green at HEAD)
+status: Awaiting next milestone
+stopped_at: Completed 23-05-PLAN.md
+last_updated: "2026-07-14T14:06:21.474Z"
+last_activity: 2026-07-14 — Milestone v1.4 completed and archived
 progress:
   total_phases: 6
   completed_phases: 6
@@ -18,24 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-10)
+See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 23 — portfolio-surface-ci-cd
+**Current focus:** none — v1.4 "Open House" shipped + archived (tag `v1.4`). Next: `/gsd-new-milestone` (fresh REQUIREMENTS.md). Candidate directions in PROJECT.md → Current Milestone.
 
 ## Current Position
 
-Phase: 23 (portfolio-surface-ci-cd) — COMPLETE ✓
-Plan: 7 of 7 complete
-Status: Phase verified (human_needed for 3 deferred items); v1.4 "Open House" code-complete — pending milestone close
-Last activity: 2026-07-14 -- Phase 23 executed (7 plans), verified, pushed to origin/main; CI green at HEAD 3c39558
-
-Progress: [██████████] 100%
-
-**Phase 23 close notes:** 27 commits pushed to origin/main (149-commit P19–22 baseline in 23-01 + Phase 23 build). CI green at exact HEAD. Three requirements deliberately deferred by the user (blocked-on-human, tracked in 23-HUMAN-UAT.md):
-- PORT-02 — two verbatim real Dexter lines for the demo mock (placeholder tokens intact; no invented lines)
-- CICD-02 — enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first pages.yml run
-- CICD-03 — GHCR package-visibility flip + first v* tag release.yml run
+Phase: Milestone v1.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-14 — Milestone v1.4 completed and archived
 
 ## Performance Metrics
 
@@ -162,21 +155,30 @@ None.
 
 ## Deferred Items
 
-Acknowledged and deferred at v1.3 milestone close (2026-07-03) — 24 open items from the pre-close artifact audit, all `human_needed` live-Discord checks or stale planning markers, **zero code gaps**. All resume when a Pi / always-on residential host exists. (Unrelated to and not blocking v1.4 scope.)
+Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open items from the pre-close artifact audit (17 UAT gaps, 16 `human_needed` verification, 3 stale CONTEXT markers) **plus 3 blocked-on-human v1.4 requirements**. All are `human_needed` live-Discord checks, manual GitHub-UI toggles, or stale planning markers — **zero code gaps** (code-complete, CI green at HEAD `006da2a`). The live-Discord tail resumes when a Pi / always-on residential host exists (DEPLOY-F1); the 3 pending reqs resume when the owner performs the manual GitHub steps. Supersedes the v1.3-close deferral list (all its items are re-captured below).
+
+### Blocked-on-human v1.4 requirements (3)
+
+| Req | Item | Status |
+|-----|------|--------|
+| PORT-02 | Demo GIF needs two verbatim real Dexter personality lines (placeholder tokens intact; no invented lines) | Blocked on live bot capture |
+| CICD-02 | Enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first `pages.yml` run | Blocked on owner GitHub-UI toggle |
+| CICD-03 | GHCR package-visibility flip + first `v*` tag `release.yml` run | Blocked on owner GitHub-UI toggle |
+
+### Live-Discord / verification tail (33)
 
 | Category | Item | Status |
 |----------|------|--------|
-| uat | Phase 14 — `14-HUMAN-UAT.md` (4 pending: taste-aware auto-queue, `/discover`, `/jam suggest` feel) | Blocked on live Discord/host |
-| uat | Phase 15 — `15-HUMAN-UAT.md` (4 pending: live-DB `remember→forget→recall==[]` proof + 3 `/memory` UX) | Blocked on live Discord/host |
-| uat | Phase 16 — `16-HUMAN-UAT.md` (2 pending: proactive "feel" + `/memory callbacks off` UX) | Blocked on live Discord/host |
-| uat | Phase 17 — `17-HUMAN-UAT.md` (3 pending: vision cadence feel, real safety-block leaves no trace, `/ask`+`/imagine` unregressed) | Blocked on live Discord/host |
+| uat | Phases 18/19/20/21/22 — `*-HUMAN-UAT.md` (v1.4: `/setup`, kill-switch, guild-scoped recall, `/invite`, join/leave notifications feel) | Blocked on live Discord/host |
+| verification | Phases 18/19/20/21/22 — `*-VERIFICATION.md` (`human_needed`) | Blocked on live Discord/host |
+| uat | Phases 14/15/16/17 — `*-HUMAN-UAT.md` (v1.3: taste auto-queue, `/memory`, proactive feel, vision) | Blocked on live Discord/host |
 | verification | Phases 14/15/16/17 — `*-VERIFICATION.md` (`human_needed`) | Blocked on live Discord/host |
-| uat/verification | Phase 09/11 — `*-HUMAN-UAT`/`*-VERIFICATION` (carried v1.2: truthful `/health`, task surfacing, live RAG recall/callback roasts) | Blocked on live Discord/host |
+| uat/verification | Phases 09/11 — `*-HUMAN-UAT`/`*-VERIFICATION` (v1.2: truthful `/health`, task surfacing, live RAG recall) | Blocked on live Discord/host |
+| uat/verification | Phases 03-06 — `*-HUMAN-UAT`/`*-VERIFICATION`/`05-UAT-RUNBOOK.md` (v1.1 live-deploy checks) | Blocked on 24/7 host |
 | requirement | DEPLOY-02/03/05/08 — standing live-UAT, restart persistence, keepalive cron (carried v1.1) | Blocked on 24/7 host |
-| uat/verification | Phases 03-06 `*-HUMAN-UAT`/`*-VERIFICATION`/`05-UAT-RUNBOOK.md` — carried v1.1 live-deploy checks | Blocked on 24/7 host |
 | planning | Phases 13/14/15 — 3 stale `*-CONTEXT.md` open-question markers (all resolved during research/planning; code shipped + verified) | Doc-only, no action |
 
-Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishments + close in MILESTONES.md v1.3 entry.
+> Phases 08 & 23 `*-HUMAN-UAT.md` show `partial` with 0 pending scenarios (marker-only, nothing actually open). Prior-milestone detail in MILESTONES.md v1.2 "Known Gaps" + v1.3 entry.
 
 ## Session Continuity
 
@@ -184,3 +186,7 @@ Last session: 2026-07-14T12:59:07.826Z
 Stopped at: Completed 23-05-PLAN.md
 Resume file: 
 None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

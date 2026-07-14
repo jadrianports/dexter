@@ -10,7 +10,7 @@ Dexter is a sarcastic, personality-driven Discord bot: a reliable YouTube music 
 - ✅ **v1.1 Live & Lethal** — Phases 5–8 (shipped code 2026-06-26; 24/7 deploy ⏸ parked) — see [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 Sharper & Smarter** — Phases 9–12 (shipped code 2026-06-30) — see [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Taste Brain** — Phases 13–17 (shipped code 2026-07-03) — see [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
-- 🚧 **v1.4 Open House** — Phases 18–23 (in progress)
+- ✅ **v1.4 Open House** — Phases 18–23 (shipped code 2026-07-14) — see [milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md)
 
 ## Phases
 
@@ -76,210 +76,24 @@ Full phase details, success criteria, and decisions archived in
 
 </details>
 
-### 🚧 v1.4 Open House (Phases 18–23) — IN PROGRESS
+<details>
+<summary>✅ v1.4 Open House (Phases 18–23) — SHIPPED (code) 2026-07-14</summary>
 
 **Milestone Goal:** Turn Dexter from a single-community bot into a publicly-invitable, multi-tenant-robust portfolio piece — a recruiter can invite it to any server and it just works — without changing the on-demand, owner-run hosting model.
 
-- [x] **Phase 18: Per-Guild Config Foundation & CI Gate** - Replace the hardcoded single-channel/single-owner-guild assumption with a real per-guild config seam, behind a green CI gate (completed 2026-07-09)
-- [x] **Phase 19: Onboarding & Admin Setup** - New servers get a welcome nudge and a self-service `/setup`, ambient-silent until configured (completed 2026-07-10)
-- [x] **Phase 20: Owner Control Plane & Rate Observability** - The owner can list, silence, and force-leave guilds — the abuse kill-switch, with per-guild AI usage visible (completed 2026-07-13)
-- [x] **Phase 21: Memory Scoping & Guild Data Lifecycle** - Third-party memory stops leaking across guilds and a departed guild's data gets purged (or the documented global-memory fallback ships instead) (completed 2026-07-13)
-- [x] **Phase 22: Invite Plumbing** - A correct, least-privilege OAuth2 invite link, in-bot and public (completed 2026-07-13)
-- [x] **Phase 23: Portfolio Surface & CI/CD** - Landing page, case-study README, CI+Pages+GHCR — the recruiter-facing deliverable (completed 2026-07-14)
-
-## Phase Details
-
-### Phase 18: Per-Guild Config Foundation & CI Gate
-
-**Goal**: Dexter's ambient/unprompted behavior is driven by real per-guild configuration instead of one hardcoded channel — the seam every later v1.4 phase reads from — and every subsequent phase executes behind a green CI gate.
-**Depends on**: Nothing (first phase of v1.4; builds on the existing Phase 4 Postgres schema idiom and Phase 9 service-cache pattern)
-**Requirements**: CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04, CONFIG-05, CICD-01
-**Success Criteria** (what must be TRUE):
-
-  1. When Dexter joins a brand-new guild, every ambient/unprompted surface (roasts, proactive callbacks, vision roasts, idle + startup messages) stays completely silent there — no config exists for that guild yet.
-  2. The owner's existing home guild behaves exactly as before the refactor — same ambient channel, same firing behavior — because it was seeded from the existing `config.DEXTER_CHANNEL_ID`.
-  3. Every ambient/unprompted surface resolves its channel through exactly one code path — `bot.py::_resolve_dexter_channel`, `cogs/events.py::_get_ambient_channel`, and the two bare-equality `message.channel.id == config.DEXTER_CHANNEL_ID` gates are gone, replaced by calls into the same consolidated resolver.
-  4. Per-guild config reads never issue a live Neon round-trip during normal event handling — an in-memory cache serves them, loaded at boot and push-invalidated only when config changes.
-  5. Every push and PR runs the pytest suite + lint in GitHub Actions (CICD-01), so Phases 19–23 — especially Phase 21's surgery on the scarred memory subsystem — all execute behind a green gate. The README build badge may land here or in Phase 23 alongside the rest of the README rewrite.
-
-**Plans**: 7 plans (5 waves)
-
-**Wave 1**
-
-- [x] 18-01-PLAN.md — Ruff adoption + repo-wide lint/format cleanup (own atomic commit)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 18-02-PLAN.md — guild_config schema + boot helpers + conftest pgvector-codec fix
-- [x] 18-03-PLAN.md — pure logic/guild_config.py decision seam (mock-free)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 18-04-PLAN.md — GuildConfigService: cache + strict ambient resolver + announce resolver
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 18-05-PLAN.md — bot.py boot wiring + home-guild seed + ambient call-site consolidation
-- [x] 18-06-PLAN.md — cogs/events.py consolidation (3 voice sites + 2 on_message gates) + tests
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 18-07-PLAN.md — GitHub Actions CI gate (pytest + Ruff, pgvector service container)
-
-### Phase 19: Onboarding & Admin Setup
-
-**Goal**: A server admin can turn Dexter "on" for their own guild with zero manual intervention from the owner — the preventive half of safety.
-**Depends on**: Phase 18
-**Requirements**: ONBOARD-01, ONBOARD-02, ONBOARD-03, ONBOARD-04, ONBOARD-05
-**Success Criteria** (what must be TRUE):
-
-  1. When Dexter is invited to a new server, it posts a welcome/setup-nudge message in a safely-resolved channel — even a permission failure there never crashes the join.
-  2. A server admin can run `/setup`, pick a channel from a dropdown, and ambient behavior in that guild activates immediately after — while a non-admin running `/setup` is rejected regardless of what the command's UI hint implies.
-  3. A server admin can independently toggle ambient roasting and vision roasting on or off for their guild.
-  4. The owner receives a notification in `ERROR_LOG_CHANNEL_ID` every time Dexter joins or is removed from any server.
-
-**Plans**: 4 plans (3 waves)
-
-**Wave 1**
-
-- [x] 19-01-PLAN.md — guild_config toggle columns + RETURNING insert-if-absent + channel/toggle write helpers
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 19-02-PLAN.md — AmbientSurface surface-keyed seam (logic + service + events reaction/vision split, atomic breaking change)
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 19-03-PLAN.md — on_guild_join/remove + boot backfill + home-guild-only startup + music-roast hole
-- [x] 19-04-PLAN.md — /setup admin cog (channel|roasts|vision) + /help admin section
-
-### Phase 20: Owner Control Plane & Rate Observability
-
-**Goal**: The owner can see every server Dexter is in and can shut off or expel a specific guild the moment it becomes an abuse problem — the reactive half of safety, enforced at one choke point instead of scattered per-cog checks.
-**Depends on**: Phase 18 (config cache), Phase 19 (guild-join lifecycle to hang the blacklist re-invite check off)
-**Requirements**: OWNER-01, OWNER-02, OWNER-03, OWNER-04, OWNER-05, OWNER-06, RATE-01
-**Success Criteria** (what must be TRUE):
-
-  1. The owner can list every guild Dexter currently occupies, with each guild's Gemini/AI usage (tagged by `guild_id`) visible in that same view.
-  2. The owner can silence a guild — Dexter stays joined but stops firing ambient behavior and responding to commands there — with the silence taking effect on the very next event, never a stale in-flight response slipping through after the block is issued.
-  3. The owner can force-leave a guild; the teardown mirrors the existing `clear_persisted()` discipline (bump `_play_generation`, clear queue + voice state) so no ghost state resurrects if that guild re-invites Dexter.
-  4. A blocked guild is refused re-entry via a block-check-first in the join handler, and every owner-only command rejects a non-owner caller via an inline `is_owner()` check — never `default_permissions` alone.
-
-**Plans**: 7 plans (3 waves)
-
-**Wave 1**
-
-- [x] 20-01-PLAN.md — guild_blocklist table + blocklist/silenced DB helpers + live-DB tests (OWNER-04/02)
-- [x] 20-02-PLAN.md — pure logic: silenced branch in decide_ambient_channel + decide_interaction_allowed predicate (OWNER-05/06)
-- [x] 20-03-PLAN.md — GeminiService per-guild session counter + guild_id kwargs + non-events call-site threading (RATE-01)
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 20-04-PLAN.md — GuildConfigService _blocked set + block/unblock/silence/unsilence/is_* + tests (OWNER-04/02)
-- [x] 20-05-PLAN.md — events.py ambient TOCTOU pre-send re-check + 2 Gemini call-site threads + regression (OWNER-06/02, RATE-01)
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 20-06-PLAN.md — bot.py DexterCommandTree.interaction_check choke point + tree_cls + on_guild_join block-check-first (OWNER-05/06/04)
-- [x] 20-07-PLAN.md — cogs/ops.py /guilds group (list/silence/unsilence/leave/block/unblock) + GuildListPageView (OWNER-01/02/03/04/06, RATE-01)
-
-### Phase 21: Memory Scoping & Guild Data Lifecycle
-
-**Goal**: A third party's recalled memory stops leaking across servers, and a departed guild's data can't resurface — without assuming the ideal scoping ships, since the standing Descope Rule applies with particular force here.
-**Depends on**: Phase 18 (config), Phase 20 (`on_guild_remove`/force-leave hook to hang the MEM-04 purge off)
-**Requirements**: MEM-01, MEM-02, MEM-03, MEM-04, MEM-05
-**Success Criteria** (what must be TRUE — MEM-01/03/05 are a hypothesis, not a contract; see Descope Rule):
-
-  1. `/ask` continues to recall the invoker's own memory globally, completely unaffected by any guild-scoping change (MEM-02 — unconditionally shippable regardless of how the rest of this phase resolves).
-  2. When Dexter leaves or is force-left from a guild, that guild's `guild_config`, `guild_queues`, `guild_jams`, and guild-scoped `user_memories` rows are purged so stale context cannot resurface on re-invite (MEM-04 — unconditionally shippable).
-  3. Either: `/roast @user`, ambient roasts, and proactive callbacks recall only guild-scoped memories — with the legacy `guild_id = NULL` corpus (e.g. `daily_batch`) handled by an explicit, tested backward-compat rule, and with a regression test locking that guild-scoped search cannot corrupt cross-kind dedup or `expires_at` semantics (the Phase 13 CR-01 scar) — or: the documented zero-code fallback ("keep memory global + disclose") ships instead.
-  4. Whichever path is taken, the decision and its rationale are recorded in PROJECT.md Key Decisions before the phase closes, so PORT-04 can disclose it honestly.
-
-> **Descope gate (D-04): NOT triggered.** Plan-time research evaluated all three REQUIREMENTS.md tripwires against the literal code — none fire. The full hybrid scoping is planned; the "keep memory global + disclose" fallback is NOT being built.
-
-**Plans**: 4 plans (3 waves)
-
-**Wave 1**
-
-- [x] 21-01-PLAN.md — search_memories optional guild clause (D-01 grandfather rule) + recall(guild_scoped=) keyword-only opt-in + MEM-05 dedup call-shape lock (MEM-02/03/05)
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 21-02-PLAN.md — purge_guild_data 4-table transaction (never guild_blocklist) + live-DB integration tests (MEM-04/03)
-- [x] 21-03-PLAN.md — 5 recall call-site guild_scoped opt-ins + /ask stays-global regression lock (MEM-01/02)
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 21-04-PLAN.md — bot.py on_guild_remove purge wiring (single hook, WR-04 wrapped) + PROJECT.md Key Decisions record (SC-4 / PORT-04) (MEM-04/01/03/05)
-
-### Phase 22: Invite Plumbing
-
-**Goal**: Anyone can invite Dexter to their own server via a correct, least-privilege invite link — with one source of truth, not hand-maintained duplicates.
-**Depends on**: Phase 20 (sequenced after the control plane exists — no code dependency, but the abuse-mitigation story must be real before actively promoting the invite)
-**Requirements**: INVITE-01, INVITE-02
-**Success Criteria** (what must be TRUE):
-
-  1. The invite URL requests only the specific `Permissions()` Dexter's commands actually need — no Administrator, no Manage Server/Roles.
-  2. Running `/invite` returns a working invite link that successfully adds Dexter to a server the invoker manages, with `bot` + `applications.commands` scopes.
-  3. The in-bot `/invite` link and the publicly-promoted link (Developer Portal / landing page) are the same URL — a single source of truth, not two hand-maintained copies that can drift.
-
-> **Bitfield (D-09, user-confirmed):** TEN permissions, value `309240908864` — the 8-permission `3263552` from D-01's original table is SUPERSEDED (research found `/autolyrics`' thread call sites at `cogs/music.py:938,950,958,965`).
-
-**Plans**: 3 plans (2 waves)
-
-**Wave 1**
-
-- [x] 22-01-PLAN.md — config constants (`DISCORD_CLIENT_ID`/`INVITE_PERMISSIONS_VALUE`/`INVITE_SCOPES`) + pure `logic/invite.py::build_invite_url()` + D-02 negative-assertion bitfield lock (INVITE-01)
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 22-02-PLAN.md — `cogs/invite.py` `/invite` (public embed + link button, DM-allowed, no cooldown) + registration at BOTH `bot.py` cog sites + `/help` entry (INVITE-02 / SC-2)
-- [x] 22-03-PLAN.md — git-tracked-doc drift guard (excl. `.planning/`, D-10) + mandatory positive control + single-URL-constructor source lock (INVITE-02 / SC-3)
-
-### Phase 23: Portfolio Surface & CI/CD
-
-**Goal**: A recruiter can land on Dexter's page, see it demonstrated, click "Add to Discord," and read an honest architecture case study — backed by a green CI badge and a pull-able Docker image, with zero new prod hosting.
-**Depends on**: Phase 18 (CI workflow to extend with the Pages job), Phase 19 (a real `/setup` walkthrough to prove the claims), Phase 20 (kill-switch as the disclosed mitigation), Phase 22 (working invite link)
-**Requirements**: PORT-01, PORT-02, PORT-03, PORT-04, CICD-02, CICD-03
-**Success Criteria** (what must be TRUE):
-
-  1. The `/site` landing page is live via GitHub Pages, with a hero, feature showcase, an embedded short demo GIF of the personality, and a working "Add to Discord" button.
-  2. The README reads as an architecture case study — tagline, feature list, tech-stack badges, architecture summary, working invite link — with a CI build-status badge that reflects the actual last GitHub Actions run (the workflow itself landed in Phase 18).
-  3. A merge to `main` auto-publishes the updated `/site` to GitHub Pages (CICD-02).
-  4. A tagged release publishes Dexter's Docker image to GHCR, pullable by a future always-on host with zero build step (CICD-03 — no prod auto-deploy, there is no prod host this milestone).
-  5. The README/landing page honestly discloses the 100-guild verification wall, the on-demand hosting caveat (Dexter is offline unless the owner is running it), the full-savage-personality + reactive-kill-switch tradeoff, and whatever memory-scoping decision Phase 21 actually shipped.
-
-**Plans**: 7 plans (7 waves — strictly sequential; D-13's push gates everything, and each later wave consumes the prior wave's files)
-
-**Wave 1**
-
-- [x] 23-01-PLAN.md — D-13: ruff-format + retire the stale Pitfall-7 comment, push Phases 19–22 (147 commits), watch CI, repair to green at HEAD
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 23-02-PLAN.md — Human gates: package legitimacy (astro/playwright), the verbatim Dexter demo lines (D-06), GitHub Pages enablement
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 23-03-PLAN.md — Astro scaffold + `base: '/dexter'` + `site/src/config.ts` invite fence + **D-02 built-artifact drift guard** + ignore-file hygiene
-
-**Wave 4** *(blocked on Wave 3)*
-
-- [x] 23-04-PLAN.md — ci.yml site job (unprivileged scan) + pages.yml (workflow_run-gated deploy) + release.yml (multi-arch GHCR on `v*`)
-
-**Wave 5** *(blocked on Wave 4)*
-
-- [x] 23-05-PLAN.md — global.css design tokens + self-hosted mono + Layout/Hero/Cta/Footer (both invite CTAs)
-
-**Wave 6** *(blocked on Wave 5)*
-
-- [x] 23-06-PLAN.md — Demo mock (verbatim transcript) + Features + PORT-04 Boundaries + locked single-scroll composition
-
-**Wave 7** *(blocked on Wave 6)*
-
-- [x] 23-07-PLAN.md — Playwright→GIF pipeline + README architecture case study (5 badges, mermaid, 4 callouts, boundaries, invite link) + 23-HUMAN-UAT.md
-
-**UI hint**: yes
+- [x] **Phase 18: Per-Guild Config Foundation & CI Gate** (7/7 plans) — `guild_config` table + pure `logic/guild_config.py` seam + boot-loaded `GuildConfigService` cache replaces the hardcoded single-channel assumption (unconfigured guilds structurally silent); ruff + pytest CI against a `pgvector/pgvector:pg16` container on every push/PR — completed 2026-07-09
+- [x] **Phase 19: Onboarding & Admin Setup** (4/4 plans) — `/setup` group (channel/roasts/vision) with `manage_guild` gate + independent per-guild toggles, required keyword-only `AmbientSurface` threading, guild-lifecycle glue (join-welcome-once, owner join/leave notices) — completed 2026-07-10
+- [x] **Phase 20: Owner Control Plane & Rate Observability** (7/7 plans) — `guild_blocklist` table + `/guilds` list/silence/leave/block/unblock at ONE `interaction_check` choke point + block-check-first re-invite refusal, cache-only silence/block reads, per-guild Gemini usage counters (RATE-01) — completed 2026-07-13
+- [x] **Phase 21: Memory Scoping & Guild Data Lifecycle** (4/4 plans) — explicit per-call-site `guild_scoped=True` opt-in narrows ANN recall for unprompted surfaces (`/ask` stays global), legacy NULL corpus grandfathered, `purge_guild_data` four-table hard-delete on removal (blocklist excluded) — completed 2026-07-13
+- [x] **Phase 22: Invite Plumbing** (3/3 plans) — `logic/invite.py::build_invite_url()` sole least-privilege OAuth2 constructor + public `/invite` + CI drift-guard failing the build on any doc URL drift — completed 2026-07-14
+- [x] **Phase 23: Portfolio Surface & CI/CD** (7/7 plans) — static `/site` landing page + architecture-case-study README + honest scope-boundary docs; `pages.yml`/`release.yml` CI/CD scaffolded — completed 2026-07-14
+
+**Deferred at close (3 blocked-on-human reqs + 36 audit items):** PORT-02 (demo-GIF Dexter lines), CICD-02 (GitHub Pages toggle), CICD-03 (GHCR flip) need owner-performed GitHub-UI / live-bot steps; the 36 audit items (Phases 14–22 HUMAN-UAT + `human_needed` VERIFICATION + 3 stale CONTEXT markers) are live-Discord/host-gated. Zero code gaps. See STATE.md Deferred Items.
+
+Full phase details, success criteria, and decisions archived in
+[milestones/v1.4-ROADMAP.md](milestones/v1.4-ROADMAP.md).
+
+</details>
 
 ## Progress
 

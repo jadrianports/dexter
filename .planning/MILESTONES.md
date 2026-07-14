@@ -1,5 +1,32 @@
 # Milestones: Dexter ("Dex")
 
+## v1.4 Open House (Shipped: 2026-07-14)
+
+**Phases completed:** 6 phases (18–23), 32 plans, 78 tasks
+**Requirements:** 28/31 shipped at the code level; 3 deferred blocked-on-human (see Known Gaps)
+**Git range:** v1.3 → v1.4 (231 commits, 274 files, +44.9k/-4.4k LOC), 2026-07-10 → 2026-07-14
+
+**Key accomplishments:**
+
+- **Multi-tenancy from the ground up (Phase 18):** the hardcoded single-channel assumption is gone — a `guild_config` table + pure `logic/guild_config.py` seam + boot-loaded, fail-closed `GuildConfigService` cache (zero per-event Neon round-trips) drive every ambient surface; `DEXTER_CHANNEL_ID` demoted to a home-guild seed and removed from `cogs/` entirely, so an unconfigured guild is *structurally* silent.
+- **Green CI gate (Phase 18):** ruff (lint+format) + pytest on every push/PR against a `pgvector/pgvector:pg16` service container with zero secrets — the first milestone where the ~111 live-DB tests actually execute rather than skip (the gate's first run caught a sentinel collision + two latent fresh-boot bugs).
+- **Self-serve onboarding (Phase 19):** any admin can `/setup` their own guild (channel picker + `manage_guild` gate + independent roast/vision toggles) with zero owner intervention; a required keyword-only `AmbientSurface` enum means a surface must name itself to fire, plus guild-lifecycle glue (join-welcome-once, owner join/leave notices).
+- **Owner control plane / kill-switch (Phase 20):** `/guilds` list/silence/leave/block/unblock enforced at ONE `DexterCommandTree.interaction_check` choke point + a block-check-first re-invite refusal, with cache-only silence/block reads (TOCTOU-safe pre-send re-checks) and per-guild Gemini usage counters (RATE-01 observability, not a quota).
+- **Hybrid memory scoping + guild-data lifecycle (Phase 21):** an explicit per-call-site `guild_scoped=True` opt-in narrows ANN recall to the current guild (+ grandfathered NULL corpus) for every unprompted surface while `/ask` stays global/self-scoped; `purge_guild_data` hard-deletes a departed guild's rows from four tables on removal, blocklist excluded by design — the Descope Rule's tripwires never fired.
+- **Recruiter-facing surface (Phases 22–23):** a single least-privilege `build_invite_url()` source of truth + public `/invite` + CI drift-guard; a static `/site` landing page (feature showcase + "Add to Discord"), a README rewritten as an architecture case study, and honestly-documented scope boundaries — CI/Pages/GHCR workflows scaffolded.
+
+### Known Gaps
+
+3 requirements deferred at close as **blocked-on-human** (no code work — owner-performed GitHub-UI / live-bot steps; tracked in `23-HUMAN-UAT.md`):
+
+- **PORT-02** — embed two verbatim real Dexter personality lines in the demo GIF (needs a live bot; placeholder tokens left intact, no invented lines).
+- **CICD-02** — enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first `pages.yml` run.
+- **CICD-03** — GHCR package-visibility flip + first `v*` tag `release.yml` run.
+
+**Known deferred items at close: 36** (17 UAT gaps, 16 `human_needed` verification, 3 stale CONTEXT markers — all live-Discord/host-blocked or doc-only, zero code gaps) — see STATE.md Deferred Items. The full live-Discord/24-7 tail resumes when an always-on residential host exists (DEPLOY-F1).
+
+---
+
 A historical record of shipped versions. Newest first.
 
 ---

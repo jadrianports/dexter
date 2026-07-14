@@ -168,6 +168,52 @@
 
 ---
 
+## Milestone: v1.4 — Open House
+
+**Shipped (code):** 2026-07-14
+**Phases:** 6 (18, 19, 20, 21, 22, 23) | **Plans:** 32 | **Tasks:** 78 | **Commits:** 231 since v1.3 | **Timeline:** 2026-07-10 → 2026-07-14 (5 days)
+
+### What Was Built
+- A per-guild config seam: `guild_config` table + pure `logic/guild_config.py` + boot-loaded, fail-closed `GuildConfigService` cache that replaced the hardcoded `DEXTER_CHANNEL_ID` single-channel assumption everywhere; an unconfigured guild is *structurally* silent (Phase 18).
+- A real green CI gate: ruff (lint+format) + pytest against a `pgvector/pgvector:pg16` service container on every push/PR, zero secrets — the first milestone where the ~111 live-DB tests actually run rather than skip (Phase 18).
+- Self-serve onboarding: `/setup` (channel/roasts/vision) with a `manage_guild` gate + independent per-guild toggles, a required keyword-only `AmbientSurface` enum, and guild-lifecycle glue (Phase 19).
+- An owner kill-switch at one choke point: `/guilds` list/silence/leave/block/unblock via `DexterCommandTree.interaction_check` + block-check-first re-invite refusal + per-guild Gemini usage counters, backed by a purge-proof `guild_blocklist` table (Phase 20).
+- Hybrid memory scoping: an explicit per-call-site `guild_scoped=True` opt-in narrowing ANN recall for unprompted surfaces while `/ask` stays global, plus a four-table `purge_guild_data` on guild removal (Phase 21).
+- The recruiter-facing surface: a single least-privilege `build_invite_url()` + public `/invite` + CI drift-guard, an Astro static `/site` landing page, an architecture-case-study README, and honest scope-boundary docs (Phases 22–23).
+
+### What Worked
+- **The CI gate earned its keep on the first real run.** Standing up the pgvector service container turned ~111 always-skipped live-DB tests into executing tests — and immediately caught a sentinel collision that would have silently kept them skipping, plus two latent fresh-boot bugs (an import-time `sys.exit`, and a `0.0`-vs-monotonic clock sentinel that suppressed vision roasts / yt-dlp self-heal after any reboot) invisible on a long-uptime dev box. All locked by `test_fresh_boot_regressions.py`.
+- **Deliberate table separation paid a downstream dividend.** Giving `guild_blocklist` its OWN table in Phase 20 (D-01) is exactly what let Phase 21's `purge_guild_data` be a clean four-table `DELETE` with no "except if blocked" carve-out — a decision made one phase early to unblock the next.
+- **The Descope Rule held as a real safety valve.** MEM-01/03/05 touched the Phase 13 CR-01-scarred `search_memories` path; research was run at plan time precisely because of that scar, the tripwires never fired, and the read-path-only opt-in shipped without reopening the write path.
+- **Structural silence over remembered-to-guard.** The pure `logic/guild_config.py` seam + required `AmbientSurface` enum make it impossible to add an ambient surface that forgets to check per-guild config — the same "make the invariant structural" move that worked for the pure-logic seam in prior milestones.
+- **The drift-guard pattern generalized.** Phase 22's CI test failing the build on any doc invite-URL drift extended cleanly to Phase 23's site build — a reusable "single source of truth, enforced by a build-failing test with a positive control" shape.
+
+### What Was Inefficient
+- **Executors over-marked requirement status three separate times.** Requirement checkboxes were flipped to complete ahead of reality, forcing a central reconciliation pass on REQUIREMENTS.md before close could be trusted. A single writer of requirement status (the verifier, not the executor) would have avoided it.
+- **`commit_docs` was effectively false, so planning-doc commits fell to the orchestrator by hand.** The auto-commit-docs path didn't fire, so `.planning/` updates had to be committed manually throughout — quiet friction repeated across all six phases.
+- **The `human_needed` tail grew again — now 36 at close** (up from 24 at v1.3). Every new multi-tenant surface (`/setup`, kill-switch, guild-scoped recall, `/invite`) added live-Discord UAT that can't run without a standing host. A fourth straight milestone where "code-complete" outran "validated."
+- **Three requirements couldn't close at all without manual GitHub-UI steps.** PORT-02 (live-bot Dexter lines), CICD-02 (Pages toggle), CICD-03 (GHCR flip) are owner-performed, not code — a foreseeable shape that could have been split into their own explicitly-human phase rather than deferred at the end.
+- **North-star doc drift.** CLAUDE.md's Build Phases section stopped at Phase 17 and its milestone-status line still claimed "v1.3 pending close" — the spec fell a whole milestone behind the code before anyone refreshed it.
+
+### Patterns Established
+- **CI as a correctness gate, not just a lint pass** — a service-container-backed suite that runs the previously-skipped integration tests catches fresh-boot/environment bugs a long-uptime dev box hides.
+- **Own-table-for-purge-safety** — data that must survive a lifecycle purge (a blocklist) gets its own table so the purge stays a literal, reviewable `DELETE` list with no carve-outs.
+- **Structural silence** — gate a cross-cutting behavior (ambient output) at one pure seam + a required self-identifying enum, so no new call site can bypass it.
+- **Single-source-of-truth + drift-guard** — one constructor for a value that appears in many places (invite URL), locked by a build-failing test with a positive control.
+
+### Key Lessons
+1. Turn on the integration tests in CI *early* — the environment differences a service container exposes (fresh boot, real Postgres) surface bugs that a long-running dev box and all-mocked unit tests both hide.
+2. Make requirement *status* have a single writer (the verifier), not the executor — over-eager completion marks cost a reconciliation pass three times this milestone.
+3. Separate owner-performed steps into their own explicitly-human work item up front — PORT-02/CICD-02/CICD-03 were never code and shouldn't have ridden a code phase to the end.
+4. Refresh the north-star spec (CLAUDE.md) at each milestone close, not opportunistically — it silently fell a full milestone behind the code.
+
+### Cost Observations
+- Model mix: executor/verifier/reviewer/fixer = sonnet; orchestration + planning = opus (per session memory). Not otherwise instrumented.
+- Sessions: not tracked.
+- Notable: the flagship *risk* this milestone was multi-tenancy correctness + abuse-surface control on public servers, de-risked structurally (pure seams, one choke point, own-table purge) rather than by a data spike. Phases 18 and 20 were the heaviest by plan count (7 each); Phase 23 (portfolio) was the only phase to close with requirements it structurally couldn't finish in code.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -178,6 +224,7 @@
 | v1.1 | n/a | 4 | Full GSD per-phase chain throughout; executor=sonnet; deploy substrate re-targeted twice (Oracle → Koyeb → on-demand PC) |
 | v1.2 | n/a | 4 | First milestone with a dedicated test-coverage phase (10) and a research-backed flagship phase (11) gated by a validation spike; pure-logic seam graduated to a `logic/` package |
 | v1.3 | n/a | 5 | Longest milestone by phase count; every phase built additively on the Phase 11 memory store (zero schema forks); trust-ordered sequencing (forget before proactive); adversarial review caught a goal-blocking no-op unit tests missed |
+| v1.4 | n/a | 6 | First real green CI gate (service-container pgvector) unskipping ~111 live-DB tests + catching latent fresh-boot bugs; multi-tenancy retrofit (config seam + cache) with structural silence; owner kill-switch at one choke point; portfolio pivot — first milestone to close with requirements it structurally couldn't finish in code (owner-performed GitHub steps) |
 
 ### Cumulative Quality
 
@@ -187,6 +234,7 @@
 | v1.1 | + Phase 6/7/8 suites (resolution-cache, audio, filters, favorites/playlists, leaderboard — incl. live-DB integration) | Not measured (same convention) | SponsorBlock via yt-dlp postprocessors; aiohttp `/health` server |
 | v1.2 | + ~83 mock-free `logic/` unit tests (playback/health/roasts) with named scar regressions + Phase 11 memory rerank/dedup/decay suites | Not measured (same convention; first explicit regression-gate phase) | `pgvector` (Neon extension) + `pgvector` Python codec; `gemini-embedding-001` embeddings |
 | v1.3 | + `logic/taste|proactive|vision` suites, kind-aware memory + DB aggregate helper tests, cadence rarity-invariants, live-DB forget-proof — suite green at 848 pass / 108 skip | Not measured (same convention) | **None** — zero new deps/tables/limiters; all built on the existing pgvector + Gemini stack |
+| v1.4 | + `logic/guild_config|invite` suites, GuildConfigService no-round-trip regressions, blocklist/silence/purge live-DB tests, invite + site drift-guards — **~1017 pass in CI, ~111 live-DB tests now execute** (not skip) against a pgvector service container | Not measured (same convention; first CI-enforced gate) | ruff (dev tooling); Astro (site build, isolated in `/site`) — **no new bot runtime deps/tables/limiters** |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -198,3 +246,5 @@
 6. *(New at v1.2, compounded at v1.3)* Give each workload class its own rate budget — separate 60 RPM embeddings from the 15 RPM chat budget so background work never starves user commands. A kind-agnostic memory store designed in v1.2 then absorbed all of v1.3's new features with zero schema forks.
 7. *(New at v1.3)* Extend a shared hot path additively — new signal is byte-identical-when-empty and pinned by a regression test — to make multi-phase expansion safe.
 8. *(New at v1.3)* Don't mock the exact output you're validating, and lean on adversarial review for goal-level no-ops — Phase 16's all-mocked `recall()` hid a feature-killing anchor bug the green suite never flagged.
+9. *(New at v1.4)* Turn the integration tests on in CI early — a service-container gate surfaced fresh-boot/environment bugs that both a long-uptime dev box and all-mocked unit tests hid, and made every subsequent phase execute behind a real green gate.
+10. *(New at v1.4)* Give requirement *status* a single writer (the verifier, not the executor) and split owner-performed steps into their own explicitly-human work item — over-eager completion marks forced three reconciliation passes, and three requirements rode a code phase to the end without ever being code.
