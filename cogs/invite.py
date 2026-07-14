@@ -21,10 +21,9 @@ class InviteCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    # Deliberately no rate-limiting decorator here — unlike /help's 5s
-    # cooldown, /invite does zero I/O (no DB, no Gemini, no network) and
-    # returns a static string built in microseconds. Nothing to rate-limit
-    # (Claude's Discretion, 22-CONTEXT.md; see T-22-06).
+    # Mirrors /help's cooldown — /invite is also a public reply, and without
+    # rate-limiting it's a channel-flood/spam vector: compute cost was never
+    # the concern, flood control is (WR-03, 22-REVIEW.md).
     #
     # Deliberately no DM-restriction decorator here — DM support is a
     # requirement (D-06). It needs zero new plumbing: this command already
@@ -32,6 +31,7 @@ class InviteCog(commands.Cog):
     # computes has_guild, and logic/guild_config.py::decide_interaction_allowed
     # models has_guild=False as a first-class allowed case.
     @app_commands.command(name="invite", description="Get Dexter's invite link")
+    @app_commands.checks.cooldown(1, config.INVITE_COOLDOWN_SECONDS)
     async def invite_command(self, interaction: discord.Interaction) -> None:
         # The running bot's real application_id is the authoritative source
         # (it self-heals a fork that forgot to set DISCORD_CLIENT_ID); the

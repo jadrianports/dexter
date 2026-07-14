@@ -7,7 +7,7 @@ Tests:
 - test_invite_command_sends_the_canonical_url    — button URL == build_invite_url()'s output
 - test_invite_command_is_public_not_ephemeral    — reply is public (D-05)
 - test_invite_command_is_dm_allowed              — guild_only is False (D-06)
-- test_invite_command_has_no_cooldown            — no app_commands.checks.cooldown
+- test_invite_command_has_cooldown               — mirrors /help's cooldown (WR-03)
 - test_invite_command_falls_back_to_config_client_id — application_id=None -> config.DISCORD_CLIENT_ID (WR-01)
 - test_invite_command_guards_against_unresolved_client_id — both falsy -> ephemeral error, no malformed URL (WR-02)
 - test_cog_does_not_construct_a_url_itself       — no literal oauth2 URL / oauth_url( in the cog (D-03)
@@ -107,10 +107,11 @@ def test_invite_command_is_dm_allowed():
     assert InviteCog.invite_command.guild_only is False
 
 
-def test_invite_command_has_no_cooldown():
-    """Deliberate departure from /help's 5s cooldown — the command returns a
-    static string; there is nothing to rate-limit (T-22-06)."""
-    assert InviteCog.invite_command.checks == []
+def test_invite_command_has_cooldown():
+    """WR-03: /invite mirrors /help's cooldown -- a public reply with no
+    cooldown is a channel-flood vector, so a single
+    app_commands.checks.cooldown check must be registered."""
+    assert len(InviteCog.invite_command.checks) == 1
 
 
 @pytest.mark.asyncio

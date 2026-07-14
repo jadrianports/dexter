@@ -270,6 +270,10 @@ GUILDS_LIST_PAGE_SIZE = 1800
 
 
 # --- Phase 22: Invite Plumbing (INVITE-01/02) ---
+# Mirrors HELP_COOLDOWN_SECONDS -- /invite is a public reply and, without a
+# cooldown, is a low-grade channel-flood vector (WR-03, 22-REVIEW.md).
+INVITE_COOLDOWN_SECONDS = 5
+
 # A Discord client/application ID is PUBLIC BY DESIGN — it is visible in every invite
 # link ever handed out — so committing a default here leaks nothing. This is load-bearing,
 # not cosmetic: the Phase 18 CI gate runs with ZERO secrets and no `.env`, and the 22-03
