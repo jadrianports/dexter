@@ -19,9 +19,9 @@ doc — gitignored as of Phase 22; do not rely on it and do not re-add it to the
 - **Vision (multimodal):** `gemini-2.5-flash` native image understanding for cadence-gated image roasts (Phase 17 — shares the 15 RPM chat budget at priority 2, NOT the embed limiter; explicit `safety_settings` on every user-content Gemini call)
 - **Long-term memory (RAG):** `pgvector` on the same Neon Postgres + `gemini-embedding-001` @ 768d on a **separate** 60 RPM limiter (Phase 11 — zero new infra/cost). Phase 13 added a number-free `taste_episode` memory kind (its own salience/decay tier) distilled from listening history
 - **Database:** PostgreSQL 16 via `asyncpg` 0.31.0 — migrated from SQLite in Phase 4; `vector` extension enabled in Phase 11
-- **Containerization:** Docker + Docker Compose (bot image only; DB is **Neon serverless Postgres**, not a colocated container — the Oracle-era `postgres:16-alpine` service was dropped in Phase 6)
+- **Containerization:** Docker + Docker Compose (bot image only; DB is **Neon serverless Postgres**, not a colocated container — the colocated `postgres:16-alpine` service was dropped in Phase 6)
 - **Lyrics:** Genius API via `lyricsgenius` (primary), AZLyrics scrape via `beautifulsoup4` (fallback), LRCLIB `/api/search` (third fallback, Phase 12)
-- **Hosting:** re-targeted Oracle A1 → Koyeb + Neon (Phase 5), then **24/7 deploy parked** (YouTube blocks datacenter IPs → free cloud non-viable). Runs on the user's PC (residential IP) on demand → **Neon serverless Postgres** (Singapore). Code is substrate-agnostic (Dockerfile + `DATABASE_URL`), so the host swap is config-only.
+- **Hosting:** the 24/7 cloud deploy is **parked** (YouTube blocks datacenter IPs → free cloud non-viable). Dexter runs on-demand via Docker on the user's PC (residential IP) → **Neon serverless Postgres** (Singapore). Code is substrate-agnostic (Dockerfile + `DATABASE_URL`), so the host swap is config-only.
 
 ---
 
@@ -82,8 +82,7 @@ dexter/
 │   ├── formatters.py              # Duration, progress bars, etc.
 │   ├── tasks.py                   # Phase 9: make_task — fire-and-forget with failure surfacing
 │   └── logger.py                  # File + Discord channel logging
-├── scripts/                       # Phase 4/5 ops: deploy.sh, backup.sh, keepalive.sh,
-│                                  #   lifecycle-policy.json, seed_restore_test.py
+├── scripts/                       # memory_spike.py (Phase 11 RAG numeric-defaults spike), render_demo_gif.py (Phase 23 demo-GIF renderer)
 ├── tests/                         # pytest suite (pure unit tests + live-DB integration tests + invite/site drift-guards)
 ├── site/                          # Phase 23: Astro static landing page (feature showcase + Add-to-Discord), GitHub Pages subpath /dexter
 ├── .github/workflows/             # Phase 18/23: ci.yml (ruff + pytest on pgvector service container), pages.yml (Pages deploy), release.yml (GHCR image on v* tags)
@@ -684,7 +683,7 @@ Fields: title, artist, duration, progress bar, requested by, loop mode, lyrics s
 ## Logging
 
 ### File Logging
-Location: `LOG_DIR` = `logs/` (NOT `/var/log/dexter/`), **plus stdout** so Docker/Koyeb log viewers capture output (K-16).
+Location: `LOG_DIR` = `logs/` (NOT `/var/log/dexter/`), **plus stdout** so Docker/container log viewers capture output (K-16).
 - `dexter.log`: INFO+ (commands, songs, queries). Daily rotation, 14-day retention.
 - `error.log`: ERROR+ only. Weekly rotation, 30-day retention.
 
@@ -777,7 +776,7 @@ HEALTH_STRICT_STATUS=   # optional; "false" reverts /health to legacy 200
 14. File logging (logs/ dir, daily rotation)
 15. Command sync via --first-run --guild CLI flag + /sync owner command
 
-**Deferred to Phase 2/3:** Designated channel support, /history, /lyrics, deploy to Oracle Cloud
+**Deferred to Phase 2/3:** Designated channel support, /history, /lyrics, deploy to a cloud host
 
 ### Phase 2 — Personality + AI ✅ COMPLETE
 1. /ask with Gemini + 10-message context
@@ -816,10 +815,10 @@ HEALTH_STRICT_STATUS=   # optional; "false" reverts /health to legacy 200
 6. ~~Web config dashboard~~ — dropped (never committed)
 
 ### Phase 5 — Ship It Live ✅ CODE COMPLETE (24/7 deploy PARKED)
-1. Deploy substrate re-targeted **Oracle A1 → Koyeb WEB + Neon serverless Postgres** (the Oracle attempt is archived under `.planning/phases/05-ship-it-live/oracle-attempt/`)
-2. Neon-tuned asyncpg pool (`ssl='require'`, `statement_cache_size=0`, 240s lifetime), `sanitize_database_url`, aiohttp `/health` on `0.0.0.0:8000`, de-Oracle'd Dockerfile, stdout logging
+1. Deploy substrate re-targeted **a first cloud WEB-service attempt → Neon serverless Postgres** (the archived Phase-5 deploy attempt lives under `.planning/`)
+2. Neon-tuned asyncpg pool (`ssl='require'`, `statement_cache_size=0`, 240s lifetime), `sanitize_database_url`, aiohttp `/health` on `0.0.0.0:8000`, host-neutral Dockerfile, stdout logging
 3. `clear_persisted()` gap closure on idle-leave / reconnect-failure (DEPLOY-06), reconnect-race hardening (DEPLOY-04), TZ-correct late-night roast via `ZoneInfo(STREAK_TIMEZONE)` (D-06)
-4. `docs/DEPLOY-KOYEB.md` + a 22-check live-UAT runbook — **24/7 deploy PARKED behind the YouTube datacenter-IP block; bot runs on the user's PC (residential IP) → Neon Singapore on demand**
+4. `docs/DEPLOY-DOCKER.md` + a 22-check live-UAT runbook — **24/7 deploy PARKED behind the YouTube datacenter-IP block; bot runs on the user's PC (residential IP) → Neon Singapore on demand**
 
 ### Phase 6 — Speed & Caching ✅ COMPLETE
 Generation-guarded next-track prefetch (zero inter-song gap), Postgres `resolution_cache` (URL-bypass), 3-PP SponsorBlock→FFmpegExtractAudio→ModifyChapters chain + codec-path logging, download-timeout→stream fallback, LFU cache eviction (protects in-use), `PerfMetrics` in `/stats`.
