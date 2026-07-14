@@ -47,17 +47,19 @@ Every phase passed verification (4/4 or 10/10 code-level) and code review; the g
 
 **CI is green on `main`** ([run 29056570511](https://github.com/jadrianports/dexter/actions/runs/29056570511) — 1017 passed, 0 skipped). This is the first milestone where the ~111 live-DB tests actually execute rather than skip: the gate's first run caught a sentinel collision that would have made CI silently skip them, plus two latent pre-existing bugs invisible on a long-uptime dev box (an import-time `sys.exit` in `bot.py`, and a `0.0`-vs-monotonic-clock sentinel that suppressed vision roasts for 10 minutes and yt-dlp self-heal for an hour after any reboot). All fixed and locked by `tests/test_fresh_boot_regressions.py`. Phases 19–23 now execute behind a real green gate. Phase 18's 3 remaining live-Discord UAT items are deferred behind the same parked host.
 
-## Current Milestone: none — v1.4 shipped, next milestone unplanned
+## Current Milestone: v1.5 "Deep Cuts"
 
-**v1.4 "Open House" closed 2026-07-14** (tag `v1.4`). No milestone is currently active. Next step is `/gsd-new-milestone` (questioning → research → requirements → roadmap). Candidate directions for the next cycle:
+**Goal:** Clean the deploy story down to one honest Docker path, deepen the taste brain (durable memory + vision-sourced memories), add real DJ muscle (radio, skip-voting, crossfade), and finish the recruiter-facing surface — the landing-page redesign already landed. Continues phase numbering at Phase 24.
 
-- **Resume the parked 24/7 deploy** (DEPLOY-F1) — host-gated; closes DEPLOY-02/03/05/08 + the entire live-UAT tail once an always-on residential host (Pi) exists. This is the single biggest lever — it converts ~33 deferred `human_needed` items into runnable checks.
-- **Salience reinforcement** (MEM-F1) — surfaced/hit memories gain durability (deferred out of v1.3).
-- **Vision → RAG memory** (MEM-F2) — persist a distilled fact from a vision roast.
-- **Full guild-scoped recall / opt-in cross-guild sharing** (MEM-F3) — revisit if Dexter outgrows modest scale.
-- **Discord bot verification + privileged-intent approval** (SCALE-F2) — required past 100 guilds / 10k unique users; only if scale demand appears.
+**Target features:**
+- **Hosting honesty & Docker** — purge every dead cloud-host trace (Render / Koyeb / Oracle) from code + docs; replace `docs/DEPLOY-KOYEB.md` with a real `docker compose up` run guide; verify the clean local boot. *(Owner step: delete the dashboard-side Render service that still auto-deploys the repo and emails CI/CD failures — blocked-on-human; there is no Render config in the repo, the connection lives in the Render dashboard.)*
+- **Smarter memory** — salience reinforcement (surfaced/hit memories gain durability, MEM-06) + vision→memory (a vision roast persists a distilled fact, MEM-07). Additive on the existing pgvector store, zero new cost.
+- **New music muscle** — radio/endless mode (taste-brain-driven) + skip-voting/queue democracy + crossfade (**spike-gated**: a plan-time prototype must prove `/skip`-mid-fade behaves before full commit, else descope to fast-follow per the standing Descope Rule).
+- **Portfolio finish** — landing-page redesign ✅ (proper case, fixed demo animation, "after hours" visual identity; shipped `c7fd22e`); PORT-02 real Dexter demo lines *(deferred, blocked-on-human)*; CICD-02 GitHub Pages live; CICD-03 GHCR publish *(both owner GitHub-UI steps)*.
 
-> **Also carried into the next milestone:** the 3 blocked-on-human v1.4 requirements (PORT-02 demo-GIF Dexter lines, CICD-02 GitHub Pages toggle, CICD-03 GHCR flip) — no code work, just owner-performed GitHub/live-bot steps. See STATE.md Deferred Items.
+**Key context / decisions:** hosting model unchanged (owner's PC, residential IP, on demand) — the true 24/7 deploy stays **PARKED**; this milestone makes Docker the clean, honest run path, not a 24/7 standup. Crossfade verified feasible (custom PCM-mixing `AudioSource`, prior art exists — `veloura-audio`, `discord-ext-music`) but forfeits opus-copy during the fade and touches the delicate playback engine (generation-counter/`/skip`/prefetch; `audioop`→`numpy` note for Py 3.13), so it carries the one plan-time research spike + the Descope escape hatch.
+
+> **Deferred candidate directions (not in v1.5):** resume the parked 24/7 deploy (DEPLOY-F1, host-gated); full guild-scoped recall / opt-in cross-guild sharing (MEM-F3, scale-gated); Discord bot verification + privileged-intent approval (SCALE-F2, only past 100 guilds); synced-scrolling `/lyrics`; per-guild personality tone dial.
 
 <details>
 <summary>Previous: v1.4 "Open House" milestone framing (archived — shipped 2026-07-14)</summary>
@@ -141,20 +143,18 @@ Sequenced deploy-first so every speed gain is measured against live numbers. The
 
 ### Active
 
-<!-- No active milestone — v1.4 shipped 2026-07-14. Next scope defined by /gsd-new-milestone (fresh REQUIREMENTS.md). -->
+<!-- v1.5 "Deep Cuts" — .planning/REQUIREMENTS.md is the authoritative list + traceability. -->
 
-**No active milestone.** v1.4 "Open House" shipped; requirements archived to `milestones/v1.4-REQUIREMENTS.md`. Run `/gsd-new-milestone` to define the next scope.
+**v1.5 "Deep Cuts"** (active — full list + traceability in `.planning/REQUIREMENTS.md`):
 
-Blocked-on-human v1.4 tail (no code work — owner-performed GitHub/live-bot steps, carried until done):
-- [ ] PORT-02 — embed two verbatim real Dexter personality lines in the demo GIF (needs live bot; placeholder tokens intact)
-- [ ] CICD-02 — enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first `pages.yml` run
-- [ ] CICD-03 — GHCR package-visibility flip + first `v*` tag `release.yml` run
+- **Hosting & Docker:** HOST-01 purge dead cloud-host references (Render/Koyeb/Oracle) from code + docs; HOST-02 Docker run guide replaces `DEPLOY-KOYEB.md`; HOST-03 verified `docker compose up` local boot.
+- **Smarter memory:** MEM-06 salience reinforcement (surfaced/hit memories gain durability); MEM-07 vision→RAG memory (a vision roast persists a distilled fact).
+- **New music muscle:** DJ-01 radio/endless mode; DJ-02 skip-voting/queue democracy; DJ-03 crossfade (spike-gated).
+- **Portfolio finish:** PORT-05 landing-page redesign ✅ (done, `c7fd22e`); PORT-02 real Dexter demo lines *(blocked-on-human)*; CICD-02 GitHub Pages live *(blocked-on-human)*; CICD-03 GHCR publish *(blocked-on-human)*.
 
-Candidate directions for the next milestone (carried, not committed):
-- [ ] Resume the parked 24/7 live deploy once an always-on residential host exists → closes DEPLOY-02/03/05/08 + the entire live-UAT tail (Phases 03–06 v1.1, Phase 09/11 v1.2, Phases 14–22 v1.3/v1.4)
-- [ ] Salience reinforcement (MEM-F1) — surfaced/hit memories gain durability
-- [ ] Vision → RAG memory (MEM-F2) — persist a distilled fact from a vision roast
-- [ ] Discord bot verification + privileged-intent approval (SCALE-F2) — only past 100 guilds / 10k users
+> **Blocked-on-human** (owner GitHub-UI / live-bot steps, no code): PORT-02 (two verbatim Dexter demo lines), CICD-02 (enable Pages), CICD-03 (GHCR visibility + first `v*` tag), and the **Render-dashboard service deletion** (there is no Render config in the repo — the connection is dashboard-side and is what emails the CI/CD failures; deleting the service stops them).
+
+> **Deferred (not in v1.5):** resume the parked 24/7 deploy (DEPLOY-F1, host-gated); full guild-scoped recall / cross-guild sharing (MEM-F3); Discord bot verification (SCALE-F2, past 100 guilds); synced-scrolling `/lyrics`; per-guild tone dial.
 
 ### Out of Scope
 
@@ -251,4 +251,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-14 after v1.4 "Open House" milestone (Phases 18–23, 28/31 requirements shipped, 3 deferred blocked-on-human)*
+*Last updated: 2026-07-15 at start of v1.5 "Deep Cuts" milestone (hosting/Docker cleanup, smarter memory, new music muscle, portfolio finish; continues at Phase 24)*
