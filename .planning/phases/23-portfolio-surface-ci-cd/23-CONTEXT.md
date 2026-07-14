@@ -77,6 +77,11 @@ new production hosting** — the 24/7 deploy stays parked.
   needs a Node build first. The planner must decide how it is invoked (a pytest that shells out and
   skips when `dist/` is absent, vs a standalone script step) — but it **must fail the build** when
   it drifts, and it **must not silently skip in CI**.
+  **This also closes Phase 22's deferred code-review item IN-01** (the drift guard's
+  `.md`/`.html`/`.txt` extension allowlist), which the user explicitly deferred **to Phase 23** at
+  Phase 22's close. D-02 is its resolution: rather than widening the allowlist to cover new source
+  types, the guard gains a second, artifact-level check over the built output. The planner should
+  confirm IN-01 is genuinely discharged by this and not merely bypassed.
   *(Rejected: widening the guard's allowlist to `.astro` — only guards a LITERAL string; the moment
   a template builds the URL from a variable the regex matches nothing and the guard goes blind while
   still reporting green. Rejected: a committed generated `invite-url.txt` as single source — Claude's
