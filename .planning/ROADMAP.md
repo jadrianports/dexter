@@ -257,11 +257,11 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 23-02-PLAN.md — Human gates: package legitimacy (astro/playwright), the verbatim Dexter demo lines (D-06), GitHub Pages enablement
+- [x] 23-02-PLAN.md — Human gates: package legitimacy (astro/playwright), the verbatim Dexter demo lines (D-06), GitHub Pages enablement
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 23-03-PLAN.md — Astro scaffold + `base: '/dexter'` + `site/src/config.ts` invite fence + **D-02 built-artifact drift guard** + ignore-file hygiene
+- [x] 23-03-PLAN.md — Astro scaffold + `base: '/dexter'` + `site/src/config.ts` invite fence + **D-02 built-artifact drift guard** + ignore-file hygiene
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -310,4 +310,4 @@ Full phase details, success criteria, and decisions archived in
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
 | 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
-| 23. Portfolio Surface & CI/CD | v1.4 | 1/7 | In Progress|  |
+| 23. Portfolio Surface & CI/CD | v1.4 | 3/7 | In Progress|  |

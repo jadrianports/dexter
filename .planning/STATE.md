@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Phase 23 UI-SPEC approved
-last_updated: "2026-07-14T10:14:41.505Z"
+stopped_at: Completed 23-03-PLAN.md
+last_updated: "2026-07-14T10:48:43.219Z"
 last_activity: 2026-07-14 -- Phase 23 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 32
-  completed_plans: 26
-  percent: 81
+  completed_plans: 28
+  percent: 83
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 23 (portfolio-surface-ci-cd) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-07-14 -- Phase 23 execution started
 
@@ -76,6 +76,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 22 P02 | 12min | 2 tasks | 4 files |
 | Phase 22 P03 | 25min | 2 tasks | 3 files |
 | Phase 23 P01 | 12min | 2 tasks | 4 files |
+| Phase 23 P03 | 25min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -131,6 +132,9 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 22-02]: /invite command carries no @app_commands.checks.cooldown and no DM-restriction decorator — zero I/O, static output, DM support is a hard requirement (D-06)
 - [Phase 22]: [Phase 22-03]: Reworded two pre-existing prose comments (config.py INVITE_SCOPES comment, logic/__init__.py package docstring) that legitimately mentioned oauth_url( in documentation so the new single-invite-URL-constructor scan (T-22-03) doesn't false-positive on prose
 - [Phase 23-01]: D-13 discharged clean on first CI run — 1160 DB-inclusive tests pass against real pgvector container, no repair needed
+- [Phase 23]: [Phase 23-03]: Astro entity-escapes & in interpolated href attributes -- confirmed empirically, fixed with set:html on a raw HTML fragment for the invite CTA anchors (UI-SPEC HARD VERIFICATION GATE)
+- [Phase 23]: [Phase 23-03]: tests/test_site_drift_guard.py rebuilds the D-02 guard to scan built site/dist/**/*.html via filesystem rglob (never git ls-files) -- closes the vacuous-pass hole Astro's SSG choice opened; reuses _canonical_url/_collect_offenders from tests/test_invite_drift_guard.py, no second regex
+- [Phase 23]: [Phase 23-03]: site/package.json engines field (>=22.12.0, Astro's own scaffold output) is the CI Node version source of truth for plan 23-04, not a hardcoded guess from research
 
 ### Pending Todos
 
@@ -162,7 +166,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-14T10:13:23.145Z
-Stopped at: Phase 23 UI-SPEC approved
+Last session: 2026-07-14T10:48:43.211Z
+Stopped at: Completed 23-03-PLAN.md
 Resume file: 
 None
