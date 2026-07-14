@@ -94,11 +94,21 @@ left untouched.
 
 ## CI Run Record (for plan 23-07's badge)
 
+**First real run over Phases 19-22 (the D-13 event itself):**
 - **Head SHA:** `cff65e96b249301afbc8c920509020704b5a1dff`
 - **Run URL:** https://github.com/jadrianports/dexter/actions/runs/29324334001
 - **Conclusion:** `success`
 - **Test result:** `1160 passed, 2 warnings in 45.79s` (vs local pre-push run: `1036 passed, 124 skipped, 0 failed` — the 124-test delta is the DB-gated slice, confirmed executed and passing against the real `pgvector/pgvector:pg16` service container for the first time)
-- **git rev-list --count origin/main..HEAD:** `0`
+
+**Final green run at this plan's true final HEAD** (the doc-completion commit — SUMMARY.md + STATE.md +
+ROADMAP.md — advanced `main` one commit past the run above, and `ci.yml` triggers on every push, so a
+second run confirms the doc commit didn't break anything and keeps the SHA-must-equal-HEAD invariant
+holding at the moment this plan actually closes):
+- **Head SHA:** `c0a1ce6c820fd30145361cd6084351c4cd2e03ee`
+- **Run URL:** https://github.com/jadrianports/dexter/actions/runs/29324809714
+- **Conclusion:** `success`
+
+- **git rev-list --count origin/main..HEAD:** `0` (verified after both pushes)
 
 ## User Setup Required
 
