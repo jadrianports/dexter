@@ -63,9 +63,9 @@ Exceptions:
 
 **Mono-vs-sans pairing decision (Claude's discretion, justified):** headings, labels, timestamps, badges, and both CTA buttons are set in **mono** — this is what makes "terminal-ish" real rather than decorative (D-04). Running **body paragraph copy** (feature blurbs, boundaries prose, hero subhead) is set in **sans** — D-04's hard constraint is that the page "must stay legible" even while being a personality demo, and a full page of monospace prose measurably hurts reading speed at paragraph length. The demo mock's fake chat message text is also set in **sans** (not mono) — Discord's own UI is sans-serif, and using sans here makes the reproduction read as an authentic UI mock rather than a stylized illustration, which matters for D-06's honesty framing (see Demo Mock spec below).
 
-**h3 (feature card titles, boundary item titles):** 18px / 600 / 1.3 / mono — one step below Heading, still mono (titles are short labels, not prose).
+**h3 (feature card titles, boundary item titles):** reuses the **Body 16px size token** — set at **600 / 1.3 / mono**, vs. Body's own 16px/400/1.6/sans. Same size as its own paragraph copy, but bold weight + mono family + tighter line-height still reads unambiguously as a title sitting above that paragraph — this collapses what would otherwise be a 5th size token (was 18px) without losing the visual hierarchy a title needs. Label (13px) stays reserved exclusively for meta/timestamps/badges/nav — it is never reused for a title role, which keeps the two small-text tiers semantically distinct even though h3 is close to Label in size.
 
-**Responsive scale-down (`<640px`):** Display → 32px, Heading → 22px, h3 → 16px. Body/Label sizes are unchanged at every breakpoint (16px body is the accessibility floor; do not shrink it on mobile).
+**Responsive scale-down (`<640px`):** Display → 32px, Heading → 22px. Body, Label, and h3 are unchanged at every breakpoint — h3 shares the Body 16px token, which is the accessibility floor and is never shrunk on mobile, so h3 scales exactly as Body scales (i.e., not at all) by construction, not by a separate override.
 
 ---
 
