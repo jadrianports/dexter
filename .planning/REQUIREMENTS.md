@@ -9,10 +9,10 @@ Requirements for the "Deep Cuts" milestone. Each maps to a roadmap phase (Phase 
 
 ### Hosting & Docker
 
-- [ ] **HOST-01**: All dead cloud-host references (Render, Koyeb, Oracle) are removed from code comments, `config.py`, `Dockerfile`, `docker-compose.yml`, and `.env.example` — only the host-agnostic `$PORT` read and Docker / residential-host framing remain.
-- [ ] **HOST-02**: `docs/DEPLOY-KOYEB.md` is replaced by a Docker run guide documenting `docker compose up` on a local/residential machine (env setup, Neon `DATABASE_URL`, how to verify the bot is alive).
-- [ ] **HOST-03**: `docker compose up` is verified to build the image and boot Dexter locally against Neon — clean startup, `/health` responds, no new silent failures in `dexter.log`.
-- [ ] **HOST-04** *(blocked-on-human)*: The dashboard-side Render service is deleted so the repo no longer auto-deploys and the CI/CD failure emails stop. *(Owner Render-UI step — there is no Render config in the repo; the connection is dashboard-side.)*
+- [x] **HOST-01**: All dead cloud-host references (Render, Koyeb, Oracle) are removed from code comments, `config.py`, `Dockerfile`, `docker-compose.yml`, and `.env.example` — only the host-agnostic `$PORT` read and Docker / residential-host framing remain.
+- [x] **HOST-02**: `docs/DEPLOY-KOYEB.md` is replaced by a Docker run guide documenting `docker compose up` on a local/residential machine (env setup, Neon `DATABASE_URL`, how to verify the bot is alive).
+- [x] **HOST-03**: `docker compose up` is verified to build the image and boot Dexter locally against Neon — clean startup, `/health` responds, no new silent failures in `dexter.log`.
+- [x] **HOST-04**: The dashboard-side Render service is deleted so the repo no longer auto-deploys and the CI/CD failure emails stop. *(Owner deleted it 2026-07-15 — there was no Render config in the repo; the connection was dashboard-side.)*
 
 ### Smarter Memory
 
@@ -67,10 +67,10 @@ Explicitly excluded.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HOST-01 | Phase 24 | Pending |
-| HOST-02 | Phase 24 | Pending |
-| HOST-03 | Phase 24 | Pending |
-| HOST-04 | Phase 24 | Pending (blocked-on-human) |
+| HOST-01 | Phase 24 | Complete |
+| HOST-02 | Phase 24 | Complete |
+| HOST-03 | Phase 24 | Complete |
+| HOST-04 | Phase 24 | Complete |
 | MEM-06 | Phase 25 | Pending |
 | MEM-07 | Phase 25 | Pending |
 | DJ-01 | Phase 26 | Pending |
@@ -82,6 +82,7 @@ Explicitly excluded.
 | CICD-03 | Phase 28 | Pending (blocked-on-human) |
 
 **Coverage:**
+
 - v1.5 requirements: 13 total (1 already complete, 4 blocked-on-human)
 - Mapped to phases: 13/13
 - Unmapped: 0

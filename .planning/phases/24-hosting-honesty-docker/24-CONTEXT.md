@@ -76,11 +76,38 @@ memory/music/portfolio threads (Phases 25–28).
   live-verification precedent (Phases 03–22 parked UATs). Scout confirms `docker-compose.yml` is
   already bot-only → Neon, so the boot is genuinely runnable — no compose changes needed for it.
 
+### Research-surfaced additions (D-10…D-12) — resolved 2026-07-15 during plan-phase
+Research (`24-RESEARCH.md`) enumerated every tracked hit and surfaced three items CONTEXT.md's
+original file list did not name. All three resolved with the researcher's recommended option.
+- **D-10 (extends D-03 exclusion list):** Treat tracked `docs/superpowers/{plans,specs}/*` — the
+  April-2026 pre-GSD phase1/phase2 spec+plan files (genuine `Oracle` mentions, e.g.
+  `docs/superpowers/specs/2026-04-12-dexter-phase1-design.md:30,117,422,504`) — as **sealed
+  historical record**, same as `.planning/**` and `milestones/**`. They are **excluded** from the
+  grep success gate and the drift guard; **not scrubbed**. Rewriting a frozen planning snapshot
+  would falsify history.
+- **D-11 (extends D-01 scrub list + D-02 deletions):** Two tracked targets research found beyond
+  CONTEXT.md's original list, both required for the repo-wide grep gate to actually reach zero:
+  - **`git rm scripts/seed_restore_test.py`** — dead Oracle-era helper coupled to the
+    `scripts/archive/backup.sh` that D-02 deletes; says "run on Oracle". Delete (not reword).
+  - **`utils/embeds.py:294`** (`# No Oracle/CPU label — baselines against actual run environment
+    (D-19).`) — reword the prose host-honest, **keep the `(D-19)` tag** (K-##/D-## tag-preservation
+    discipline, D-04).
+- **D-12 (new deliverable — permanent regression backstop):** Add
+  **`tests/test_hosting_drift_guard.py`**, mirroring the existing
+  `tests/test_invite_drift_guard.py` / site drift-guard convention. It fails CI if any dead
+  hosting-target reference reappears in tracked, non-archive files: **zero-tolerance** for
+  `Koyeb`/`Oracle`; `Render` enforced as an **allowlist diff** against the ~23 known-legitimate
+  "render/rendering" English hits (naive grep is permanently noisy — only `bot.py:252,254` are true
+  positives). Excludes the D-03 + D-10 sealed paths. The same grep is also documented in
+  `24-HOST-UAT.md` for the human boot check.
+
 ### Claude's Discretion
 - Exact host-honest wording of rewritten comments/narrative (must satisfy: grep for
-  `Render`/`Koyeb`/`Oracle` in tracked non-archive files returns zero, `$PORT` read + Docker /
-  residential framing remain).
+  `Render`/`Koyeb`/`Oracle` in tracked non-archive files — excluding the D-03/D-10 sealed paths —
+  returns zero live hosting-target hits, `$PORT` read + Docker / residential framing remain).
 - Section ordering and exact prose of `docs/DEPLOY-DOCKER.md` within the D-06 shape.
+- Exact allowlist contents / structure of `tests/test_hosting_drift_guard.py` (D-12) within the
+  invite/site drift-guard precedent.
 
 ### HOST-04 (blocked-on-human)
 - **D-09:** No repo action possible — there is **no Render config in the repo**. The Render CI/CD
@@ -106,15 +133,21 @@ memory/music/portfolio threads (Phases 25–28).
 - `docker-compose.yml` — "Oracle-era legacy" comment; **already bot-only → Neon (no changes for boot)**.
 - `CLAUDE.md` — Tech Stack "Hosting" bullet + Phase-5 build-log narrative + `logs` Docker/Koyeb note.
 - `tests/test_config.py`, `utils/logger.py`, `scripts/memory_spike.py` — carry `(K-##)` tags (tags stay, D-04).
+- `utils/embeds.py:294` — `# No Oracle/CPU label …(D-19)`; reword prose, keep `(D-19)` tag (D-11).
+
+### New deliverable (D-12)
+- `tests/test_hosting_drift_guard.py` — permanent CI drift guard (mirrors `tests/test_invite_drift_guard.py`).
 
 ### File to remove / replace
 - `docs/DEPLOY-KOYEB.md` — 179-line Koyeb runbook; `git rm` and replace with `docs/DEPLOY-DOCKER.md` (D-05/D-06).
 
 ### Delete (dead Oracle-era)
 - `scripts/archive/backup.sh`, `scripts/archive/deploy.sh`, `scripts/archive/keepalive.sh`, `scripts/archive/lifecycle-policy.json` (D-02).
+- `scripts/seed_restore_test.py` — dead Oracle-era, coupled to the deleted `backup.sh` (D-11).
 
 ### Explicitly NOT touched
 - `.planning/**`, `milestones/**` (sealed history), `dexter-architecture.md` (gitignored/untracked).
+- `docs/superpowers/{plans,specs}/*` — tracked pre-GSD historical planning docs; sealed, excluded from grep gate + drift guard (D-10).
 
 No external ADRs — decisions fully captured above.
 </canonical_refs>

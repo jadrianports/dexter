@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
-status: planning
-stopped_at: Phase 24 context gathered
-last_updated: "2026-07-14T19:02:14.344Z"
-last_activity: "2026-07-15 — v1.5 "Deep Cuts" roadmap created (5 phases: 24–28), 13/13 requirements mapped"
+status: verifying
+stopped_at: Completed 24-03-PLAN.md
+last_updated: "2026-07-14T22:24:45.177Z"
+last_activity: 2026-07-14
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 20
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 24 (Hosting Honesty & Docker) — v1.5 "Deep Cuts" roadmap drafted, awaiting approval, then `/gsd-plan-phase 24`.
+**Current focus:** Phase 24 — hosting-honesty-docker
 
 ## Current Position
 
-Phase: 24 of 28 (Hosting Honesty & Docker)
-Plan: 0 of TBD in current phase
-Status: Roadmap drafted — ready to plan
-Last activity: 2026-07-15 — v1.5 "Deep Cuts" roadmap created (5 phases: 24–28), 13/13 requirements mapped
+Phase: 25
+Plan: Not started
+Status: Phase complete — ready for verification
+Last activity: 2026-07-14
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -94,6 +94,9 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 23 P04 | 15min | 3 tasks | 3 files |
 | Phase 23 P05 | 25min | 3 tasks | 9 files |
 | Phase 23-portfolio-surface-ci-cd P07 | 35min | 3 tasks | 4 files |
+| Phase 24 P01 | 12min | 3 tasks | 7 files |
+| Phase 24 P02 | 15min | 3 tasks | 4 files |
+| Phase 24 P03 | 30min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -116,6 +119,12 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 23-portfolio-surface-ci-cd]: [Phase 23-07]: README.md rewritten as an architecture case study; drift guard proven NON-VACUOUS (README.md now in tracked-doc scan, canonical URL found, zero offenders) — PORT-03/PORT-04 delivered; the moment a tracked doc carries the invite URL, tests/test_invite_drift_guard.py stops passing vacuously and starts enforcing something real
 
 > Full v1.4 per-phase decision log (30+ entries) preserved in milestones/v1.4-ROADMAP.md and prior STATE.md git history — trimmed here to keep this digest under the size guideline.
+
+- [Phase 24-01]: deleted tests/test_seed_restore.py alongside scripts/seed_restore_test.py (sole importer) as the necessary completion of D-11, not new scope
+- [Phase ?]: [Phase 24-02] Dropped (not repointed) the UptimeRobot inbound-keep-alive note from .env.example per D-07 -- no scale-to-zero concept applies to a residential Docker run
+- [Phase ?]: [Phase 24-02] docs/DEPLOY-DOCKER.md deliberately omits the old doc's Neon-account walkthrough, UptimeRobot setup, Koyeb secrets-UI steps, and HeavenCloud/Wispbyte contingency -- none apply to the real docker compose up -> Neon flow
+- [Phase 24]: [Phase 24-03] RENDER_ALLOWLIST derived fresh from git grep against the post-scrub repo (29 entries/18 files), not copied from 24-PATTERNS.md's pre-scrub line-number guesses
+- [Phase 24]: [Phase 24-03] milestones/ sealed prefix kept as defensive/currently-vacuous (milestone docs nest under .planning/milestones/, already covered) rather than dropped or faked
 
 ### Pending Todos
 
@@ -157,9 +166,9 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 
 ## Session Continuity
 
-Last session: 2026-07-14T19:02:14.324Z
-Stopped at: Phase 24 context gathered
-Resume file: .planning/phases/24-hosting-honesty-docker/24-CONTEXT.md
+Last session: 2026-07-14T21:09:05.560Z
+Stopped at: Completed 24-03-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

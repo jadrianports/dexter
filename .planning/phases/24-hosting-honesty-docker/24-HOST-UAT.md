@@ -1,5 +1,5 @@
 ---
-status: partial
+status: complete
 phase: 24-hosting-honesty-docker
 source: [24-RESEARCH.md]
 started: 2026-07-15T00:00:00Z
@@ -8,7 +8,10 @@ updated: 2026-07-15T00:00:00Z
 
 ## Current Test
 
-[awaiting human testing]
+Complete — both items passed (2026-07-15). HOST-03 driven in-session via a real `docker compose
+up -d --build` on the owner's PC against live Neon + git-ignored `.env` secrets (secrets never
+printed/read into the session — `docker compose` consumed `.env` directly). HOST-04 owner deleted
+the dashboard-side Render service (confirmed by owner).
 
 ## Preamble — why this is human-run, acknowledged-deferred
 
@@ -52,7 +55,24 @@ Run these steps on your PC (residential IP), per `docs/DEPLOY-DOCKER.md`:
 
 expected: Clean build, clean boot log, truthful `/health` response, no new silent failures,
 drift guard green.
-result: [pending]
+result: PASSED (2026-07-15, driven in-session on owner's PC / Docker 29.5.3, Compose v5.1.4).
+Evidence:
+- Build: `docker compose up -d --build` exited 0 — image `dexter-bot:latest` built clean; pip
+  installed all deps (discord.py 2.7.1, yt-dlp 2026.7.4, asyncpg 0.31.0, pgvector 0.4.2, …),
+  FFmpeg apt-get layer succeeded, no build failure.
+- Boot log (`docker compose logs bot`): `Logged in as Dexter#2172` → `pgvector extension ensured`
+  → `Database schema initialized` (init_db against Neon OK) → Gemini/Memory/Lyrics services
+  initialized → `Health server task scheduled` → `Dexter is ready.` → `Health endpoint listening
+  on 0.0.0.0:8000/health`. No repeated tracebacks.
+- `/health` (hit inside container via urllib, since compose intentionally publishes no host port):
+  **HTTP 200 `{"status":"ok"}`** — truthful healthy shape.
+- No new silent failures: no `error.log` written (zero ERROR-level events); `grep -iE
+  "traceback|[ERROR]|CRITICAL" logs/dexter.log` → no matches. Only benign pre-existing info line
+  `guild_config: configured ambient channel … no longer resolves` (stale channel config, not a
+  Phase-24 regression).
+- Drift guard: `pytest tests/test_hosting_drift_guard.py` → 7 passed. Full suite: 1029 passed,
+  124 skipped, 0 failed; `ruff check .` clean.
+- Container torn down after verification (`docker compose down`) — no lingering gateway session.
 
 ### 2. HOST-04: Owner deletes the dashboard-side Render service (blocked-on-human)
 
@@ -72,19 +92,28 @@ this item blocked-on-human until the owner performs the dashboard deletion — t
 further to verify from the code side.
 
 expected: Render dashboard service deleted; auto-deploy + failure emails stop.
-result: [pending]
+result: PASSED (2026-07-15). Owner deleted the dashboard-side Render service connected to this
+repo, stopping auto-deploy + CI/CD-failure emails. Repo side re-confirmed in-session: `git grep
+-niE '\brender\.com|render\.yaml|RENDER_API|onrender'` over tracked code/CI/scripts returns ZERO
+live Render references (the only `render` path hit is `scripts/render_demo_gif.py`, an image/GIF
+renderer unrelated to Render.com) — nothing remained to remove in the repo.
 
 ## Summary
 
 total: 2
-passed: 0
+passed: 2
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
-blocked: 1
+blocked: 0
 
 ## Gaps
 
-- HOST-03 requires real secrets that must not live in this session (D-08) — deferred to the
-  owner's next local run.
-- HOST-04 requires owner-only Render dashboard access (D-09) — no repo-side action exists.
+None — both items resolved 2026-07-15.
+
+- ~~HOST-03 requires real secrets that must not live in this session (D-08)~~ — RESOLVED:
+  driven in-session on the owner's PC; `docker compose` consumed the git-ignored `.env` directly
+  (no secret ever printed/read into the session). Clean build+boot, `/health` 200 `{"status":"ok"}`,
+  no new silent failures, drift guard green.
+- ~~HOST-04 requires owner-only Render dashboard access (D-09)~~ — RESOLVED: owner deleted the
+  dashboard-side Render service; repo re-confirmed to carry zero live Render refs.
