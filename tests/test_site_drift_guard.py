@@ -108,8 +108,7 @@ def test_no_drift_in_built_site():
     if not files:
         if os.getenv("SITE_DIST_REQUIRED"):
             pytest.fail(
-                "site/dist/ is empty but SITE_DIST_REQUIRED=1 — "
-                "the Astro build step did not run or produced no output"
+                "site/dist/ is empty but SITE_DIST_REQUIRED=1 — the Astro build step did not run or produced no output"
             )
         pytest.skip("site/dist/ not built (local run, no `npm run build`)")
     offenders = _collect_offenders(files, _canonical_url())
