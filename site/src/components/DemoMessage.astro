@@ -1,0 +1,142 @@
+---
+// site/src/components/DemoMessage.astro
+//
+// One message row in the demo mock's fake Discord conversation: a CSS-circle
+// avatar (no image asset), a username row (+ "BOT" pill on Dexter's rows
+// only), a timestamp (hidden below 480px), and a flat sans-serif message
+// bubble (23-UI-SPEC.md "Demo Mock Spec" -> "Message row anatomy").
+//
+// The reveal animation is a single `demo-reveal` keyframe (opacity 0 ->
+// opacity 1 over ~400ms, then held) driven entirely by the `delay` prop --
+// zero JS, per D-01. `prefers-reduced-motion` is handled by DemoMock.astro's
+// blanket override (23-UI-SPEC.md's HARD REQUIREMENT block), not here.
+interface Props {
+  speaker: "human" | "dexter";
+  handle?: string;
+  text: string;
+  timestamp?: string;
+  delay: string; // e.g. "0.5s" -- animation-delay into the shared 16s loop
+}
+
+const { speaker, handle, text, timestamp = "2:41 AM", delay } = Astro.props;
+const isDexter = speaker === "dexter";
+const username = isDexter ? "dexter" : (handle ?? "wrenlow");
+const initial = username.charAt(0).toUpperCase();
+---
+
+<div class="demo-message" style={`animation-delay: ${delay};`}>
+  <div class={`demo-avatar ${isDexter ? "demo-avatar--dexter" : "demo-avatar--human"}`} aria-hidden="true">
+    {isDexter ? "D" : initial}
+  </div>
+  <div class="demo-message-body">
+    <p class="demo-message-meta text-label">
+      <span class="demo-username">{username}</span>
+      {isDexter && <span class="demo-bot-pill">BOT</span>}
+      <span class="demo-timestamp">{timestamp}</span>
+    </p>
+    <p class="demo-message-text">{text}</p>
+  </div>
+</div>
+
+<style>
+  .demo-message {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    animation: demo-reveal 16s infinite;
+    animation-fill-mode: backwards;
+  }
+
+  @keyframes demo-reveal {
+    0% {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    2.5% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .demo-avatar {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: var(--text-label-size);
+  }
+
+  .demo-avatar--human {
+    background-color: #3a4250;
+    color: var(--color-text-secondary);
+  }
+
+  .demo-avatar--dexter {
+    background-color: var(--color-accent);
+    color: var(--color-bg);
+  }
+
+  .demo-message-body {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .demo-message-meta {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+    margin: 0 0 var(--space-xs) 0;
+  }
+
+  .demo-username {
+    color: var(--color-text);
+    font-weight: 600;
+  }
+
+  .demo-bot-pill {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: var(--text-label-size);
+    line-height: 1;
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1px var(--space-xs);
+  }
+
+  .demo-timestamp {
+    color: var(--color-text-secondary);
+  }
+
+  .demo-message-text {
+    font-family: var(--font-sans);
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-line-height);
+    color: var(--color-text);
+    margin: 0;
+    /* Hard rule: text always wraps, never clips, never scrolls horizontally
+       (23-UI-SPEC.md "Responsive Behavior" -- the fragile-element contract). */
+    overflow-wrap: break-word;
+  }
+
+  @media (max-width: 479px) {
+    .demo-avatar {
+      width: 32px;
+      height: 32px;
+    }
+
+    .demo-timestamp {
+      display: none;
+    }
+  }
+</style>
