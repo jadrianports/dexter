@@ -65,10 +65,10 @@ Hybrid scoping: contain third-party exposure, keep self-recall global.
 
 ### Portfolio Surface (PORT)
 
-- [ ] **PORT-01**: A static landing page in `/site` presents Dexter (hero, feature showcase, "Add to Discord" button)
+- [x] **PORT-01**: A static landing page in `/site` presents Dexter (hero, feature showcase, "Add to Discord" button)
 - [ ] **PORT-02**: A short demo GIF showing the personality landing is embedded in the landing page
-- [ ] **PORT-03**: The README is rewritten as an architecture case study (tagline, feature list, tech-stack badges, architecture summary, working invite link)
-- [ ] **PORT-04**: Scope boundaries are documented honestly rather than hidden: the 100-guild verification wall, the on-demand hosting caveat (the bot is offline unless the owner runs it), the full-savage-personality + reactive-kill-switch tradeoff, and the hybrid memory-scoping decision
+- [x] **PORT-03**: The README is rewritten as an architecture case study (tagline, feature list, tech-stack badges, architecture summary, working invite link)
+- [x] **PORT-04**: Scope boundaries are documented honestly rather than hidden: the 100-guild verification wall, the on-demand hosting caveat (the bot is offline unless the owner runs it), the full-savage-personality + reactive-kill-switch tradeoff, and the hybrid memory-scoping decision
 
 ### CI/CD (CICD)
 
@@ -146,13 +146,13 @@ Which phases cover which requirements. Populated during roadmap creation.
 | RATE-01 | Phase 20 | Complete |
 | INVITE-01 | Phase 22 | Complete |
 | INVITE-02 | Phase 22 | Complete |
-| PORT-01 | Phase 23 | Pending |
-| PORT-02 | Phase 23 | Pending |
-| PORT-03 | Phase 23 | Pending |
-| PORT-04 | Phase 23 | Pending |
+| PORT-01 | Phase 23 | Complete |
+| PORT-02 | Phase 23 | Pending (blocked-on-human: real Dexter lines) |
+| PORT-03 | Phase 23 | Complete |
+| PORT-04 | Phase 23 | Complete |
 | CICD-01 | Phase 18 | Complete |
-| CICD-02 | Phase 23 | Pending |
-| CICD-03 | Phase 23 | Pending |
+| CICD-02 | Phase 23 | Pending (blocked-on-human: Pages toggle + first run) |
+| CICD-03 | Phase 23 | Pending (blocked-on-human: GHCR flip + v* tag run) |
 
 **Coverage:**
 
