@@ -1,0 +1,70 @@
+name: Deploy Pages
+
+# Phase 23 / CICD-02, D-03, D-11, D-12.
+#
+# Why `workflow_run` and not `needs:`: `needs:` only expresses a dependency
+# between jobs *inside the same workflow file*. D-03 locks the unprivileged
+# scan (ci.yml) and this privileged deploy into two SEPARATE files — because
+# actions/deploy-pages requires pages: write + id-token: write, exactly what
+# ci.yml's `permissions: contents: read` ceiling exists to deny a PR-triggered
+# run (T-18-CIPRIV). Once the two concerns are split across files, `needs:`
+# cannot express "wait for CI" at all — `workflow_run` is not a preference
+# here, it is the only mechanism GitHub Actions offers. Do not "simplify" this
+# back to `needs:`; it would silently stop working.
+on:
+  workflow_run:
+    workflows: ["CI"] # must match ci.yml's `name:` field exactly, not its filename
+    types: [completed]
+
+permissions:
+  contents: read
+  pages: write # actions/deploy-pages requirement — scoped to THIS file only (D-03)
+  id-token: write # actions/deploy-pages requirement — scoped to THIS file only (D-03)
+
+jobs:
+  deploy:
+    # D-12: the gate must be REAL, not advisory. `completed` fires on a failed
+    # run too, and on every branch (including forked PRs, which can never push
+    # to main anyway). Both filters are required — conclusion alone would
+    # publish a broken main; head_branch alone would publish a red run.
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Explicit head_sha checkout — actions/checkout's default ref for a
+      # workflow_run-triggered job is THIS workflow's own trigger context, not
+      # automatically the commit ci.yml validated. Without this, a push that
+      # lands between the CI run and this deploy could publish one commit
+      # ahead of what was actually gated.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      # D-11: the site builds AGAIN here. workflow_run runs in a different
+      # workflow run with a different filesystem — it cannot reach into
+      # ci.yml's already-built dist/. Building twice (once to gate, once to
+      # deploy) is a structural consequence of the D-03 file split, not an
+      # inefficiency to optimize away.
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site
+
+      # D-11: publish via artifact + deploy-pages. No build output is ever
+      # committed — dist/ stays a pure, gitignored artifact.
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+
+      - uses: actions/deploy-pages@v5
+        id: deployment
