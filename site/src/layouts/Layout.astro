@@ -1,12 +1,41 @@
 ---
-// Minimal shell for plan 23-03. The full head (OG tags, font preloads,
-// global.css) and the skip-link land in plan 23-05 — this only needs to be
-// enough for a real build so plan 23-03's drift guard has something to scan.
+// site/src/layouts/Layout.astro
+//
+// The document shell: <html lang="en">, the accessibility floor (skip link +
+// <main id="main-content">), meta/OG tags, the self-hosted mono font preloads,
+// and the global.css import. Completed here from plan 23-03's minimal
+// placeholder (23-UI-SPEC.md "Component Split" + "Accessibility Contract").
+//
+// D-14 / RESEARCH Pitfall 1 (the subpath trap): this file NEVER writes a
+// root-absolute href/src by hand. A literal href="/foo" resolves to
+// jadrianports.github.io/foo instead of .../dexter/foo once deployed --
+// invisible in `astro dev` (served at `/`), fatal once built. Every asset
+// reference below goes through one of two sanctioned paths instead:
+//   1. `public/`-directory assets (the favicon) are hand-prefixed with
+//      `import.meta.env.BASE_URL`, normalized to strip any trailing slash so
+//      concatenation can never produce a double slash regardless of how
+//      `astro.config.mjs` declares `base`.
+//   2. `src/assets/`-directory files (the two font weights) are plain ESM
+//      imports -- Astro/Vite resolves these to a base-prefixed, content-hashed
+//      URL automatically, and the identical import used by `global.css`'s
+//      `@font-face` `url()` guarantees the preloaded URL is byte-identical to
+//      the one actually fetched (a mismatched preload href does nothing).
+import "../styles/global.css";
+import fontRegularUrl from "../assets/fonts/jetbrains-mono-400.woff2";
+import fontSemiBoldUrl from "../assets/fonts/jetbrains-mono-600.woff2";
+
 interface Props {
   title: string;
+  description?: string;
 }
 
-const { title } = Astro.props;
+const {
+  title,
+  description = "dexter is a sarcastic discord bot that plays youtube audio, roasts your listening history with gemini, and remembers what you did last tuesday.",
+} = Astro.props;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const canonicalUrl = Astro.site ? new URL(Astro.url.pathname, Astro.site).toString() : Astro.url.pathname;
 ---
 
 <!doctype html>
@@ -15,10 +44,49 @@ const { title } = Astro.props;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
+    <meta name="description" content={description} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+
+    <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
+    <link rel="alternate icon" href={`${base}/favicon.ico`} />
+
+    <!-- UI-SPEC's one sanctioned exception to a zero-preload budget: both
+         self-hosted mono weights, since the display/heading/CTA text above
+         the fold is set in this family. -->
+    <link rel="preload" as="font" type="font/woff2" href={fontRegularUrl} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={fontSemiBoldUrl} crossorigin />
   </head>
   <body>
+    <a href="#main-content" class="skip-link text-label">skip to main content</a>
     <main id="main-content">
       <slot />
     </main>
   </body>
 </html>
+
+<style>
+  /* Skip link: visually hidden until focused, the very first focusable
+     element in the document (23-UI-SPEC.md "Accessibility Contract"). This
+     is a separate, focus-revealed variant of the hidden-content pattern from
+     the shared .sr-only utility, kept local to the one element that needs the
+     focus-reveal behavior rather than folded into .sr-only itself. */
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    left: var(--space-md);
+    z-index: 100;
+    background-color: var(--color-accent);
+    color: var(--color-bg);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+  }
+
+  .skip-link:focus {
+    top: var(--space-md);
+  }
+</style>
