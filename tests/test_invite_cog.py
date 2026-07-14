@@ -9,6 +9,7 @@ Tests:
 - test_invite_command_is_dm_allowed              — guild_only is False (D-06)
 - test_invite_command_has_no_cooldown            — no app_commands.checks.cooldown
 - test_invite_command_falls_back_to_config_client_id — application_id=None -> config.DISCORD_CLIENT_ID (WR-01)
+- test_invite_command_guards_against_unresolved_client_id — both falsy -> ephemeral error, no malformed URL (WR-02)
 - test_cog_does_not_construct_a_url_itself       — no literal oauth2 URL / oauth_url( in the cog (D-03)
 - test_invite_cog_registered_at_both_bot_load_sites — Phase 8 scar: bot.py dual cog-registration
 - test_invite_listed_in_help_commands            — /invite discoverable via /help (D-06)
@@ -130,6 +131,25 @@ async def test_invite_command_falls_back_to_config_client_id(monkeypatch):
         permissions_value=config.INVITE_PERMISSIONS_VALUE,
     )
     assert button.url == expected_url
+
+
+@pytest.mark.asyncio
+async def test_invite_command_guards_against_unresolved_client_id(monkeypatch):
+    """WR-02: if both bot.application_id and config.DISCORD_CLIENT_ID are
+    falsy, the command must not emit a malformed client_id=None URL -- it
+    replies with an ephemeral error instead."""
+    monkeypatch.setattr(config, "DISCORD_CLIENT_ID", 0)
+    bot = _make_bot(application_id=None)
+    interaction = _make_interaction()
+    cog = InviteCog(bot)
+
+    await InviteCog.invite_command.callback(cog, interaction)
+
+    interaction.response.send_message.assert_awaited_once()
+    kwargs = interaction.response.send_message.call_args.kwargs
+    assert kwargs.get("ephemeral") is True
+    assert "view" not in kwargs
+    assert "embed" not in kwargs
 
 
 def test_cog_does_not_construct_a_url_itself():

@@ -38,6 +38,15 @@ class InviteCog(commands.Cog):
         # committed constant is only the fallback for when there's no
         # running client (e.g. the CI drift-guard) (WR-01, 22-REVIEW.md).
         client_id = self.bot.application_id or config.DISCORD_CLIENT_ID
+        if not client_id:
+            # Both sources are falsy -- refuse to build a malformed
+            # client_id=None URL (WR-02, 22-REVIEW.md). Ephemeral: this is
+            # an owner-configuration problem, not something the invoker did.
+            await interaction.response.send_message(
+                "can't build an invite right now — my client id isn't configured. tell the owner.",
+                ephemeral=True,
+            )
+            return
 
         url = build_invite_url(
             client_id=client_id,
