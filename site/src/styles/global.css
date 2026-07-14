@@ -1,0 +1,325 @@
+/* site/src/styles/global.css
+ *
+ * The single :root token declaration for the entire landing page (23-UI-SPEC.md
+ * "Design System" / "Spacing Scale" / "Typography" / "Color" / "Radii & Borders").
+ * Every color, spacing, radius, and type-size value used anywhere on this page
+ * traces back to a variable declared here — no component may introduce a
+ * bespoke hex value or a fifth type size. The four-size cap and the two-weight
+ * cap (400/600, never 300/700/800) were checker-enforced; do not add a fifth.
+ *
+ * Also home to: @font-face (self-hosted JetBrains Mono, OFL-1.1), the minimal
+ * reset, the .sr-only utility (defined ONCE, reused by the skip link and the
+ * demo-mock transcript fallback), section background alternation, and the
+ * global prefers-reduced-motion floor — the structural version of "reduced
+ * motion is honored," so no individual component has to remember it.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Fonts — self-hosted, Latin-subset JetBrains Mono only (OFL-1.1). Body copy
+ * is the zero-download system-ui sans stack; only the mono family is ever
+ * fetched, and only two weights (400, 600) exist anywhere on the page.
+ * ------------------------------------------------------------------------ */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/jetbrains-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/jetbrains-mono-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Color — three-tier + two reserved accents (23-UI-SPEC.md "Color") */
+  --color-bg: #0a0d12; /* dominant, 60% — page background, every section */
+  --color-surface: #12161d; /* secondary, 30% — cards/panels/footer */
+  --color-accent: #ffb454; /* 10% — CTAs, links, cursor, focus ring, ">" glyph */
+  --color-disclosure: #e2793f; /* boundaries marker + offline status dot ONLY */
+  --color-border: #232a35; /* 1px hairline dividers — decorative, not a11y-load-bearing */
+  --color-text: #e7eaf0; /* primary text — ~15.7:1 on --color-bg */
+  --color-text-secondary: #93a0b0; /* captions, timestamps, footer — ~7.3:1 */
+
+  /* Spacing scale — all multiples of 4 (23-UI-SPEC.md "Spacing Scale") */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* Radii & borders (23-UI-SPEC.md "Radii & Borders") */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --border-width: 1px;
+
+  /* Typography (23-UI-SPEC.md "Typography") — exactly 4 sizes, 2 weights */
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --text-body-size: 16px;
+  --text-body-line-height: 1.6;
+  --text-label-size: 13px;
+  --text-label-line-height: 1.5;
+  --text-heading-size: 28px;
+  --text-heading-line-height: 1.2;
+  --text-display-size: 44px;
+  --text-display-line-height: 1.15;
+
+  /* Responsive scale-down (<640px) — Display and Heading only; Body/Label/h3
+   * are unchanged at every breakpoint (h3 shares the Body token by design). */
+  --text-display-size-mobile: 32px;
+  --text-heading-size-mobile: 22px;
+
+  /* Layout (23-UI-SPEC.md "Layout") */
+  --max-content-width: 1120px;
+  --gutter-mobile: var(--space-lg);
+  --gutter-desktop: var(--space-2xl);
+  --section-padding-desktop: var(--space-3xl);
+  --section-padding-mobile: var(--space-2xl);
+}
+
+/* ---------------------------------------------------------------------------
+ * Minimal reset
+ * ------------------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  font-weight: 400;
+}
+
+img,
+picture,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration-color: var(--color-accent);
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+ * Type roles
+ * ------------------------------------------------------------------------ */
+
+.text-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line-height);
+  font-weight: 400;
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+h1,
+.text-display {
+  font-size: var(--text-display-size);
+  line-height: var(--text-display-line-height);
+}
+
+h2,
+.text-heading {
+  font-size: var(--text-heading-size);
+  line-height: var(--text-heading-line-height);
+}
+
+/* h3 reuses the Body 16px size token — 600/1.3/mono vs Body's 400/1.6/sans.
+ * Never a fifth size token; the accessibility floor is never shrunk on mobile,
+ * so h3 scales exactly as Body scales (i.e. not at all) by construction. */
+h3,
+.text-h3 {
+  font-family: var(--font-mono);
+  font-size: var(--text-body-size);
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+@media (max-width: 639px) {
+  h1,
+  .text-display {
+    font-size: var(--text-display-size-mobile);
+  }
+
+  h2,
+  .text-heading {
+    font-size: var(--text-heading-size-mobile);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * .sr-only — defined once, reused everywhere a visually-hidden-but-announced
+ * element is needed (skip link, demo-mock transcript fallback). Do not
+ * hand-roll a second variant.
+ * ------------------------------------------------------------------------ */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Section background alternation (23-UI-SPEC.md "Layout" — section rhythm)
+ * ------------------------------------------------------------------------ */
+
+.section {
+  padding-top: var(--section-padding-mobile);
+  padding-bottom: var(--section-padding-mobile);
+  padding-left: var(--gutter-mobile);
+  padding-right: var(--gutter-mobile);
+}
+
+.section > .section-inner {
+  max-width: var(--max-content-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 1024px) {
+  .section {
+    padding-top: var(--section-padding-desktop);
+    padding-bottom: var(--section-padding-desktop);
+    padding-left: var(--gutter-desktop);
+    padding-right: var(--gutter-desktop);
+  }
+}
+
+.section--dominant {
+  background-color: var(--color-bg);
+}
+
+.section--secondary {
+  background-color: var(--color-surface);
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared cross-component primitives — the Add-to-Discord CTA button and the
+ * accent ">" glyph that leads every h2. Declared here (not in a component's
+ * scoped <style>) because the CTA anchors are injected via `set:html` (the
+ * Astro entity-escaping workaround, 23-UI-SPEC.md "HARD VERIFICATION GATE")
+ * and raw-injected HTML does not receive Astro's component-scoping attribute
+ * — a scoped style would silently fail to apply to it.
+ * ------------------------------------------------------------------------ */
+
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--text-body-size);
+  line-height: 1.2;
+  color: var(--color-bg);
+  background-color: var(--color-accent);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-md) var(--space-lg);
+  width: fit-content;
+  min-height: 44px;
+}
+
+.cta-button:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 479px) {
+  .cta-button {
+    width: 100%;
+  }
+}
+
+.h2-glyph {
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus visibility — 2px accent outline, 2px offset, on every interactive
+ * element. Never suppressed without a replacement (23-UI-SPEC.md
+ * "Accessibility Contract").
+ * ------------------------------------------------------------------------ */
+
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Flat design — no drop shadows anywhere, 1px borders only. Deliberately no
+ * reset rule declaring the property at all (not even set to "none"): a
+ * property that is never once written passes both a literal grep for the
+ * disallowed declaration AND this file's own build-time regex check without
+ * relying on a value-aware negative-lookahead, which backtracks around a
+ * bare "none" value in a way a plain substring search would not expect. */
+
+/* ---------------------------------------------------------------------------
+ * Global reduced-motion floor. Lives at the stylesheet level so no component
+ * can forget it — the structural version of the guarantee (D-04 / 23-UI-SPEC
+ * "Accessibility Contract"). Individual components (hero cursor, demo mock)
+ * may layer additional reduced-motion rules, but this is the backstop.
+ * ------------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
