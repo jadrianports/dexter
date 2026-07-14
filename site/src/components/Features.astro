@@ -1,0 +1,77 @@
+---
+// site/src/components/Features.astro
+//
+// PORT-01: the six-feature showcase. Copy is used verbatim from
+// 23-UI-SPEC.md's Copywriting Contract -- backtick-wrapped slash commands are
+// mechanically converted to <code> spans (no wording change). Grid: 1 column
+// <640px, 2 columns 640-1023px, 3 columns >=1024px (23-UI-SPEC.md "Responsive
+// Behavior").
+//
+// Feature 3 deliberately names the gap D-06 disclosed out loud -- the mock
+// can't show the five-button now-playing panel, so the feature list names it
+// directly. Do not soften or drop that sentence.
+import FeatureCard from "./FeatureCard.astro";
+
+const features = [
+  {
+    title: "full youtube playback",
+    bodyHtml:
+      "queues, skips, seeks, loops, and applies a genuinely unnecessary number of audio filters. bassboost included, regret not included.",
+  },
+  {
+    title: "an ai with opinions",
+    bodyHtml:
+      "<code>/ask</code> and <code>/roast</code> are grounded in what you've actually listened to — gemini, wired to real play history. it remembers, so it can hold it against you.",
+  },
+  {
+    title: "a five-button now-playing panel",
+    bodyHtml:
+      "play/pause, skip, loop, shuffle, and stop, live on the embed. the demo above can't show it — this is the part you're missing.",
+  },
+  {
+    title: "long-term memory",
+    bodyHtml:
+      "pgvector-backed recall surfaces old habits at the worst possible moments — and <code>/memory forget</code> deletes it all, verbatim, on request.",
+  },
+  {
+    title: "unprompted personality",
+    bodyHtml:
+      "reacts to voice joins, late-night sessions, and repeat plays without being asked. it has opinions about your 3am queue.",
+  },
+  {
+    title: "vision roasts",
+    bodyHtml:
+      "post a picture in the wrong channel and gemini's vision model might have a comment. safety-gated, mercifully rare.",
+  },
+];
+---
+
+<section id="features" class="section section--dominant" aria-labelledby="features-heading">
+  <div class="section-inner">
+    <h2 id="features-heading"><span class="h2-glyph" aria-hidden="true">&gt;</span> what it actually does</h2>
+    <div class="feature-grid">
+      {features.map((f) => <FeatureCard title={f.title} bodyHtml={f.bodyHtml} />)}
+    </div>
+  </div>
+</section>
+
+<style>
+  .feature-grid {
+    margin-top: var(--space-xl);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-xl);
+  }
+
+  @media (min-width: 640px) {
+    .feature-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .feature-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+</style>
