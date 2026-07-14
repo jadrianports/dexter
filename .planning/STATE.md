@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Open House
 status: executing
-stopped_at: Completed 23-05-PLAN.md
-last_updated: "2026-07-14T12:59:07.841Z"
-last_activity: 2026-07-14 -- Phase 23 execution started
+stopped_at: Phase 23 complete — v1.4 code-complete, pending milestone close
+last_updated: "2026-07-14T13:29:44.247Z"
+last_activity: 2026-07-14 -- Phase 23 executed, verified, pushed (CI green at HEAD)
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 32
-  completed_plans: 31
-  percent: 83
+  completed_plans: 32
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,17 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 23 (portfolio-surface-ci-cd) — EXECUTING
-Plan: 7 of 7
-Status: Ready to execute
-Last activity: 2026-07-14 -- Phase 23 execution started
+Phase: 23 (portfolio-surface-ci-cd) — COMPLETE ✓
+Plan: 7 of 7 complete
+Status: Phase verified (human_needed for 3 deferred items); v1.4 "Open House" code-complete — pending milestone close
+Last activity: 2026-07-14 -- Phase 23 executed (7 plans), verified, pushed to origin/main; CI green at HEAD 3c39558
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
+
+**Phase 23 close notes:** 27 commits pushed to origin/main (149-commit P19–22 baseline in 23-01 + Phase 23 build). CI green at exact HEAD. Three requirements deliberately deferred by the user (blocked-on-human, tracked in 23-HUMAN-UAT.md):
+- PORT-02 — two verbatim real Dexter lines for the demo mock (placeholder tokens intact; no invented lines)
+- CICD-02 — enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first pages.yml run
+- CICD-03 — GHCR package-visibility flip + first v* tag release.yml run
 
 ## Performance Metrics
 
