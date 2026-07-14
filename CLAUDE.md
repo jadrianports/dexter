@@ -42,6 +42,9 @@ dexter/
 │   ├── help.py                    # /help
 │   ├── ops.py                     # /leaderboard, /skips, /stats (Phases 8/12)
 │   ├── library.py                 # /favorite(s), /playlist group, /jam group (+ /jam suggest, Phase 14) (Phases 7/12/14)
+│   ├── admin.py                   # Phase 19: /setup group (channel|roasts|vision) — manage_guild-gated per-guild config
+│   ├── invite.py                  # Phase 22: public /invite (embed + Add-to-Discord button from build_invite_url)
+│   ├── ops.py                     # + Phase 20: /guilds owner group (list|silence|unsilence|leave|block|unblock)
 │   └── events.py                  # Unprompted roasts, reactions, mood, status, idle, proactive callbacks (P16), vision roasts (P17)
 ├── logic/                         # Phase 10: pure, mock-free decision logic (TDD seam)
 │   ├── playback.py                # TrackEndAction enum + 5 keyword-only playback fns
@@ -51,11 +54,14 @@ dexter/
 │   ├── taste.py                   # Phase 13/14: classify_artist bands + positive-taste selection
 │   ├── proactive.py               # Phase 16: should_fire_proactive_callback gate (chance + daily cap)
 │   ├── vision.py                  # Phase 17: should_fire_vision_roast gate (chance + per-user cooldown)
+│   ├── guild_config.py            # Phase 18/20: decide_ambient_channel (+ silenced) + is_ambient_channel + decide_interaction_allowed + AmbientSurface enum
+│   ├── invite.py                  # Phase 22: build_invite_url() — sole OAuth2 URL constructor (only documented `import discord` in logic/)
 │   └── skip_stats.py              # /skips rate computation (Phase 12)
 ├── services/
 │   ├── youtube.py                 # yt-dlp: search, download, metadata extraction, resolution cache, self-heal
-│   ├── gemini.py                  # Gemini API: chat, music recs, image gen, embed() (RAG)
-│   ├── memory.py                  # Phase 11: RAG long-term memory (recall/remember/dedup/decay)
+│   ├── gemini.py                  # Gemini API: chat, music recs, image gen, embed() (RAG) — Phase 20 per-guild usage tagging
+│   ├── memory.py                  # Phase 11: RAG long-term memory (recall/remember/dedup/decay); Phase 21 guild_scoped opt-in read path
+│   ├── guild_config.py            # Phase 18/20: GuildConfigService — boot-loaded, fail-closed, cache-only per-guild config + blocklist/silence
 │   ├── metrics.py                 # Phase 6: PerfMetrics rolling aggregates for /stats
 │   ├── lyrics.py                  # Genius + AZLyrics + LRCLIB
 │   ├── queue_persistence.py       # Phase 4: persist/restore queues (guild_queues JSONB), smart-rejoin
@@ -78,9 +84,13 @@ dexter/
 │   └── logger.py                  # File + Discord channel logging
 ├── scripts/                       # Phase 4/5 ops: deploy.sh, backup.sh, keepalive.sh,
 │                                  #   lifecycle-policy.json, seed_restore_test.py
-├── tests/                         # pytest suite (pure unit tests + live-DB integration tests)
+├── tests/                         # pytest suite (pure unit tests + live-DB integration tests + invite/site drift-guards)
+├── site/                          # Phase 23: Astro static landing page (feature showcase + Add-to-Discord), GitHub Pages subpath /dexter
+├── .github/workflows/             # Phase 18/23: ci.yml (ruff + pytest on pgvector service container), pages.yml (Pages deploy), release.yml (GHCR image on v* tags)
 ├── data/cache/                    # Audio cache (Postgres data lives in a Docker volume, not here)
 ├── requirements.txt
+├── requirements-dev.txt           # Phase 18: ruff (lint+format), pinned dev tooling
+├── pyproject.toml                 # Phase 18: ruff config (single lint+format tool)
 ├── .env                           # DISCORD_TOKEN, GEMINI_API_KEY, GENIUS_TOKEN, DATABASE_URL, OWNER_ID, …
 └── README.md
 ```
@@ -258,6 +268,11 @@ CREATE TABLE IF NOT EXISTS guild_config (
     joined_at          TIMESTAMPTZ DEFAULT now(),
     updated_at         TIMESTAMPTZ DEFAULT now()
 );
+-- Phase 19: independent per-guild ambient/vision roast toggles (ALTER-added, default true).
+-- Threaded through the pure/service seam via the required keyword-only AmbientSurface enum so
+-- ROAST/PRESENCE vs VISION can be silenced independently.
+ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS ambient_roasts_enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS vision_roasts_enabled  BOOLEAN NOT NULL DEFAULT true;
 
 -- Phase 20 / D-01: the owner kill-switch's persistent blacklist gets its OWN table,
 -- deliberately separate from guild_config, so Phase 21's guild_config purge (MEM-04) can
@@ -461,6 +476,15 @@ TEXT_SAFETY_THRESHOLD = "BLOCK_ONLY_HIGH"           # permissive-but-explicit �
 
 > All `/memory` subcommands are strictly self-scoped — no `target` arg, no way to inspect another user.
 
+### Admin (Phase 19) — `manage_guild`-gated, per-guild
+| Command | Args | Cooldown |
+|---------|------|----------|
+| `/setup channel` | `<#channel>` (designate the ambient/response channel via a native channel picker; send-permission validated at write) | — |
+| `/setup roasts` | `[on\|off]` (toggle ambient/voice roasts for this guild) | — |
+| `/setup vision` | `[on\|off]` (toggle vision/image roasts for this guild, independently of roasts) | — |
+
+> `/setup` is gated by an inline `manage_guild` check (`default_permissions` is a UI hint only, never the gate — ONBOARD-02). Ambient/unprompted surfaces stay silent in a guild until `/setup channel` runs; core commands work immediately on join.
+
 ### Ops (Phases 8/12)
 | Command | Args | Cooldown |
 |---------|------|----------|
@@ -468,10 +492,21 @@ TEXT_SAFETY_THRESHOLD = "BLOCK_ONLY_HIGH"           # permissive-but-explicit �
 | `/skips` | — (skip-rate analytics) | — |
 | `/stats` | — (owner-only) | — |
 
+### Owner control plane (Phase 20) — `is_owner()`-gated
+| Command | Args | Cooldown |
+|---------|------|----------|
+| `/guilds list` | — (every server Dexter is in, sorted by per-guild Gemini usage — RATE-01) | — |
+| `/guilds silence\|unsilence` | `<guild_id>` (stay joined but suppress ambient + commands) | — |
+| `/guilds leave` | `<guild_id>` (force-leave; teardown mirrors `clear_persisted()`, purges guild data via `on_guild_remove`) | — |
+| `/guilds block\|unblock` | `<guild_id> [reason]` (persistent `guild_blocklist`; a blocked re-invite is refused block-check-first) | — |
+
+> Block/silence are enforced at ONE choke point — `DexterCommandTree.interaction_check` for slash commands (owner-bypassed) + the CONFIG-02 ambient resolver's `silenced` early-return for unprompted surfaces (OWNER-05). No per-cog checks.
+
 ### Utility
 | Command | Args | Cooldown |
 |---------|------|----------|
 | `/help` | — | 5s |
+| `/invite` | — (public; embed + "Add to Discord" link button from `build_invite_url()`, works in DMs — Phase 22) | 5s |
 
 > `/health` is an aiohttp HTTP endpoint on `0.0.0.0:8000` (not a slash command) — returns degraded-503 when MusicCog fails to load (Phases 5/8/9).
 
@@ -822,7 +857,25 @@ Additive 3rd ambient cadence: pure `logic/proactive.py` gate (`PROACTIVE_CALLBAC
 ### Phase 17 — Vision / Multimodal Roasting ✅ COMPLETE
 Cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image roasts via `gemini-2.5-flash` vision; before-download mime/size gate (`MAX_VISION_IMAGE_BYTES=8MB`); safety-block = **silent skip** (never a fallback template); `_build_safety_settings` retrofit across all 3 `generate_content` sites (VIS-03). `logic/vision.py` pure gate; reuses Phase 16 opt-out.
 
-> **Milestone status:** v1.0 (Phases 1–4), v1.1 "Live & Lethal" (Phases 5–8), and v1.2 "Sharper & Smarter" (Phases 9–12) all shipped (code), archived & tagged — `v1.0`/`v1.1`/`v1.2`. **v1.3 "Taste Brain" (Phases 13–17) is CODE-COMPLETE + code-verified on `main` (18 plans, suite green through 848 tests), pending milestone close (`/gsd:complete-milestone`) — the whole v1.3 stack is still UNPUSHED.** The 24/7 live deploy + the Phase 03–06/09/11/13–17 live-Discord UAT tail remain **parked** behind an always-on residential host. See `.planning/PROJECT.md` + `.planning/STATE.md` for authoritative current state.
+### Phase 18 — Per-Guild Config Foundation & CI Gate ✅ COMPLETE
+The hardcoded single-channel assumption is gone. `guild_config` table + pure `logic/guild_config.py` seam + boot-loaded, fail-closed `services/guild_config.py::GuildConfigService` cache (zero per-event Neon round-trips) drive every ambient surface; `_resolve_dexter_channel`/`_get_ambient_channel` deleted, both bare-equality `DEXTER_CHANNEL_ID` gates replaced, the env var demoted to a home-guild bootstrap seed (`ON CONFLICT DO NOTHING`, D-09) and removed from `cogs/` entirely — **an unconfigured guild is structurally silent** (CONFIG-01…05). Ruff adopted as a blocking lint/format gate; `.github/workflows/ci.yml` runs ruff + pytest against a `pgvector/pgvector:pg16` service container on every push/PR with zero secrets (CICD-01).
+
+### Phase 19 — Onboarding & Admin Setup ✅ COMPLETE
+Any admin can turn Dexter "on" for their own guild. Two per-guild toggle columns (`ambient_roasts_enabled`, `vision_roasts_enabled`) + a required keyword-only `AmbientSurface` enum threaded through the pure/service seam (a surface must name itself to fire — also closed the CONFIG-04 reaction hole); guild-lifecycle glue (`on_guild_join`/`on_guild_remove`, boot backfill welcoming offline-invited guilds exactly once, home-guild-only startup, owner join/leave notices); new `cogs/admin.py` `/setup` group (channel/roasts/vision) with an inline `manage_guild` gate (ONBOARD-01…05).
+
+### Phase 20 — Owner Control Plane & Rate Observability ✅ COMPLETE
+The reactive half of safety, at ONE choke point. Dedicated `guild_blocklist` table (own table — D-01, so Phase 21's purge stays a clean DELETE) + first reader/writer of `guild_config.silenced`; pure `silenced` early-return in `decide_ambient_channel` + `decide_interaction_allowed`; `DexterCommandTree.interaction_check` enforces block/silence for every slash command (owner-bypassed) + `on_guild_join` block-check-first re-invite refusal; `GuildConfigService` extended with an O(1) `_blocked` set + cache-only silence reads + write-then-invalidate setters; TOCTOU pre-send re-checks on the reply-after-Gemini paths; per-guild Gemini usage tagging/counters + a `/guilds` owner group (OWNER-01…06, RATE-01).
+
+### Phase 21 — Memory Scoping & Guild Data Lifecycle ✅ COMPLETE
+Hybrid scoping shipped (the Descope Rule's tripwires never fired). `recall()`/`search_memories()` gained an **explicit per-call-site `guild_scoped=True` opt-in** adding a `(guild_id = $N OR guild_id IS NULL)` clause — every unprompted/ambient surface opts in, `/ask` stays deliberately global (MEM-02); the legacy `guild_id IS NULL` corpus stays globally recallable (MEM-03). Write path (dedup, cap-evict) untouched — still `user_id`-scoped (CR-13-01 scar not reopened). `database.purge_guild_data` hard-deletes a departed guild's rows from four tables from `bot.py::on_guild_remove` (best-effort); `guild_blocklist` excluded by design (MEM-01…05).
+
+### Phase 22 — Invite Plumbing ✅ COMPLETE
+`logic/invite.py::build_invite_url()` — the sole least-privilege OAuth2 constructor (the one documented `import discord` exception in `logic/`) over `INVITE_PERMISSIONS_VALUE=309240908864` (ten named permissions, negatively asserted free of Administrator/Manage Guild/Manage Roles); public `/invite` (`cogs/invite.py`) returns an embed + "Add to Discord" link button built only from that function, works in DMs, prefers `bot.application_id` so forks emit their own client id; CI drift-guard (`tests/test_invite_drift_guard.py`) fails the build if any tracked doc's invite URL drifts (INVITE-01/02).
+
+### Phase 23 — Portfolio Surface & CI/CD ✅ COMPLETE
+The recruiter-facing deliverable. Static Astro `/site` landing page (hero + feature showcase + "Add to Discord" from the same invite source of truth, GitHub Pages subpath `/dexter`); README rewritten as an architecture case study (badges, CI status, working invite link); honest scope-boundary docs (100-guild wall, on-demand hosting, full-savage + reactive-kill-switch tradeoff, hybrid memory scoping — PORT-04); `pages.yml` + `release.yml` (GHCR image on `v*` tags) + a `site_drift_guard` test (PORT-01/03/04). **PORT-02 (demo-GIF Dexter lines), CICD-02 (Pages toggle), CICD-03 (GHCR flip) deferred blocked-on-human** — owner-performed GitHub-UI / live-bot steps (23-HUMAN-UAT.md).
+
+> **Milestone status:** v1.0–v1.4 all shipped (code), archived & tagged — `v1.0`/`v1.1`/`v1.2`/`v1.3`/`v1.4`. **v1.4 "Open House" (Phases 18–23, 32 plans, 78 tasks) closed 2026-07-14** — 28/31 requirements shipped at the code level (3 deferred blocked-on-human: PORT-02, CICD-02, CICD-03), pushed to `origin/main`, CI green against a live pgvector container. The 24/7 live deploy + the Phase 03–06/09/11/14–22 live-Discord UAT tail (36 items) remain **parked** behind an always-on residential host — zero code gaps. Next: `/gsd:new-milestone`. See `.planning/PROJECT.md` + `.planning/STATE.md` for authoritative current state.
 
 ---
 
@@ -845,6 +898,9 @@ Cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image
 15. **A safety-blocked vision reaction is a SILENT skip — never a visible refusal or the generic rate-limit fallback template (Phase 17 / VIS-02)**
 16. **`/memory forget` must be a real hard-delete (rows + embeddings) — it is the trust escape hatch proactive callbacks (Phase 16) hard-depend on shipping first**
 17. **Guild-scoping on memory recall is an EXPLICIT per-call-site opt-in (`guild_scoped=True`), never inferred from `guild_id` presence** — `/ask` also passes a real `guild_id` and must stay global (MEM-02); only unprompted/ambient recall (`/roast`, ambient roasts, proactive callbacks, the music-command callback, the auto-queue taste blend) opts in (Phase 21)
+18. **Ambient/unprompted surfaces stay silent in a guild until `/setup channel` runs — an unconfigured guild is structurally silent (never a system-channel/first-writable fallback)** — the pre-`/setup` fallback chain would fire roasts/vision at strangers within minutes of an invite, the exact abuse surface the kill-switch only mitigates reactively; core commands (`/play`, `/ask`, …) work immediately on join (Phase 18/19, CONFIG-04)
+19. **The block/silence kill-switch is enforced at ONE choke point each — `DexterCommandTree.interaction_check` for slash commands (owner-bypassed) and the CONFIG-02 ambient resolver's `silenced` early-return for unprompted surfaces — never per-cog checks** (Phase 20, OWNER-05); reads are cache-only (no Neon on the hot path) and TOCTOU-safe (re-checked immediately before the final send on reply-after-Gemini paths, OWNER-06)
+20. **`guild_blocklist` is its OWN table and is NEVER purged by `purge_guild_data`** — a kicked abuser's block must outlive their guild data so a re-invite is refused; the four-table purge list stays hardcoded SQL literals so it can never sweep the blocklist in (Phase 20 D-01 / Phase 21 MEM-04)
 
 ---
 
@@ -898,9 +954,13 @@ Cadence-gated (`VISION_ROAST_CHANCE=0.12` + per-user cooldown, priority-2) image
 - **Vision reuses a DEDICATED `_generate_vision_roast` (str|None), never the ambient always-str generator** — the ambient path collapses safety-block AND transport-failure into one `return fallback_line`, which would leak a visible template for a safety-blocked image (VIS-02). Success→line, transport-except→fallback, empty/blocked→`None` silent-skip. `chat()` already returns `None`-no-raise on empty/blocked (Phase 17)
 - **Vision mime allowlist EXCLUDES gif** (Gemini image-understanding 400s on GIF) and normalizes `content_type` (strip `;charset=`, `None`→reject); the mime/size gate runs BEFORE `attachment.read()`/download; the free structural gate runs BEFORE the DB opt-out lookup (WR-01/02/03 close-out fixes, Phase 17)
 
-**Phases 18–21 (per-guild config, onboarding, owner control plane, memory scoping):**
+**Phases 18–23 (per-guild config, onboarding, owner control plane, memory scoping, invite, portfolio):**
 - **`search_memories`'s SQL placeholder numbers are computed from `len(params)`, not hardcoded** — two optional clauses now exist (`kind`, `guild_id`), each appended only when its arg is set; a future third optional clause must follow the same discipline or it will silently bind to the wrong `$N` (Phase 21)
 - **`recall()` forwards `guild_id=` to `search_memories` ONLY when `guild_scoped=True`** — passing it unconditionally (even as `None`) would break existing narrow-signature test doubles/fakes across the recall call sites, and would risk emitting a degenerate `guild_id IS NULL`-only filter instead of omitting the clause entirely (Phase 21, following the Phase 14 `kind`-clause precedent)
 - **`remember()`'s k=1 dedup search stays fully `user_id`-scoped — untouched by the Phase 21 guild-scoping work** (CR-13-01 scar); guild-scoping was deliberately added to the READ path (`recall`/`search_memories`) only, never to dedup or `MEMORY_MAX_PER_USER` cap-eviction, which stay global per-user budgets (Phase 21, D-02)
 - **`purge_guild_data`'s four-table DELETE list is four hardcoded SQL literals, never a loop or a schema-catalog introspection** — a dynamic form would eventually and silently sweep up `guild_blocklist` too; the reviewability of the literal list IS the control (Phase 21, T-21-03)
 - **`purge_guild_data` raises on failure by design (no internal try/except)** — the best-effort swallow lives at the `bot.py::on_guild_remove` call site, mirroring `on_guild_join`'s WR-04 discipline, keeping the helper itself honestly testable (Phase 21)
+- **`ambient_roasts_enabled`/`vision_roasts_enabled` are threaded via a REQUIRED keyword-only `AmbientSurface` enum, not read ad hoc** — a surface must name itself (`ROAST`/`PRESENCE`/`VISION`) to resolve a channel, so a new ambient surface cannot silently bypass the per-guild toggle gate; `TypeError` on omission is the guardrail (Phase 19, D-22)
+- **`build_invite_url()` is the ONLY invite-URL constructor and the one sanctioned `import discord` inside `logic/`** — every surface (the `/invite` embed, docs, the site) must derive from it; the CI drift-guard (`test_invite_drift_guard.py`, extended to `site/dist/` in Phase 23) fails the build on any drift and has a positive control proving it's not a no-op (Phase 22/23, INVITE-02)
+- **`/invite` prefers `bot.application_id` over a hardcoded client id** so a fork emits its OWN invite; `INVITE_PERMISSIONS_VALUE=309240908864` is negatively asserted free of Administrator/Manage Guild/Manage Roles by a CI test — widen it only through that assertion (Phase 22)
+- **CI (`.github/workflows/ci.yml`) is `pull_request` (never `pull_request_target`), top-level `permissions: contents: read`, zero secrets, pgvector service container** — this least-privilege posture is the standing contract; `pages.yml`/`release.yml` (Phase 23) are CI-gated and only `release.yml` (GHCR on `v*` tags) needs elevated scope (Phase 18/23)
