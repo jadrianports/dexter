@@ -1,5 +1,5 @@
-# Dexter Discord bot image — multi-arch (amd64 on Koyeb/CI, arm64 on dev machines).
-# Koyeb builds this Dockerfile directly from git (K-11); docker-compose.yml is local-dev only (K-12).
+# Dexter Discord bot image — multi-arch (amd64 on CI/dev PCs, arm64 on dev machines).
+# Built by CI / any Docker host directly from git (K-11); docker-compose.yml is local-dev only (K-12).
 # Secrets are injected at runtime via env vars — never bake token/key literals into image layers (T-04-05).
 FROM python:3.11-slim-bookworm
 
