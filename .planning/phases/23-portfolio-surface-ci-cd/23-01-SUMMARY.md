@@ -79,7 +79,18 @@ completed: 2026-07-14
 None — plan executed exactly as written. Task 2's CI-repair contingency (Buckets A/B/C, 3-iteration bound) was never invoked because the run went green on the first attempt.
 
 ## Issues Encountered
-None.
+
+**[Rule 1 - Bug] Reverted a false requirements-completion record.** This plan's frontmatter lists
+`requirements: [PORT-03, CICD-02, CICD-03]`, and the standard post-execution step
+(`requirements mark-complete`) checked all three off in `REQUIREMENTS.md` as a mechanical
+consequence. That is factually wrong: this plan only pushes the CI prerequisite — the README
+rewrite (PORT-03), the Pages workflow (CICD-02), and the GHCR workflow (CICD-03) do not exist yet
+(verified: `README.md` is still 2 lines, no `pages.yml`/`release.yml` in `.github/workflows/`).
+Marking them "Complete" here would corrupt the traceability table this project relies on, on a
+phase whose entire thesis is honest disclosure. Reverted `REQUIREMENTS.md` PORT-03/CICD-02/CICD-03
+back to `[ ]` Pending — they will be genuinely marked complete by whichever later plan (23-05/23-06
+per the phase's plan sequence) actually delivers them. `CICD-01` (already `[x]` from Phase 18) was
+left untouched.
 
 ## CI Run Record (for plan 23-07's badge)
 
@@ -100,3 +111,7 @@ None - no external service configuration required.
 ---
 *Phase: 23-portfolio-surface-ci-cd*
 *Completed: 2026-07-14*
+
+## Self-Check: PASSED
+
+All 4 modified files and both commit hashes (`cff65e9`, `a88f957`) confirmed present via `git log --oneline --all` and filesystem checks.

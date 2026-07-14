@@ -253,7 +253,7 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 1**
 
-- [ ] 23-01-PLAN.md — D-13: ruff-format + retire the stale Pitfall-7 comment, push Phases 19–22 (147 commits), watch CI, repair to green at HEAD
+- [x] 23-01-PLAN.md — D-13: ruff-format + retire the stale Pitfall-7 comment, push Phases 19–22 (147 commits), watch CI, repair to green at HEAD
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -310,4 +310,4 @@ Full phase details, success criteria, and decisions archived in
 | 20. Owner Control Plane & Rate Observability | v1.4 | 7/7 | Complete    | 2026-07-13 |
 | 21. Memory Scoping & Guild Data Lifecycle | v1.4 | 4/4 | Complete   | 2026-07-13 |
 | 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
-| 23. Portfolio Surface & CI/CD | v1.4 | 0/7 | Planned | - |
+| 23. Portfolio Surface & CI/CD | v1.4 | 1/7 | In Progress|  |

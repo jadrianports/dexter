@@ -4,14 +4,14 @@ milestone: v1.4
 milestone_name: Open House
 status: executing
 stopped_at: Phase 23 UI-SPEC approved
-last_updated: "2026-07-14T09:32:35.183Z"
-last_activity: 2026-07-14 -- Phase 23 planning complete
+last_updated: "2026-07-14T10:14:41.505Z"
+last_activity: 2026-07-14 -- Phase 23 execution started
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 25
-  completed_plans: 25
-  percent: 83
+  total_plans: 32
+  completed_plans: 26
+  percent: 81
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 22 — invite-plumbing
+**Current focus:** Phase 23 — portfolio-surface-ci-cd
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
+Phase: 23 (portfolio-surface-ci-cd) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-07-14 -- Phase 23 planning complete
+Last activity: 2026-07-14 -- Phase 23 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -75,6 +75,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 22 P01 | 12min | 2 tasks | 4 files |
 | Phase 22 P02 | 12min | 2 tasks | 4 files |
 | Phase 22 P03 | 25min | 2 tasks | 3 files |
+| Phase 23 P01 | 12min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,7 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 22-02]: cogs/invite.py comments avoid the literal substrings ephemeral/guild_only/checks.cooldown so the plan's grep -c == 0 acceptance checks stay exact while still documenting the deliberate omissions in prose — Mirrors the Phase 21 guild_blocklist/purge_guild_data docstring-avoidance discipline
 - [Phase 22-02]: /invite command carries no @app_commands.checks.cooldown and no DM-restriction decorator — zero I/O, static output, DM support is a hard requirement (D-06)
 - [Phase 22]: [Phase 22-03]: Reworded two pre-existing prose comments (config.py INVITE_SCOPES comment, logic/__init__.py package docstring) that legitimately mentioned oauth_url( in documentation so the new single-invite-URL-constructor scan (T-22-03) doesn't false-positive on prose
+- [Phase 23-01]: D-13 discharged clean on first CI run — 1160 DB-inclusive tests pass against real pgvector container, no repair needed
 
 ### Pending Todos
 
@@ -160,7 +162,7 @@ Prior-milestone detail also in MILESTONES.md v1.2 "Known Gaps"; v1.3 accomplishm
 
 ## Session Continuity
 
-Last session: 2026-07-14T08:58:26.902Z
+Last session: 2026-07-14T10:13:23.145Z
 Stopped at: Phase 23 UI-SPEC approved
 Resume file: 
-.planning/phases/23-portfolio-surface-ci-cd/23-UI-SPEC.md
+None
