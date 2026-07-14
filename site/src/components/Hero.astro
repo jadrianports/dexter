@@ -1,0 +1,97 @@
+---
+// site/src/components/Hero.astro
+//
+// h1, subhead, CTA #1, scroll-to-demo micro-link, and the reduced-motion-aware
+// blinking cursor (23-UI-SPEC.md "Component Split" / "Copywriting Contract").
+// Copy below is used verbatim from the Copywriting Contract -- do not rewrite
+// or "punch up"; it is already voice-checked against CLAUDE.md Critical Rules
+// 6-9.
+import { INVITE_URL } from "../config";
+
+// HARD VERIFICATION GATE (23-UI-SPEC.md "Invite URL Sourcing"): Astro
+// HTML-entity-escapes `&` inside interpolated attribute values, which would
+// make the D-02 byte-comparison drift scan report permanent false-positive
+// drift. `set:html` on a small raw HTML fragment bypasses escaping for just
+// this one attribute -- the same workaround plan 23-03 landed, applied
+// identically here and in Cta.astro so the two anchors can never diverge.
+const ctaHtml = `<a href="${INVITE_URL}" class="cta-button">add to discord</a>`;
+---
+
+<section id="hero" class="section section--dominant" aria-labelledby="hero-heading">
+  <div class="section-inner hero-inner">
+    <p class="hero-kicker text-label" aria-hidden="true">dexter<span class="cursor">_</span></p>
+    <h1 id="hero-heading">dexter plays your music and judges your taste.</h1>
+    <p class="hero-subhead">
+      a sarcastic discord bot that plays youtube audio, roasts your listening history with
+      gemini, and remembers what you did last tuesday. mostly reliable. occasionally mean.
+    </p>
+    <div class="hero-cta">
+      <Fragment set:html={ctaHtml} />
+    </div>
+    <a href="#demo" class="hero-demo-link text-label">see it in action ↓</a>
+  </div>
+</section>
+
+<style>
+  .hero-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-lg);
+  }
+
+  .hero-kicker {
+    color: var(--color-text-secondary);
+    margin: 0;
+  }
+
+  .cursor {
+    color: var(--color-accent);
+    animation: blink 1s steps(1, jump-none) infinite;
+  }
+
+  @keyframes blink {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* Belt-and-suspenders on top of global.css's blanket reduced-motion floor:
+     a visitor with reduced motion sees a static, non-blinking cursor
+     character, never a half-second of a stalled blink (23-UI-SPEC.md
+     "Accessibility Contract"). */
+  @media (prefers-reduced-motion: reduce) {
+    .cursor {
+      animation: none;
+      opacity: 1;
+    }
+  }
+
+  .hero-subhead {
+    font-family: var(--font-sans);
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-line-height);
+    color: var(--color-text);
+    max-width: 640px;
+    margin: 0;
+  }
+
+  .hero-cta {
+    margin-top: var(--space-sm);
+  }
+
+  .hero-demo-link {
+    display: inline-block;
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  .hero-demo-link:hover {
+    text-decoration: underline;
+  }
+</style>

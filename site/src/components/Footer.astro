@@ -1,0 +1,46 @@
+---
+// site/src/components/Footer.astro
+//
+// The one minimal footer line: text-secondary, Label size, all lowercase
+// (23-UI-SPEC.md "Copywriting Contract" / "Layout" — Footer = Secondary
+// background in the section alternation).
+---
+
+<footer class="site-footer text-label text-secondary">
+  <p>
+    dexter &middot; built by jadrianports &middot;
+    <a href="https://github.com/jadrianports/dexter" rel="noopener noreferrer">github &#8599;</a>
+    &middot;
+    <a href="https://github.com/jadrianports/dexter/blob/main/README.md" rel="noopener noreferrer"
+      >readme &#8599;</a
+    >
+  </p>
+</footer>
+
+<style>
+  .site-footer {
+    background-color: var(--color-surface);
+    padding: var(--space-lg);
+    text-align: center;
+  }
+
+  @media (min-width: 1024px) {
+    .site-footer {
+      padding: var(--space-lg) var(--space-2xl);
+    }
+  }
+
+  .site-footer p {
+    margin: 0;
+  }
+
+  .site-footer a {
+    color: var(--color-text-secondary);
+    text-decoration: none;
+  }
+
+  .site-footer a:hover {
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+</style>

@@ -1,0 +1,65 @@
+---
+// site/src/components/Cta.astro
+//
+// The closing section: heading, body line, CTA #2 (identical label to CTA #1
+// so the two read as the same action, not two different offers -- D-05), and
+// the "browse the code" link (23-UI-SPEC.md "Copywriting Contract").
+import { INVITE_URL } from "../config";
+
+// Same set:html workaround as Hero.astro, applied identically -- see that
+// file's comment for the full HARD VERIFICATION GATE rationale. The two
+// anchors must never diverge.
+const ctaHtml = `<a href="${INVITE_URL}" class="cta-button">add to discord</a>`;
+---
+
+<section id="cta" class="section section--dominant" aria-labelledby="cta-heading">
+  <div class="section-inner cta-inner">
+    <h2 id="cta-heading"><span class="h2-glyph" aria-hidden="true">&gt;</span> add it. see what happens.</h2>
+    <p class="cta-body">one click, ten permissions, zero admin rights. dexter joins, waits for <code>/setup</code>, and stays quiet until you tell it otherwise.</p>
+    <div class="cta-button-wrap">
+      <Fragment set:html={ctaHtml} />
+    </div>
+    <a href="https://github.com/jadrianports/dexter" class="cta-secondary-link text-label">browse the code ↗</a>
+  </div>
+</section>
+
+<style>
+  .cta-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-lg);
+  }
+
+  .cta-body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-line-height);
+    color: var(--color-text);
+    max-width: 640px;
+    margin: 0;
+  }
+
+  .cta-body code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background-color: var(--color-surface);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0 var(--space-xs);
+  }
+
+  .cta-button-wrap {
+    margin-top: var(--space-sm);
+  }
+
+  .cta-secondary-link {
+    display: inline-block;
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  .cta-secondary-link:hover {
+    text-decoration: underline;
+  }
+</style>
