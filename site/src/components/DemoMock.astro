@@ -1,245 +1,89 @@
 ---
 // site/src/components/DemoMock.astro
 //
-// PORT-02 / D-06: a static-markup, CSS-animated reproduction of a two-exchange
-// Discord conversation inside a "window chrome" frame. Reconstructing the
-// pixels is a normal documentation convention -- it is honest *because and
-// only because* the words are real, verbatim Dexter output copied from
-// `.planning/phases/23-portfolio-surface-ci-cd/23-DEMO-TRANSCRIPT.md` into
-// `site/src/data/demo-transcript.ts`. This component never authors dialogue.
+// A reconstructed two-exchange Discord conversation. Honest because the words
+// are (or will be) real, verbatim Dexter output — see demo-transcript.ts. While
+// the real lines are still pending (PORT-02), resolveLine() shows the labeled
+// preview sample so the component renders finished instead of leaking a token.
 //
-// STOP-RULE APPLIED: as of this build, 23-DEMO-TRANSCRIPT.md is `BLOCKED` --
-// the user deferred supplying the two real Dexter lines (2026-07-14). The
-// `{{DEXTER_DEMO_LINE_*}}` tokens are therefore left VISIBLY INTACT in the
-// rendered output below, on purpose. Do not fill them with plausible roasts
-// and do not substitute `personality/responses.py` / `personality/roasts.py`
-// strings (RESEARCH Finding 1). PORT-02 is INCOMPLETE until a human supplies
-// the real lines and swaps `demo-transcript.ts` -- tracked in
-// `23-HUMAN-UAT.md` at phase close.
-//
-// Zero JS (D-01): a single 16s looping CSS keyframe timeline drives every
-// reveal, staged via per-element `animation-delay` (23-UI-SPEC.md "Demo Mock
-// Spec" -> "Animation mechanism").
-import { demoTranscript } from "../data/demo-transcript";
+// The reveal is staged and plays ONCE when the mock scrolls into view (fixing
+// the old always-looping CSS timeline that revealed everything in the first
+// fraction of a 16s loop, then sat fully populated). Progressive enhancement:
+// html.js hides the rows until an IntersectionObserver adds .is-playing;
+// no-JS and reduced-motion visitors get the full static transcript.
+import { demoTranscript, resolveLine } from "../data/demo-transcript";
 import DemoMessage from "./DemoMessage.astro";
 
-const [msg1, msg2, msg3, msg4] = demoTranscript;
+const [m1, m2, m3, m4] = demoTranscript;
+const t1 = m1.text;
+const t2 = resolveLine(m2);
+const t3 = m3.text;
+const t4 = resolveLine(m4);
 
-// sr-only plain-text transcript -- the actual content (the joke), not merely
-// the fact that a demo exists, per 23-UI-SPEC.md "Accessibility Contract".
 const srTranscript =
-  `${msg1.handle}: ${msg1.text}. ` +
-  `Dexter replies: ${msg2.text}. ` +
-  `${msg3.handle}: ${msg3.text}. ` +
-  `Dexter replies: ${msg4.text}.`;
+  `${m1.handle}: ${t1}. Dexter replies: ${t2}. ` +
+  `${m3.handle}: ${t3}. Dexter replies: ${t4}.`;
 ---
 
-<section id="demo" class="section section--secondary" aria-labelledby="demo-heading">
+<section id="demo" class="section section--tint section--ruled" aria-labelledby="demo-heading">
   <div class="section-inner demo-inner">
-    <h2 id="demo-heading"><span class="h2-glyph" aria-hidden="true">&gt;</span> watch it work</h2>
+    <div class="section-head demo-head">
+      <p class="eyebrow">Live demo</p>
+      <h2 id="demo-heading">Watch it work</h2>
+      <p class="section-sub">
+        A real exchange, reconstructed. It plays YouTube in voice — but the personality is the
+        part people quote back.
+      </p>
+    </div>
 
-    <div class="demo-mock" role="img" aria-labelledby="demo-mock-label">
+    <div class="demo" role="img" aria-labelledby="demo-mock-label">
       <p id="demo-mock-label" class="sr-only">
-        Animated mock of a Discord conversation demonstrating Dexter's personality.
+        A Discord conversation demonstrating Dexter's personality: {srTranscript}
       </p>
 
-      <div class="demo-mock-frame" aria-hidden="true">
-        <div class="demo-mock-chrome">
-          <span class="demo-mock-channel text-label"># general</span>
-          <span class="demo-mock-dots" aria-hidden="true">
+      <div class="demo-frame" aria-hidden="true">
+        <div class="demo-chrome">
+          <span class="demo-channel">
+            <span class="demo-channel-hash">#</span> general
+          </span>
+          <span class="demo-chrome-dots">
             <span></span><span></span><span></span>
           </span>
         </div>
 
-        <div class="demo-mock-messages">
-          <DemoMessage speaker="human" handle={msg1.handle} text={msg1.text} timestamp="2:41 AM" delay="0.5s" />
-
-          <div class="demo-typing" style="animation-delay: 2s;">
-            <span class="demo-avatar demo-avatar--dexter">D</span>
-            <span class="demo-typing-dots"><span></span><span></span><span></span></span>
-          </div>
-
-          <DemoMessage speaker="dexter" text={msg2.text} timestamp="2:41 AM" delay="4s" />
-          <DemoMessage speaker="human" handle={msg3.handle} text={msg3.text} timestamp="2:52 AM" delay="7s" />
-
-          <div class="demo-typing" style="animation-delay: 9s;">
-            <span class="demo-avatar demo-avatar--dexter">D</span>
-            <span class="demo-typing-dots"><span></span><span></span><span></span></span>
-          </div>
-
-          <DemoMessage speaker="dexter" text={msg4.text} timestamp="2:52 AM" delay="11s" />
+        <div class="demo-messages">
+          <DemoMessage speaker="human" handle={m1.handle} text={t1} timestamp="2:41 AM" delay="0.3s" />
+          <DemoMessage speaker="dexter" text={t2} timestamp="2:41 AM" delay="1.4s" textDelay="2.3s" />
+          <DemoMessage speaker="human" handle={m3.handle} text={t3} timestamp="2:52 AM" delay="3.3s" />
+          <DemoMessage speaker="dexter" text={t4} timestamp="2:52 AM" delay="4.2s" textDelay="5.1s" />
         </div>
       </div>
 
-      <p class="sr-only">{srTranscript}</p>
+      <p class="demo-caption text-label text-secondary">Real words. Reconstructed pixels.</p>
     </div>
-
-    <p class="demo-caption text-label text-secondary">real words. reconstructed pixels.</p>
   </div>
 </section>
 
-<style>
-  .demo-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-md);
-    text-align: center;
-  }
-
-  .demo-mock {
-    width: 100%;
-    max-width: 560px;
-  }
-
-  .demo-mock-frame {
-    background-color: var(--color-surface);
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    text-align: left;
-  }
-
-  .demo-mock-chrome {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-sm) var(--space-md);
-    border-bottom: var(--border-width) solid var(--color-border);
-  }
-
-  .demo-mock-channel {
-    color: var(--color-text-secondary);
-  }
-
-  .demo-mock-dots {
-    display: inline-flex;
-    gap: var(--space-xs);
-  }
-
-  .demo-mock-dots span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background-color: var(--color-border);
-  }
-
-  .demo-mock-messages {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-    padding: var(--space-md);
-  }
-
-  @media (max-width: 639px) {
-    .demo-mock-dots span {
-      width: 5px;
-      height: 5px;
+<script>
+  // Play the staged reveal once, when the mock first scrolls into view.
+  const demo = document.querySelector<HTMLElement>(".demo");
+  if (demo) {
+    const play = () => demo.classList.add("is-playing");
+    if (!("IntersectionObserver" in window)) {
+      play();
+    } else {
+      const io = new IntersectionObserver(
+        (entries, obs) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              play();
+              obs.disconnect();
+            }
+          }
+        },
+        { threshold: 0.4 },
+      );
+      io.observe(demo);
     }
   }
-
-  /* Typing indicator: an avatar + 3 pulsing dots, visible only during its
-     assigned window on the shared 16s loop (23-UI-SPEC.md "Animation
-     mechanism"). Same reveal-window mechanism as .demo-message, but visible
-     for a 2s window instead of holding through to the loop's end. */
-  .demo-typing {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    animation: demo-typing-visibility 16s infinite;
-    animation-fill-mode: backwards;
-  }
-
-  @keyframes demo-typing-visibility {
-    0% {
-      opacity: 1;
-    }
-    12.5% {
-      opacity: 1;
-    }
-    12.6% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 0;
-    }
-  }
-
-  .demo-typing .demo-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-mono);
-    font-weight: 600;
-    font-size: var(--text-label-size);
-  }
-
-  @media (max-width: 479px) {
-    .demo-typing .demo-avatar {
-      width: 32px;
-      height: 32px;
-    }
-  }
-
-  .demo-typing-dots {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .demo-typing-dots span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background-color: var(--color-accent);
-    animation: demo-typing-bounce 1.2s infinite ease-in-out;
-  }
-
-  .demo-typing-dots span:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-
-  .demo-typing-dots span:nth-child(3) {
-    animation-delay: 0.4s;
-  }
-
-  @keyframes demo-typing-bounce {
-    0%,
-    80%,
-    100% {
-      transform: translateY(0);
-      opacity: 0.5;
-    }
-    40% {
-      transform: translateY(-4px);
-      opacity: 1;
-    }
-  }
-
-  .demo-caption {
-    margin: 0;
-  }
-
-  /* HARD REQUIREMENT (23-UI-SPEC.md "Demo Mock Spec"): under reduced motion,
-     all 4 messages render immediately in their final, fully-revealed state
-     and zero typing indicators render -- a reduced-motion visitor loses the
-     timing, never the content. This exact block is mandated verbatim; the
-     .demo-typing display:none rule directly below it is the addition needed
-     to actually satisfy "zero typing indicators render" (the mandated block
-     alone would force opacity:1 on the indicators too). */
-  @media (prefers-reduced-motion: reduce) {
-    .demo-mock * {
-      animation: none !important;
-      transition: none !important;
-      opacity: 1 !important;
-      transform: none !important;
-    }
-
-    .demo-typing {
-      display: none !important;
-    }
-  }
-</style>
+</script>

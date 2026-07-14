@@ -1,97 +1,340 @@
 ---
 // site/src/components/Hero.astro
 //
-// h1, subhead, CTA #1, scroll-to-demo micro-link, and the reduced-motion-aware
-// blinking cursor (23-UI-SPEC.md "Component Split" / "Copywriting Contract").
-// Copy below is used verbatim from the Copywriting Contract -- do not rewrite
-// or "punch up"; it is already voice-checked against CLAUDE.md Critical Rules
-// 6-9.
+// The thesis: Dexter is a music bot with opinions. The signature element is a
+// faux "Now Playing" strip with an animated equalizer — it says "music bot"
+// on sight and carries the page's one hit of motion. Proper case throughout
+// the site's own voice (the demo transcript keeps Dexter's real voice).
+//
+// The invite anchor is injected via set:html so Astro never HTML-entity-escapes
+// the `&` in the URL — that raw injection is what the site-drift-guard scans.
 import { INVITE_URL } from "../config";
 
-// HARD VERIFICATION GATE (23-UI-SPEC.md "Invite URL Sourcing"): Astro
-// HTML-entity-escapes `&` inside interpolated attribute values, which would
-// make the D-02 byte-comparison drift scan report permanent false-positive
-// drift. `set:html` on a small raw HTML fragment bypasses escaping for just
-// this one attribute -- the same workaround plan 23-03 landed, applied
-// identically here and in Cta.astro so the two anchors can never diverge.
-const ctaHtml = `<a href="${INVITE_URL}" class="cta-button">add to discord</a>`;
+const ctaHtml = `<a href="${INVITE_URL}" class="cta-button">Add to Discord</a>`;
+
+// Equalizer bars — deterministic heights + delays (no Math.random at build).
+const bars = [46, 78, 34, 92, 58, 100, 40, 70, 52, 84, 30, 66];
 ---
 
-<section id="hero" class="section section--dominant" aria-labelledby="hero-heading">
+<section id="hero" class="section hero" aria-labelledby="hero-heading">
   <div class="section-inner hero-inner">
-    <p class="hero-kicker text-label" aria-hidden="true">dexter<span class="cursor">_</span></p>
-    <h1 id="hero-heading">dexter plays your music and judges your taste.</h1>
-    <p class="hero-subhead">
-      a sarcastic discord bot that plays youtube audio, roasts your listening history with
-      gemini, and remembers what you did last tuesday. mostly reliable. occasionally mean.
-    </p>
-    <div class="hero-cta">
-      <Fragment set:html={ctaHtml} />
+    <div class="hero-copy">
+      <p class="eyebrow hero-status">
+        <span class="hero-status-dot" aria-hidden="true"></span>
+        Discord music bot · Gemini-powered
+      </p>
+
+      <h1 id="hero-heading">
+        Dexter plays your music<br />
+        and <span class="hero-em">judges your taste.</span>
+      </h1>
+
+      <p class="hero-subhead">
+        A sarcastic Discord bot that plays YouTube audio, roasts your listening history with
+        Gemini, and remembers what you did last Tuesday. Mostly reliable. Occasionally mean.
+      </p>
+
+      <div class="hero-actions">
+        <Fragment set:html={ctaHtml} />
+        <a href="#demo" class="ghost-link">See it in action ↓</a>
+      </div>
     </div>
-    <a href="#demo" class="hero-demo-link text-label">see it in action ↓</a>
+
+    <!-- Signature: the Now Playing card. Purely decorative flavor. -->
+    <aside class="now-playing" aria-hidden="true">
+      <div class="np-chrome">
+        <span class="np-badge">Now Playing</span>
+        <span class="np-eq">
+          {bars.slice(0, 5).map((h, i) => (
+            <span class="np-eq-bar" style={`--h:${h}%; --i:${i};`}></span>
+          ))}
+        </span>
+      </div>
+
+      <div class="np-track">
+        <span class="np-cover">
+          <span class="np-eq np-eq--cover">
+            {bars.map((h, i) => (
+              <span class="np-eq-bar" style={`--h:${h}%; --i:${i};`}></span>
+            ))}
+          </span>
+        </span>
+        <span class="np-meta">
+          <span class="np-title">Your questionable taste</span>
+          <span class="np-artist">requested by everyone · on repeat</span>
+        </span>
+      </div>
+
+      <div class="np-scrubber">
+        <span class="np-scrubber-fill"></span>
+      </div>
+
+      <div class="np-controls text-label">
+        <span class="np-time">2:41</span>
+        <span class="np-buttons">
+          <span class="np-btn">⏮</span>
+          <span class="np-btn np-btn--play">⏸</span>
+          <span class="np-btn">⏭</span>
+        </span>
+        <span class="np-time">3:59</span>
+      </div>
+    </aside>
   </div>
 </section>
 
 <style>
+  .hero {
+    background-image: var(--hero-glow);
+    padding-top: clamp(var(--space-3xl), 8vw, var(--space-4xl));
+    overflow: hidden;
+  }
+
   .hero-inner {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2xl);
+    align-items: center;
+  }
+
+  @media (min-width: 940px) {
+    .hero-inner {
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: var(--space-3xl);
+    }
+  }
+
+  .hero-copy {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-lg);
   }
 
-  .hero-kicker {
+  .hero-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
     color: var(--color-text-secondary);
-    margin: 0;
   }
 
-  .cursor {
-    color: var(--color-accent);
-    animation: blink 1s steps(1, jump-none) infinite;
+  .hero-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--color-accent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 70%, transparent);
+    animation: pulse 2.4s ease-out infinite;
   }
 
-  @keyframes blink {
-    0%,
-    49% {
-      opacity: 1;
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 55%, transparent);
     }
-    50%,
+    70%,
     100% {
-      opacity: 0;
+      box-shadow: 0 0 0 7px transparent;
     }
   }
 
-  /* Belt-and-suspenders on top of global.css's blanket reduced-motion floor:
-     a visitor with reduced motion sees a static, non-blinking cursor
-     character, never a half-second of a stalled blink (23-UI-SPEC.md
-     "Accessibility Contract"). */
-  @media (prefers-reduced-motion: reduce) {
-    .cursor {
-      animation: none;
-      opacity: 1;
-    }
+  h1 {
+    color: var(--color-text);
+  }
+
+  .hero-em {
+    background-image: var(--accent-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .hero-subhead {
     font-family: var(--font-sans);
-    font-size: var(--text-body-size);
-    line-height: var(--text-body-line-height);
-    color: var(--color-text);
-    max-width: 640px;
-    margin: 0;
+    font-size: var(--text-body);
+    line-height: 1.65;
+    color: var(--color-text-secondary);
+    max-width: 34em;
   }
 
-  .hero-cta {
-    margin-top: var(--space-sm);
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-2xs);
   }
 
-  .hero-demo-link {
-    display: inline-block;
+  @media (max-width: 479px) {
+    .hero-actions {
+      width: 100%;
+    }
+    .hero-actions :global(.ghost-link) {
+      width: 100%;
+    }
+  }
+
+  /* ---- Now Playing signature card ---- */
+  .now-playing {
+    width: 100%;
+    max-width: 420px;
+    justify-self: center;
+    background: linear-gradient(180deg, var(--color-surface-2), var(--color-surface));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8);
+  }
+
+  @media (min-width: 940px) {
+    .now-playing {
+      transform: rotate(1.4deg);
+    }
+  }
+
+  .np-chrome {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .np-badge {
+    font-family: var(--font-mono);
+    font-size: var(--text-eyebrow);
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
     color: var(--color-accent);
-    text-decoration: none;
   }
 
-  .hero-demo-link:hover {
-    text-decoration: underline;
+  .np-eq {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 18px;
+  }
+
+  .np-eq-bar {
+    width: 3px;
+    height: var(--h);
+    min-height: 3px;
+    background-image: var(--accent-gradient);
+    border-radius: 2px;
+    transform-origin: bottom;
+    animation: eq 900ms ease-in-out infinite alternate;
+    animation-delay: calc(var(--i) * -140ms);
+  }
+
+  @keyframes eq {
+    0% {
+      transform: scaleY(0.28);
+      opacity: 0.65;
+    }
+    100% {
+      transform: scaleY(1);
+      opacity: 1;
+    }
+  }
+
+  .np-track {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .np-cover {
+    flex: none;
+    width: 68px;
+    height: 68px;
+    border-radius: var(--radius-md);
+    background:
+      radial-gradient(120% 120% at 30% 20%, rgba(255, 180, 84, 0.28), transparent 60%),
+      var(--color-bg);
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .np-eq--cover {
+    height: 30px;
+    gap: 2px;
+  }
+
+  .np-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .np-title {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
+
+  .np-artist {
+    font-family: var(--font-sans);
+    font-size: var(--text-label);
+    color: var(--color-text-secondary);
+  }
+
+  .np-scrubber {
+    height: 4px;
+    border-radius: 4px;
+    background-color: var(--color-border);
+    overflow: hidden;
+  }
+
+  .np-scrubber-fill {
+    display: block;
+    height: 100%;
+    width: 40%;
+    background-image: var(--accent-gradient);
+    border-radius: 4px;
+    animation: scrub 8s linear infinite;
+  }
+
+  @keyframes scrub {
+    0% {
+      width: 8%;
+    }
+    100% {
+      width: 96%;
+    }
+  }
+
+  .np-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--color-text-faint);
+  }
+
+  .np-buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-md);
+    font-size: 15px;
+    color: var(--color-text-secondary);
+  }
+
+  .np-btn--play {
+    color: var(--color-accent);
+    font-size: 18px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .np-eq-bar {
+      transform: scaleY(0.7);
+    }
+    .np-scrubber-fill {
+      width: 40%;
+    }
+    .hero-status-dot {
+      animation: none;
+    }
   }
 </style>

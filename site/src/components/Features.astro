@@ -1,66 +1,74 @@
 ---
 // site/src/components/Features.astro
 //
-// PORT-01: the six-feature showcase. Copy is used verbatim from
-// 23-UI-SPEC.md's Copywriting Contract -- backtick-wrapped slash commands are
-// mechanically converted to <code> spans (no wording change). Grid: 1 column
-// <640px, 2 columns 640-1023px, 3 columns >=1024px (23-UI-SPEC.md "Responsive
-// Behavior").
-//
-// Feature 3 deliberately names the gap D-06 disclosed out loud -- the mock
-// can't show the five-button now-playing panel, so the feature list names it
-// directly. Do not soften or drop that sentence.
+// PORT-01: the six-feature showcase. Each card carries a technical facet tag
+// (playback / gemini / controls / pgvector / ambient / vision) — a meaningful
+// label, not arbitrary numbering. Feature 3 deliberately names the gap the demo
+// can't show (the five-button panel); do not soften or drop that sentence.
 import FeatureCard from "./FeatureCard.astro";
 
 const features = [
   {
-    title: "full youtube playback",
+    tag: "playback",
+    title: "Full YouTube playback",
     bodyHtml:
-      "queues, skips, seeks, loops, and applies a genuinely unnecessary number of audio filters. bassboost included, regret not included.",
+      "Queues, skips, seeks, loops, and a genuinely unnecessary number of audio filters. Bassboost included, regret not included.",
   },
   {
-    title: "an ai with opinions",
+    tag: "gemini",
+    title: "An AI with opinions",
     bodyHtml:
-      "<code>/ask</code> and <code>/roast</code> are grounded in what you've actually listened to — gemini, wired to real play history. it remembers, so it can hold it against you.",
+      "<code>/ask</code> and <code>/roast</code> are grounded in what you've actually listened to — Gemini, wired to real play history. It remembers, so it can hold it against you.",
   },
   {
-    title: "a five-button now-playing panel",
+    tag: "controls",
+    title: "A five-button now-playing panel",
     bodyHtml:
-      "play/pause, skip, loop, shuffle, and stop, live on the embed. the demo above can't show it — this is the part you're missing.",
+      "Play/pause, skip, loop, shuffle, and stop, live on the embed. The demo above can't show it — this is the part you're missing.",
   },
   {
-    title: "long-term memory",
+    tag: "pgvector",
+    title: "Long-term memory",
     bodyHtml:
       "pgvector-backed recall surfaces old habits at the worst possible moments — and <code>/memory forget</code> deletes it all, verbatim, on request.",
   },
   {
-    title: "unprompted personality",
+    tag: "ambient",
+    title: "Unprompted personality",
     bodyHtml:
-      "reacts to voice joins, late-night sessions, and repeat plays without being asked. it has opinions about your 3am queue.",
+      "Reacts to voice joins, late-night sessions, and repeat plays without being asked. It has opinions about your 3am queue.",
   },
   {
-    title: "vision roasts",
+    tag: "vision",
+    title: "Vision roasts",
     bodyHtml:
-      "post a picture in the wrong channel and gemini's vision model might have a comment. safety-gated, mercifully rare.",
+      "Post a picture in the wrong channel and Gemini's vision model might have a comment. Safety-gated, mercifully rare.",
   },
 ];
 ---
 
-<section id="features" class="section section--dominant" aria-labelledby="features-heading">
+<section id="features" class="section" aria-labelledby="features-heading">
   <div class="section-inner">
-    <h2 id="features-heading"><span class="h2-glyph" aria-hidden="true">&gt;</span> what it actually does</h2>
+    <div class="section-head">
+      <p class="eyebrow">Capabilities</p>
+      <h2 id="features-heading">What it actually does</h2>
+      <p class="section-sub">
+        Six things it does well, and one it wants you to know it can't show off in a screenshot.
+      </p>
+    </div>
+
     <div class="feature-grid">
-      {features.map((f) => <FeatureCard title={f.title} bodyHtml={f.bodyHtml} />)}
+      {features.map((f) => <FeatureCard tag={f.tag} title={f.title} bodyHtml={f.bodyHtml} />)}
     </div>
   </div>
 </section>
 
 <style>
   .feature-grid {
-    margin-top: var(--space-xl);
+    margin-top: var(--space-2xl);
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--space-xl);
+    gap: var(--space-md);
   }
 
   @media (min-width: 640px) {
@@ -69,7 +77,7 @@ const features = [
     }
   }
 
-  @media (min-width: 1024px) {
+  @media (min-width: 1000px) {
     .feature-grid {
       grid-template-columns: repeat(3, 1fr);
     }

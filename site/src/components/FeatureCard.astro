@@ -1,59 +1,84 @@
 ---
 // site/src/components/FeatureCard.astro
 //
-// One feature card: h3 title + body blurb. Copy is used verbatim from
-// 23-UI-SPEC.md's Copywriting Contract -- see Features.astro for the data.
-// `bodyHtml` may contain inline <code> spans (verbatim slash-command
-// mentions) -- set:html is used only for that static, hand-authored markup,
-// the same pattern already established by Hero.astro/Cta.astro's CTA anchors.
+// One feature card: a mono facet tag, a title, and a body blurb. `bodyHtml` may
+// contain inline <code> spans (verbatim slash-command mentions) — set:html is
+// used only for that static, hand-authored markup.
 interface Props {
+  tag: string;
   title: string;
   bodyHtml: string;
 }
 
-const { title, bodyHtml } = Astro.props;
+const { tag, title, bodyHtml } = Astro.props;
 ---
 
-<div class="feature-card">
-  <h3>{title}</h3>
-  <p set:html={bodyHtml} />
-</div>
+<article class="feature-card">
+  <p class="feature-tag">{tag}</p>
+  <h3 class="feature-title">{title}</h3>
+  <p class="feature-body" set:html={bodyHtml} />
+</article>
 
 <style>
   .feature-card {
+    position: relative;
     background-color: var(--color-surface);
-    border: var(--border-width) solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    padding: var(--space-md);
+    padding: var(--space-lg);
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
+    gap: var(--space-xs);
+    overflow: hidden;
+    transition: border-color 0.18s ease, transform 0.18s ease, background-color 0.18s ease;
   }
 
-  @media (min-width: 1024px) {
-    .feature-card {
-      padding: var(--space-lg);
-    }
+  /* A thin accent seam along the top edge, revealed on hover. */
+  .feature-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background-image: var(--accent-gradient);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.22s ease;
   }
 
-  .feature-card h3 {
-    margin: 0;
+  .feature-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--color-border-strong);
+    background-color: var(--color-surface-2);
   }
 
-  .feature-card p {
-    font-family: var(--font-sans);
-    font-size: var(--text-body-size);
-    line-height: var(--text-body-line-height);
+  .feature-card:hover::before {
+    transform: scaleX(1);
+  }
+
+  .feature-tag {
+    font-family: var(--font-mono);
+    font-size: var(--text-eyebrow);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  .feature-tag::before {
+    content: "// ";
+    color: var(--color-text-faint);
+  }
+
+  .feature-title {
     color: var(--color-text);
     margin: 0;
   }
 
-  .feature-card p :global(code) {
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    background-color: var(--color-bg);
-    border: var(--border-width) solid var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: 0 var(--space-xs);
+  .feature-body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body-sm);
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+    margin: var(--space-2xs) 0 0 0;
   }
 </style>

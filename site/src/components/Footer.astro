@@ -1,46 +1,62 @@
 ---
 // site/src/components/Footer.astro
 //
-// The one minimal footer line: text-secondary, Label size, all lowercase
-// (23-UI-SPEC.md "Copywriting Contract" / "Layout" — Footer = Secondary
-// background in the section alternation).
+// Minimal footer line: a wordmark, attribution, and two repo links.
 ---
 
-<footer class="site-footer text-label text-secondary">
-  <p>
-    dexter &middot; built by jadrianports &middot;
-    <a href="https://github.com/jadrianports/dexter" rel="noopener noreferrer">github &#8599;</a>
-    &middot;
-    <a href="https://github.com/jadrianports/dexter/blob/main/README.md" rel="noopener noreferrer"
-      >readme &#8599;</a
-    >
-  </p>
+<footer class="site-footer">
+  <div class="section-inner footer-inner">
+    <p class="footer-mark">
+      dexter<span class="footer-cursor" aria-hidden="true">_</span>
+    </p>
+    <p class="footer-meta text-label text-secondary">
+      Built by jadrianports ·
+      <a href="https://github.com/jadrianports/dexter" rel="noopener noreferrer">GitHub ↗</a>
+      ·
+      <a
+        href="https://github.com/jadrianports/dexter/blob/main/README.md"
+        rel="noopener noreferrer">README ↗</a
+      >
+    </p>
+  </div>
 </footer>
 
 <style>
   .site-footer {
-    background-color: var(--color-surface);
-    padding: var(--space-lg);
-    text-align: center;
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-xl) var(--gutter);
+    background-color: var(--color-bg-tint);
   }
 
-  @media (min-width: 1024px) {
-    .site-footer {
-      padding: var(--space-lg) var(--space-2xl);
-    }
+  .footer-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
   }
 
-  .site-footer p {
+  .footer-mark {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
+
+  .footer-cursor {
+    color: var(--color-accent);
+  }
+
+  .footer-meta {
     margin: 0;
   }
 
-  .site-footer a {
+  .footer-meta a {
     color: var(--color-text-secondary);
     text-decoration: none;
   }
 
-  .site-footer a:hover {
+  .footer-meta a:hover {
     color: var(--color-accent);
-    text-decoration: underline;
   }
 </style>

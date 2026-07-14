@@ -1,105 +1,118 @@
 ---
 // site/src/components/BoundaryItem.astro
 //
-// One PORT-04 boundary: a disclosure marker, an h3 constraint label, and body
-// copy in the constraint -> deliberate decision shape (D-10). Visually
-// distinct from FeatureCard on purpose -- no ">" glyph, the calmer
-// Disclosure hue instead of Accent, because disclosure is not a call to
-// action (23-UI-SPEC.md "Color" / "Copywriting Contract").
+// One PORT-04 boundary as a spec-sheet row: a left rail (facet tag + label +
+// optional offline status) and a body in the constraint -> deliberate decision
+// shape (D-10). Calmer ember hue, not the amber CTA accent — disclosure is not
+// a call to action. Voice: NOT sarcastic (CLAUDE.md Critical Rule 6).
 //
-// Voice: NOT sarcastic (CLAUDE.md Critical Rule 6 / D-09). `bodyHtml` may
-// contain <code> (slash commands) and <strong> (the one emphasized clause in
-// boundary 2) -- both mechanical markup of already-authored, verbatim copy,
-// not new wording.
+// `bodyHtml` may contain <code> (slash commands) and <strong> (the one
+// emphasized clause in the hosting boundary) — mechanical markup of verbatim
+// copy, not new wording.
 interface Props {
+  tag: string;
   label: string;
   bodyHtml: string;
   showOfflineDot?: boolean;
 }
 
-const { label, bodyHtml, showOfflineDot = false } = Astro.props;
+const { tag, label, bodyHtml, showOfflineDot = false } = Astro.props;
 ---
 
-<div class="boundary-item">
-  <span class="disclosure-marker" aria-hidden="true"></span>
-  <div class="boundary-content">
-    <h3>
-      {label}
-      {showOfflineDot && (
+<article class="boundary-item">
+  <div class="boundary-rail">
+    <span class="boundary-tag">
+      <span class="boundary-marker" aria-hidden="true"></span>
+      {tag}
+    </span>
+    <h3 class="boundary-label">{label}</h3>
+    {
+      showOfflineDot && (
         <span class="offline-indicator">
-          <span class="offline-dot" aria-hidden="true"></span>
-          offline
+          <span class="offline-dot" aria-hidden="true" />
+          Offline
         </span>
-      )}
-    </h3>
-    <p set:html={bodyHtml} />
+      )
+    }
   </div>
-</div>
+  <p class="boundary-body" set:html={bodyHtml} />
+</article>
 
 <style>
   .boundary-item {
-    display: flex;
-    gap: var(--space-md);
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
     padding: var(--space-lg);
     background-color: var(--color-bg);
-    border: var(--border-width) solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
   }
 
-  .disclosure-marker {
-    flex: none;
-    width: 10px;
-    height: 10px;
-    margin-top: 6px;
-    background-color: var(--color-disclosure);
+  @media (min-width: 720px) {
+    .boundary-item {
+      grid-template-columns: 220px 1fr;
+      gap: var(--space-2xl);
+      padding: var(--space-xl);
+    }
   }
 
-  .boundary-content {
+  .boundary-rail {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
-    min-width: 0;
+    gap: var(--space-xs);
   }
 
-  .boundary-content h3 {
-    display: flex;
+  .boundary-tag {
+    display: inline-flex;
     align-items: center;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
+    gap: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-eyebrow);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ember);
+  }
+
+  .boundary-marker {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background-color: var(--color-ember);
+  }
+
+  .boundary-label {
+    color: var(--color-text);
+    margin: 0;
   }
 
   .offline-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     font-family: var(--font-mono);
-    font-size: var(--text-label-size);
-    font-weight: 400;
+    font-size: var(--text-label);
     color: var(--color-text-secondary);
   }
 
   .offline-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background-color: var(--color-disclosure);
+    background-color: var(--color-ember);
   }
 
-  .boundary-content p {
+  .boundary-body {
     font-family: var(--font-sans);
-    font-size: var(--text-body-size);
-    line-height: var(--text-body-line-height);
-    color: var(--color-text);
+    font-size: var(--text-body-sm);
+    line-height: 1.65;
+    color: var(--color-text-secondary);
     margin: 0;
   }
 
-  .boundary-content p :global(code) {
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    background-color: var(--color-surface);
-    border: var(--border-width) solid var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: 0 var(--space-xs);
+  .boundary-body :global(strong) {
+    color: var(--color-text);
+    font-weight: 600;
   }
 </style>

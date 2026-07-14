@@ -2,61 +2,63 @@
 // site/src/components/Boundaries.astro
 //
 // PORT-04 / D-10: four boundaries, each framed constraint -> deliberate
-// decision. Always single-column, full-width at every breakpoint -- a grid
-// would visually trivialize content D-10 wants read one at a time
-// (23-UI-SPEC.md "Responsive Behavior").
+// decision. Single-column, full-width, read one at a time. Positioned right
+// before the closing CTA so a visitor reads "offline unless the owner is
+// running it" before clicking Add-to-Discord.
 //
-// Positioned immediately before the closing CTA (D-05) so a visitor reads
-// "this bot is offline unless the owner is running it" before clicking
-// Add-to-Discord, not after.
-//
-// Copy is verbatim from 23-UI-SPEC.md's Copywriting Contract, cross-checked
-// against `.planning/PROJECT.md` §Key Decisions line by line (Phase 21 rows).
-// No drift found: `/ask` staying global-but-self-scoped, the four purged
-// tables (config/queues/jams/scoped memories), and `guild_blocklist` surviving
-// purges all match the shipped-reality ledger exactly -- boundary 4's copy is
-// used as-is, not adjusted.
-//
-// Voice: deliberately NOT sarcastic anywhere in this section (CLAUDE.md
-// Critical Rule 6 / D-09) -- this is serious content, read it back straight.
+// Voice: deliberately NOT sarcastic anywhere here (CLAUDE.md Critical Rule 6).
+// This is the honest, straight-read section — proper case, no amber CTA energy.
 import BoundaryItem from "./BoundaryItem.astro";
 
 const boundaries = [
   {
-    label: "verification wall",
+    tag: "Scale",
+    label: "Verification wall",
     bodyHtml:
-      "discord requires verification and privileged-intent approval past 100 servers — a process this project hasn't pursued. the target scale is modest (single-digit to low-dozens of servers), so verification was scoped out rather than pursued for a portfolio deployment.",
+      "Discord requires verification and privileged-intent approval past 100 servers — a process this project hasn't pursued. The target scale is modest (single-digit to low-dozens of servers), so verification was scoped out rather than pursued for a portfolio deployment.",
     showOfflineDot: false,
   },
   {
-    label: "on-demand hosting",
+    tag: "Hosting",
+    label: "On-demand hosting",
     bodyHtml:
-      "dexter runs on the owner's residential pc, not an always-on host — the free-tier cloud options that exist all get blocked by youtube's datacenter-ip rules. hosting stays on-demand rather than forcing a workaround. <strong>the bot is offline unless the owner is currently running it</strong> — invite it, and don't expect it online 24/7 yet.",
+      "Dexter runs on the owner's residential PC, not an always-on host — the free-tier cloud options that exist all get blocked by YouTube's datacenter-IP rules. Hosting stays on-demand rather than forcing a workaround. <strong>The bot is offline unless the owner is currently running it</strong> — invite it, and don't expect it online 24/7 yet.",
     showOfflineDot: true,
   },
   {
-    label: "full-savage + kill-switch",
+    tag: "Personality",
+    label: "Full-savage + kill-switch",
     bodyHtml:
-      "dexter's sarcasm runs at full intensity in every server — there's no per-guild tone dial. rather than build a settings surface for something core to the bot's identity, the owner gets a real, fast kill-switch instead: list every server dexter is in, silence one instantly, or force it to leave and blacklist a re-invite — two enforced choke points, not a scattered set of per-command checks.",
+      "Dexter's sarcasm runs at full intensity in every server — there's no per-guild tone dial. Rather than build a settings surface for something core to the bot's identity, the owner gets a real, fast kill-switch instead: list every server Dexter is in, silence one instantly, or force it to leave and blacklist a re-invite — two enforced choke points, not a scattered set of per-command checks.",
     showOfflineDot: false,
   },
   {
-    label: "hybrid memory scoping",
+    tag: "Privacy",
+    label: "Hybrid memory scoping",
     bodyHtml:
-      "dexter remembers things about users via a vector-search long-term memory store. <code>/roast @user</code>, ambient roasts, and proactive callbacks only recall memories scoped to the current server — a third party's history never crosses servers. <code>/ask</code> stays global, but only for your own memory (self-recall, no cross-user exposure is possible). when dexter leaves a server, that server's data — config, queues, jams, and its scoped memories — is purged.",
+      "Dexter remembers things about users via a vector-search long-term memory store. <code>/roast @user</code>, ambient roasts, and proactive callbacks only recall memories scoped to the current server — a third party's history never crosses servers. <code>/ask</code> stays global, but only for your own memory (self-recall, no cross-user exposure is possible). When Dexter leaves a server, that server's data — config, queues, jams, and its scoped memories — is purged.",
     showOfflineDot: false,
   },
 ];
 ---
 
-<section id="boundaries" class="section section--secondary" aria-labelledby="boundaries-heading">
+<section id="boundaries" class="section section--tint section--ruled" aria-labelledby="boundaries-heading">
   <div class="section-inner">
-    <h2 id="boundaries-heading" class="boundaries-heading">known limits</h2>
-    <p class="boundaries-subhead">four deliberate tradeoffs, disclosed here instead of discovered later.</p>
+    <div class="section-head">
+      <p class="eyebrow eyebrow--ember">The fine print</p>
+      <h2 id="boundaries-heading">Known limits</h2>
+      <p class="section-sub">Four deliberate tradeoffs, disclosed here instead of discovered later.</p>
+    </div>
+
     <div class="boundary-list">
       {
         boundaries.map((b) => (
-          <BoundaryItem label={b.label} bodyHtml={b.bodyHtml} showOfflineDot={b.showOfflineDot} />
+          <BoundaryItem
+            tag={b.tag}
+            label={b.label}
+            bodyHtml={b.bodyHtml}
+            showOfflineDot={b.showOfflineDot}
+          />
         ))
       }
     </div>
@@ -64,25 +66,12 @@ const boundaries = [
 </section>
 
 <style>
-  /* Deliberately plain: no ">" accent glyph on this heading (unlike Demo,
-     Features, CTA) -- this section is visually distinct from the amber
-     "action" sections precisely because it is not a feature (23-UI-SPEC.md
-     "Copywriting Contract"). */
-  .boundaries-heading {
-    margin: 0;
-  }
-
-  .boundaries-subhead {
-    font-family: var(--font-sans);
-    font-size: var(--text-body-size);
-    line-height: var(--text-body-line-height);
-    color: var(--color-text-secondary);
-    margin: var(--space-sm) 0 0 0;
-    max-width: 640px;
+  .eyebrow--ember {
+    color: var(--color-ember);
   }
 
   .boundary-list {
-    margin-top: var(--space-xl);
+    margin-top: var(--space-2xl);
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
