@@ -33,10 +33,11 @@ class InviteCog(commands.Cog):
     # models has_guild=False as a first-class allowed case.
     @app_commands.command(name="invite", description="Get Dexter's invite link")
     async def invite_command(self, interaction: discord.Interaction) -> None:
-        # The committed constant first (the CI drift-guard has no running
-        # bot); bot.application_id only as the fork fallback. application_id
-        # is always populated by the time a slash command can fire.
-        client_id = config.DISCORD_CLIENT_ID or self.bot.application_id
+        # The running bot's real application_id is the authoritative source
+        # (it self-heals a fork that forgot to set DISCORD_CLIENT_ID); the
+        # committed constant is only the fallback for when there's no
+        # running client (e.g. the CI drift-guard) (WR-01, 22-REVIEW.md).
+        client_id = self.bot.application_id or config.DISCORD_CLIENT_ID
 
         url = build_invite_url(
             client_id=client_id,

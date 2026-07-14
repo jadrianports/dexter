@@ -8,7 +8,7 @@ Tests:
 - test_invite_command_is_public_not_ephemeral    — reply is public (D-05)
 - test_invite_command_is_dm_allowed              — guild_only is False (D-06)
 - test_invite_command_has_no_cooldown            — no app_commands.checks.cooldown
-- test_invite_command_falls_back_to_application_id — DISCORD_CLIENT_ID=0 -> bot.application_id
+- test_invite_command_falls_back_to_config_client_id — application_id=None -> config.DISCORD_CLIENT_ID (WR-01)
 - test_cog_does_not_construct_a_url_itself       — no literal oauth2 URL / oauth_url( in the cog (D-03)
 - test_invite_cog_registered_at_both_bot_load_sites — Phase 8 scar: bot.py dual cog-registration
 - test_invite_listed_in_help_commands            — /invite discoverable via /help (D-06)
@@ -77,8 +77,11 @@ async def test_invite_command_sends_the_canonical_url():
     assert isinstance(button, discord.ui.Button)
     assert button.style == discord.ButtonStyle.link
     assert button.label == "Add to Discord"
+    # WR-01: bot.application_id is now the authoritative source, checked
+    # before config.DISCORD_CLIENT_ID -- so the expected URL is built from
+    # the fake bot's application_id (999888777), not the config constant.
     expected_url = build_invite_url(
-        client_id=config.DISCORD_CLIENT_ID,
+        client_id=bot.application_id,
         permissions_value=config.INVITE_PERMISSIONS_VALUE,
     )
     assert button.url == expected_url
@@ -110,11 +113,11 @@ def test_invite_command_has_no_cooldown():
 
 
 @pytest.mark.asyncio
-async def test_invite_command_falls_back_to_application_id(monkeypatch):
-    """D-04 discretion: when config.DISCORD_CLIENT_ID is falsy, the URL is
-    built from bot.application_id instead."""
-    monkeypatch.setattr(config, "DISCORD_CLIENT_ID", 0)
-    bot = _make_bot(application_id=555444333)
+async def test_invite_command_falls_back_to_config_client_id(monkeypatch):
+    """WR-01: bot.application_id is primary; when it's falsy (e.g. the bot
+    isn't fully identified yet), the committed config.DISCORD_CLIENT_ID
+    constant is used instead."""
+    bot = _make_bot(application_id=None)
     interaction = _make_interaction()
     cog = InviteCog(bot)
 
@@ -123,7 +126,7 @@ async def test_invite_command_falls_back_to_application_id(monkeypatch):
     kwargs = interaction.response.send_message.call_args.kwargs
     button = kwargs["view"].children[0]
     expected_url = build_invite_url(
-        client_id=555444333,
+        client_id=config.DISCORD_CLIENT_ID,
         permissions_value=config.INVITE_PERMISSIONS_VALUE,
     )
     assert button.url == expected_url
