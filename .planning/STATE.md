@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
 status: verifying
-stopped_at: Completed 24-03-PLAN.md
-last_updated: "2026-07-14T22:24:45.177Z"
+stopped_at: Phase 25 context gathered
+last_updated: "2026-07-15T08:20:57.570Z"
 last_activity: 2026-07-14
 progress:
   total_phases: 5
@@ -166,9 +166,9 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 
 ## Session Continuity
 
-Last session: 2026-07-14T21:09:05.560Z
-Stopped at: Completed 24-03-PLAN.md
-Resume file: None
+Last session: 2026-07-15T08:20:57.552Z
+Stopped at: Phase 25 context gathered
+Resume file: .planning/phases/25-smarter-memory/25-CONTEXT.md
 
 ## Operator Next Steps
 
