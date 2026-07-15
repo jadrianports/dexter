@@ -140,7 +140,15 @@ Full phase details, success criteria, and decisions archived in
   2. A vision roast persists a distilled, number-free fact into `user_memories` under its own memory kind, gated by the same sensitivity/PII + accuracy-firewall checks every other kind goes through — no raw counts or SQL-known numbers get embedded (Critical Rule 12/13).
   3. Both changes are additive: zero new tables, zero schema fork, kind-agnostic `MemoryService` untouched — every pre-existing memory kind's salience baseline, decay, and dedup behavior stays byte-identical when the new reinforcement/vision-kind paths aren't exercised.
 
-**Plans**: TBD
+**Plans**: 2 plans (2 waves)
+
+**Wave 1**
+
+- [ ] 25-01-PLAN.md — MEM-06: expiry-reinforcement DB helper (reinforce_memory_expiry) + kind-grouped recall() step 7b + SC-1/SC-3 regression guard (MEM-06)
+
+**Wave 2** *(depends on 25-01 — shares tests/test_database_phase25.py; SC-3 wants MEM-06 green first)*
+
+- [ ] 25-02-PLAN.md — MEM-07: register vision_roast kind (2 config entries) + fire-and-forget vision memory write in _maybe_fire_vision_roast + SC-2 write-through-firewall test (MEM-07)
 
 ### Phase 26: Radio Mode & Skip Democracy
 
