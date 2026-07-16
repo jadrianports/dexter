@@ -190,6 +190,32 @@ class TestVoiceMembershipGateOnSkipEntryPoints:
 
 
 # ---------------------------------------------------------------------------
+# TestPausedTrackSkippableAtEveryEntryPoint — WR-03
+# ---------------------------------------------------------------------------
+# The button's guard (playpause_button/skip_button) is
+# `not is_playing and not is_paused` — a paused track is still
+# skippable/votable. /skip and /seek used a bare `not queue.is_playing`,
+# which is True while paused, so a paused track's vote could only ever be
+# cast through the button, not the other two documented D-15 entry points.
+
+
+class TestPausedTrackSkippableAtEveryEntryPoint:
+    def test_skip_command_allows_paused_tracks(self):
+        src = _skip_command_source()
+        assert "queue.is_paused" in src
+
+    def test_seek_command_allows_paused_tracks(self):
+        src = _seek_command_source()
+        assert "queue.is_paused" in src
+
+    def test_skip_button_guard_unchanged_reference_shape(self):
+        """Locks the reference shape /skip and /seek were aligned to —
+        if the button's own guard ever stops checking is_paused, the
+        other two entry points' fix loses its anchor."""
+        assert "not queue.is_playing and not queue.is_paused" in _skip_button_source()
+
+
+# ---------------------------------------------------------------------------
 # TestVerdictDispatchedNotReimplemented — Phase 10 D-02 rule
 # ---------------------------------------------------------------------------
 

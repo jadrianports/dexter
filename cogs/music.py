@@ -1809,7 +1809,13 @@ class MusicCog(commands.Cog):
         queue = self.get_queue(interaction.guild.id)
         voice_client = interaction.guild.voice_client
 
-        if not voice_client or not queue.is_playing:
+        # WR-03: allow a paused track to be skipped/voted on, same as the
+        # button (playpause_button/skip_button both gate on
+        # `not is_playing and not is_paused`) — a bare `not queue.is_playing`
+        # check made a paused track skippable/votable only via the button,
+        # never via /skip, breaking D-15's "identical behavior at every
+        # entry point" premise.
+        if not voice_client or (not queue.is_playing and not queue.is_paused):
             return await interaction.response.send_message(embed=embeds.error("Nothing is playing."), ephemeral=True)
 
         # CR-01: /skip must reject a vote from anyone not actually in the
@@ -2095,7 +2101,10 @@ class MusicCog(commands.Cog):
         track = queue.get_current()
         voice_client = interaction.guild.voice_client
 
-        if not track or not queue.is_playing:
+        # WR-03: allow seeking (and, on the past-end branch, voting to skip)
+        # while paused — same alignment as /skip above, matching the
+        # button's `not is_playing and not is_paused` guard.
+        if not track or (not queue.is_playing and not queue.is_paused):
             return await interaction.response.send_message(
                 embed=embeds.error(pick_random_r(NOTHING_PLAYING)), ephemeral=True
             )
