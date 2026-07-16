@@ -103,7 +103,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 24: Hosting Honesty & Docker** - Purge every dead cloud-host reference and replace the Koyeb deploy doc with a verified Docker run guide (completed 2026-07-14)
 - [x] **Phase 25: Smarter Memory** - Salience reinforcement (surfaced memories gain durability) + vision-sourced memory facts, additive on the existing pgvector store (completed 2026-07-16)
 - [x] **Phase 26: Radio Mode & Skip Democracy** - Endless taste-brain-driven radio mode + vote-gated `/skip` so the queue isn't one user's toy (completed 2026-07-16)
-- [ ] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions, contingent on a plan-time spike proving playback-engine safety; descopes to a fast-follow if the spike shows instability
+- [ ] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions. **Spike ran → GO / suppressed (D-17)**; 5 plans across 3 waves, implementation planned
 - [ ] **Phase 28: Portfolio Finish & Release** - Verify the shipped landing-page redesign and close out the remaining owner-performed release steps
 
 ## Phase Details
@@ -163,7 +163,8 @@ Full phase details, success criteria, and decisions archived in
   4. A solo listener's `/skip` still skips instantly — vote-gating doesn't regress the single-listener case.
 
 **Plans**: 5 plans
-Plans:
+
+Plans:
 **Wave 1**
 
 - [x] 26-01-PLAN.md — DJ-01 radio core: pure refill-gate seam (`logic/radio.py`), in-memory armed-state + session played-set on `MusicQueue`, seed/already-played prompt slots (wave 1)
@@ -192,9 +193,23 @@ Full phase details, success criteria, and decisions archived in
   2. **If go:** the tail of the outgoing track audibly blends into the head of the incoming track, and firing `/skip` mid-crossfade does not double-play audio, orphan an FFmpeg process, or desync the generation counter.
   3. **If no-go:** DJ-03 is formally moved to Future Requirements as DJ-F2 with the spike's findings documented in REQUIREMENTS.md/ROADMAP.md, and the phase closes clean rather than shipping an unstable engine change.
 
-**Spike required**: yes — this phase cannot proceed past a plan-time research spike (`/skip`-mid-crossfade + generation-counter safety proof); a failed spike descopes DJ-03 per the standing Descope Rule (REQUIREMENTS.md) rather than forcing the workaround. Prior art exists (custom PCM-mixing `AudioSource` — `veloura-audio`, `discord-ext-music`); crossfade forfeits opus-copy during the fade and needs an `audioop`→`numpy` note for Python 3.13.
+**Spike required**: yes — **SPIKE RAN 2026-07-17, VERDICT: GO** (both rounds; `27-RESEARCH.md`). All three D-07 attacks passed against the real engine with observable evidence (ffmpeg 2→0, stale after-callback suppressed by the generation guard, counter monotonic). **D-01 is NOT tripped** — the fade lives inside the incoming track's own `AudioSource`, so per-track `play()` + the generation counter are untouched. The user chose **GO / suppressed** at the D-04 gate (**D-17**): the 100ms `send_silence` boundary is suppressed via a source-attribute-gated patch, shipping **only** with its two mandatory rails (a fail-soft wrapped install + a CI drift guard asserting the `_do_run` call site). Prior art (`veloura-audio`, `discord-ext-music`) confirmed; crossfade forfeits opus-copy for the 4s tail only; `audioop` is stdlib on the pinned 3.11 (D-02 — numpy rejected; 3.13 removal is the accepted cost).
 
-**Plans**: TBD
+**Plans**: 5 plans (3 waves)
+
+**Wave 1**
+
+- [ ] 27-01-PLAN.md — D-14 pure eligibility seam (`logic/crossfade.py`: `FadeVerdict` + `decide_crossfade` + `cut_frame`) + the two global config knobs + mock-free ladder tests (rows 1-8) (DJ-03)
+- [ ] 27-02-PLAN.md — D-12 `MusicQueue` state split (`crossfade_enabled` survives `clear()`; `_xf_*` scratch state does not) + `CROSSFADE_ON`/`OFF` copy pools + not-persisted guard (rows 9, 10, 15) (DJ-03)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 27-03-PLAN.md — D-14 mixing half (`TruncatingSource`, `CrossfadeSource` with `audioop` equal-power mixing, additive `crossfade_from=` kwarg) + byte-identical-when-off regression guard (rows 11-14, 16) (DJ-03)
+- [ ] 27-04-PLAN.md — **D-17's mandatory guard rails**: fail-soft wrapped `send_silence` patch install (`utils/discord_patch.py`) + CI drift guard asserting the `_do_run` CALL SITE with a positive control + the latent fade-aware LFU protected-set fix (rows 17-18) (DJ-03)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 27-05-PLAN.md — the glue: `/crossfade on|off` (`/autolyrics` shape) + the two `_play_track` integration points + `_on_track_end` handoff + D-01/D-15 structural tripwires (DJ-03)
 
 ### Phase 28: Portfolio Finish & Release
 
