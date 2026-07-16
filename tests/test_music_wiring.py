@@ -63,6 +63,10 @@ def _play_source() -> str:
     return inspect.getsource(MusicCog.play.callback)
 
 
+def _seek_command_source() -> str:
+    return inspect.getsource(MusicCog.seek.callback)
+
+
 def _loop_command_source() -> str:
     return inspect.getsource(MusicCog.loop.callback)
 
@@ -138,6 +142,51 @@ class TestSkipChokePointUnification:
     def test_skip_choke_point_both_callers_pass_voter_id(self):
         assert "voter_id=interaction.user.id" in _skip_command_source()
         assert "voter_id=interaction.user.id" in _skip_button_source()
+
+
+# ---------------------------------------------------------------------------
+# TestVoiceMembershipGateOnSkipEntryPoints — CR-01
+# ---------------------------------------------------------------------------
+# decide_skip's tally (logic/skip_vote.py gate 4) intentionally counts
+# len(new_votes) with no intersection against listener_ids (D-17 — a
+# departed voter's vote stays counted). That means _try_skip trusts its
+# CALLER to only ever pass a voter_id belonging to (or having belonged to)
+# the room. NowPlayingView.skip_button always enforced that via
+# _guard_in_voice; /skip and /seek's past-end auto-skip did not, so any
+# guild member with slash-command access — never having joined voice at
+# all — could cast a binding skip vote. These tests lock the fix
+# structurally (Discord glue is untested-by-design per
+# .planning/codebase/TESTING.md) by asserting both entry points reject a
+# non-listener with the same NOT_IN_VOICE guard the button and /filter
+# already use, and that the check runs strictly before any vote is cast.
+
+
+class TestVoiceMembershipGateOnSkipEntryPoints:
+    def test_skip_command_checks_user_voice_channel(self):
+        src = _skip_command_source()
+        assert "interaction.user.voice" in src
+        assert "voice_client.channel" in src
+        assert "NOT_IN_VOICE" in src
+
+    def test_skip_command_voice_guard_precedes_try_skip_call(self):
+        """The membership check must gate entry to _try_skip, not run after
+        a vote was already cast."""
+        src = _skip_command_source()
+        guard_pos = src.index("interaction.user.voice")
+        try_skip_pos = src.index("_try_skip(")
+        assert guard_pos < try_skip_pos
+
+    def test_seek_past_end_checks_user_voice_channel(self):
+        src = _seek_command_source()
+        assert "interaction.user.voice" in src
+        assert "voice_client.channel" in src
+        assert "NOT_IN_VOICE" in src
+
+    def test_seek_past_end_voice_guard_precedes_try_skip_call(self):
+        src = _seek_command_source()
+        guard_pos = src.index("interaction.user.voice")
+        try_skip_pos = src.index("_try_skip(")
+        assert guard_pos < try_skip_pos
 
 
 # ---------------------------------------------------------------------------

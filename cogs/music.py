@@ -1793,6 +1793,15 @@ class MusicCog(commands.Cog):
         if not voice_client or not queue.is_playing:
             return await interaction.response.send_message(embed=embeds.error("Nothing is playing."), ephemeral=True)
 
+        # CR-01: /skip must reject a vote from anyone not actually in the
+        # bot's voice channel — decide_skip's tally (D-17) trusts the caller
+        # to only ever pass a voter_id that belongs to the room. Mirrors the
+        # button's _guard_in_voice and /filter's identical inline check.
+        if not interaction.user.voice or interaction.user.voice.channel != voice_client.channel:
+            return await interaction.response.send_message(
+                embed=embeds.error(pick_random_r(NOT_IN_VOICE)), ephemeral=True
+            )
+
         # _try_skip awaits _do_skip (DB writes + a channel send) — defer
         # first per the 3s interaction-response rule.
         await interaction.response.defer()
@@ -2076,6 +2085,10 @@ class MusicCog(commands.Cog):
             # Past end — this advances the queue exactly like a skip, so it
             # must route through the same vote gate (Phase 26 D-15) or /seek
             # would be a silent one-click bypass of the whole vote system.
+            # CR-01: also gate on voice membership, same as /skip above —
+            # response is already deferred, so this uses followup.send.
+            if not interaction.user.voice or interaction.user.voice.channel != voice_client.channel:
+                return await interaction.followup.send(embed=embeds.error(pick_random_r(NOT_IN_VOICE)), ephemeral=True)
             verdict, next_track, votes, required = await self._try_skip(
                 interaction.guild, queue, voice_client, voter_id=interaction.user.id
             )
