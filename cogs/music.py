@@ -28,6 +28,7 @@ from database import (
 )
 from logic.guild_config import AmbientSurface
 from logic.playback import TrackEndAction, decide_on_track_end, should_start_playback
+from logic.skip_vote import SkipVerdict, decide_skip, required_votes
 from models.queue import LoopMode, MusicQueue, QueueFullError, Track
 from models.user_profile import get_user_summary
 from personality.prompts import build_chat_prompt, build_discover_commentary_prompt
@@ -37,6 +38,7 @@ from personality.responses import (
     FILTER_CLEARED,
     NOT_IN_VOICE,
     NOTHING_PLAYING,
+    SKIP_VOTE_TALLY,
 )
 from personality.responses import (
     pick_random as pick_random_r,
@@ -1002,6 +1004,85 @@ class MusicCog(commands.Cog):
     # ──────────────────────────── SHARED CONTROL HELPERS ────────────────────────────
     # These are called by both slash commands AND NowPlayingView button callbacks
     # so that logic lives in one place (Task 1 — plan 07-02).
+
+    async def _try_skip(
+        self,
+        guild: discord.Guild,
+        queue: MusicQueue,
+        voice_client: discord.VoiceClient,
+        *,
+        voter_id: int,
+    ) -> tuple[SkipVerdict, Track | None, int, int]:
+        """The single vote-gated skip choke point (D-15 / DJ-02).
+
+        Both `/skip` and the NowPlayingView Skip button call this — neither
+        reaches `_do_skip` directly any more — so a vote is enforced on
+        every skip attempt regardless of entry point. 26-RESEARCH Pitfall 1:
+        `/skip`'s slash body used to duplicate `_do_skip`'s mechanics inline
+        and never called it at all, so a vote check placed only in front of
+        `_do_skip` would have left `/skip` completely unvoted.
+
+        Returns ``(verdict, next_track, votes_now, required)``. `next_track`
+        is non-None only on a `SKIP_NOW` verdict that had a next track to
+        play.
+        """
+        current = queue.get_current()
+        if current is None:
+            # Nothing playing — the caller's existing "nothing is playing"
+            # guard handles the user-facing message; no new guard here.
+            return (SkipVerdict.SKIP_NOW, None, 0, 0)
+
+        # D-17 / Pitfall 4: read the live listener set FRESH on every single
+        # vote — never memoized per-track. This is a synchronous read of
+        # discord.py's cached gateway state, not a network call. A snapshot
+        # captured once when a vote "opens" would silently go stale the
+        # moment anyone joins or leaves mid-vote.
+        if voice_client and voice_client.channel:
+            listener_ids = frozenset(m.id for m in voice_client.channel.members if not m.bot)
+        else:
+            listener_ids = frozenset()
+
+        # D-13a/D-13b: plain equality, nothing more. Never special-case the
+        # bot's own id here — a bot-queued (radio/auto-queue) track's
+        # requester field is always the bot itself, which no human voter can
+        # ever equal, so D-13b (a bot-queued track never bypasses a human
+        # vote) falls out for free. Do NOT add an admin/owner override
+        # bypass — D-13a rejects that outright as a scope violation (T-26-05).
+        is_requester = voter_id == current.requested_by
+
+        existing = queue.skip_votes_for_current()
+        verdict, new_votes = decide_skip(
+            voter_id=voter_id,
+            is_requester=is_requester,
+            listener_ids=listener_ids,
+            existing_votes=existing,
+        )
+        queue.record_skip_votes(new_votes)
+
+        # Never re-derive the majority arithmetic here (Phase 10 D-02) — the
+        # pure helper is the only source of the number that drives the D-18
+        # tally's {required} slot.
+        required = required_votes(listener_count=len(listener_ids))
+
+        if verdict == SkipVerdict.SKIP_NOW:
+            next_track = await self._do_skip(guild, queue, voice_client)
+            return (verdict, next_track, len(new_votes), required)
+        else:
+            # VOTE_RECORDED / ALREADY_VOTED — no skip mechanics. D-16/D-18:
+            # narrate the tally publicly even on a repeat vote (the room
+            # still learns a vote is open, and staying silent on a repeat
+            # /skip would make it look broken). Numbers are interpolated by
+            # code from live state, never a Gemini call.
+            channel = self._get_text_channel(guild)
+            if channel is not None:
+                try:
+                    await channel.send(
+                        pick_random_r(SKIP_VOTE_TALLY).format(votes=len(new_votes), required=required),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                except Exception as exc:
+                    log.debug("Skip-vote tally post failed: %s", exc)
+            return (verdict, None, len(new_votes), required)
 
     async def _do_skip(
         self, guild: discord.Guild, queue: MusicQueue, voice_client: discord.VoiceClient
