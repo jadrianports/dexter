@@ -703,8 +703,18 @@ class EventsCog(commands.Cog):
         # is_sensitive + contains_number firewall applies here (vision_roast !=
         # taste_episode). Guild-stamped (Phase 21 MEM-03). distill_and_remember
         # swallows all internal errors, so this can never crash the roast path.
+        #
+        # WR-02: a canned VISION_ROAST_FALLBACKS template (returned by
+        # _generate_vision_roast on a Gemini transport failure, VIS-02's non-safety
+        # "success" str) carries zero information about the image/user — memorizing
+        # boilerplate defeats the point of the feature, so it is excluded from the
+        # write via a plain membership check against the same fixed list
+        # _generate_vision_roast draws from. This does NOT touch
+        # _generate_vision_roast's str|None contract or signature (still exactly
+        # str-on-success/fallback, None-on-silent-skip) — the 5 tests locking that
+        # behavior are unaffected; only this call site's gating changes.
         memory_service = getattr(self.bot, "memory_service", None)
-        if memory_service is not None:
+        if memory_service is not None and line not in roasts.VISION_ROAST_FALLBACKS:
             asyncio.create_task(
                 memory_service.distill_and_remember(
                     user_id=str(message.author.id),
