@@ -14,6 +14,7 @@ import config
 from database import get_recent_songs, get_recently_skipped, increment_daily_stat
 from logic.autoqueue import is_recently_skipped_artist, validate_youtube_match
 from logic.playback import should_start_playback
+from logic.radio import has_room_for_refill
 from logic.taste import select_positive_taste_context
 from models.queue import Track
 from models.server_state import get_mood, get_server_state
@@ -270,17 +271,35 @@ class AICog(commands.Cog):
 
     # ──────────────────────────── AUTO-QUEUE ────────────────────────────
 
-    async def try_auto_queue(self, guild: discord.Guild) -> None:
-        """Attempt to auto-queue songs. Called by music cog when queue empties."""
+    async def try_auto_queue(self, guild: discord.Guild, *, radio: bool = False) -> None:
+        """Attempt to auto-queue songs. Called by music cog when queue empties.
+
+        Args:
+            radio: Phase 26 / DJ-01. When False (default), byte-identical to the
+                pre-Phase-26 path. When True, this call is a radio refill (D-01
+                — the SAME brain, not a fork): the round cap is lifted, the
+                prompt is anchored on the armed radio's seed, session repeats
+                are hard-rejected after YouTube resolution, and the
+                ignored-signal announce + memory write are suppressed (D-05).
+                Radio never touches `auto_queue_rounds`/`auto_queue_results`
+                (Pitfall 2) so post-radio auto-queue resumes with a clean
+                counter. Still priority-2 on the shared 15 RPM budget — never
+                escalated (D-04, Critical Rule 1).
+        """
         server_state = get_server_state(self.bot.server_states, guild.id)
         log.info(
-            "auto-queue: invoked for guild %d (round %d/%d)",
+            "auto-queue: invoked for guild %d (round %d/%d, radio=%s)",
             guild.id,
             server_state.auto_queue_rounds,
             config.AUTO_QUEUE_MAX_ROUNDS,
+            radio,
         )
 
-        if server_state.auto_queue_rounds >= config.AUTO_QUEUE_MAX_ROUNDS:
+        # Radio deliberately never reads or writes auto_queue_rounds/auto_queue_results
+        # (26-RESEARCH Pitfall 2) — an armed radio never hits AUTO_QUEUE_MAX_ROUNDS and
+        # never sends AUTO_QUEUE_CAP_REACHED, so post-radio auto-queue resumes with
+        # exactly the counters it had before radio started. Byte-identical when radio=False.
+        if not radio and server_state.auto_queue_rounds >= config.AUTO_QUEUE_MAX_ROUNDS:
             log.info(
                 "auto-queue: bail — round cap %d reached; resets on next /play (guild %d)",
                 config.AUTO_QUEUE_MAX_ROUNDS,
@@ -292,9 +311,53 @@ class AICog(commands.Cog):
             return
 
         try:
+            # Hoisted above get_recent_songs (was after the Gemini call, :379-383
+            # pre-Phase-26): radio's seed + played-set live on MusicQueue and the
+            # prompt build below needs them. Only behavioural delta on the non-radio
+            # path — a missing MusicCog now bails BEFORE spending a Gemini call
+            # instead of after, which is strictly an improvement (no test depends
+            # on the old ordering).
+            music_cog = self.bot.cogs.get("MusicCog")
+            if not music_cog:
+                return
+
+            queue = music_cog.get_queue(guild.id)
+
+            # radio_seed / already_played are None when radio=False, so the
+            # build_recommendation_prompt call below renders byte-identically.
+            radio_seed = queue.radio_seed if radio else None
+            # D-03's advisory PROMPT HINT only, capped to keep the prompt small —
+            # the MOST RECENT N entries (radio_played is insertion-ordered). The
+            # independent hard post-filter below uses the FULL uncapped
+            # radio_played keys and is the actual no-repeats guarantee (the
+            # Phase 14 hint-plus-independent-gate discipline).
+            already_played = (
+                list(queue.radio_played.values())[-config.RADIO_ALREADY_PLAYED_HINT_CAP :] if radio else None
+            )
+
+            # T-26-09: an indefinitely-refilling radio must not fight
+            # MAX_QUEUE_SIZE_PER_GUILD — MusicQueue.add raises QueueFullError once
+            # the cap is hit, and since this call runs inside make_task that would
+            # surface a spurious error to the error channel on every subsequent
+            # refill. Check BEFORE spending a Gemini call. Byte-identical when
+            # radio=False.
+            if radio and not has_room_for_refill(queue_size=len(queue.tracks)):
+                log.info(
+                    "auto-queue: radio bail — queue near MAX_QUEUE_SIZE_PER_GUILD (guild %d)",
+                    guild.id,
+                )
+                return
+
             recent = await get_recent_songs(self.bot.pool, guild_id=str(guild.id), limit=10)
-            if not recent:
-                log.info("auto-queue: bail — no recent song history for guild %d", guild.id)
+            # A seeded radio in a history-less room must still be able to start —
+            # the seed IS the context when history is absent (see plan
+            # <planner_decisions>). Byte-identical when radio=False (radio_seed is
+            # always None then).
+            if not recent and not radio_seed:
+                log.info(
+                    "auto-queue: bail — no recent song history and no radio seed for guild %d",
+                    guild.id,
+                )
                 return
 
             # Clean messy YouTube titles/uploaders before the recommender sees them,
@@ -360,6 +423,8 @@ class AICog(commands.Cog):
                 cleaned,
                 recently_skipped=recently_skipped or None,
                 positive_taste=positive_taste or None,
+                seed=radio_seed,
+                already_played=already_played or None,
             )
             response = await self.gemini.chat(prompt, [], priority=2, guild_id=str(guild.id))
 
@@ -376,11 +441,6 @@ class AICog(commands.Cog):
                 log.warning("Auto-queue: failed to parse suggestions")
                 return
 
-            music_cog = self.bot.cogs.get("MusicCog")
-            if not music_cog:
-                return
-
-            queue = music_cog.get_queue(guild.id)
             tracks_added = []
 
             # D-14: iterate ALL suggestions, break when round is full.
