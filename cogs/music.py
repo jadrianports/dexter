@@ -877,7 +877,12 @@ class MusicCog(commands.Cog):
         # Compute glue inputs for the pure decision function
         voice_client = guild.voice_client
         connected = bool(voice_client and voice_client.channel)
-        humans_present = any(not m.bot for m in voice_client.channel.members) if connected else False
+        # Single member-filter pass, reused by humans_present, the AUTOQUEUE
+        # branch's log line below, and the Phase 26 D-10 lookahead gate — no
+        # duplicate non-bot-member scan anywhere in this function.
+        human_members = [m for m in voice_client.channel.members if not m.bot] if connected else []
+        humans_present = bool(human_members)
+        radio_armed = queue.radio_armed
         ai_cog = self.bot.cogs.get("AICog")
         aicog_loaded = ai_cog is not None
 
@@ -896,16 +901,32 @@ class MusicCog(commands.Cog):
         elif action == TrackEndAction.PLAY:
             await self._play_track(guild, next_track)
             await self._refresh_now_playing(guild, queue)
+            # Phase 26 D-10: refill while tracks remain, never on empty — an
+            # on-empty refill would stall on a Gemini call plus a YouTube
+            # resolve at every track boundary, exactly the audible dead air
+            # Phase 6's zero-gap prefetch was built to eliminate. This is an
+            # independent, additional gate consulted alongside the existing
+            # dispatch above — never a new TrackEndAction member (26-PATTERNS).
+            if ai_cog is not None and should_refill_radio(
+                armed=radio_armed,
+                humans_present=humans_present,
+                upcoming_count=len(queue.upcoming()),
+            ):
+                make_task(ai_cog.try_auto_queue(guild, radio=True), name="radio-refill", bot=self.bot)
 
         elif action == TrackEndAction.AUTOQUEUE:
             # Queue exhausted — auto-queue: don't set is_playing = False; auto-queue handles it
-            human_count = sum(1 for m in voice_client.channel.members if not m.bot)
+            human_count = len(human_members)
             log.info(
                 "auto-queue: queue empty with %d human(s) in voice — triggering (guild %d)",
                 human_count,
                 guild.id,
             )
-            make_task(ai_cog.try_auto_queue(guild), name="auto-queue", bot=self.bot)
+            # Forward the radio flag (D-10): when armed, this prevents the
+            # exhausted-queue refill from hitting AUTO_QUEUE_MAX_ROUNDS and
+            # posting AUTO_QUEUE_CAP_REACHED mid-radio. Byte-identical to the
+            # pre-Phase-26 call when radio is disarmed.
+            make_task(ai_cog.try_auto_queue(guild, radio=radio_armed), name="auto-queue", bot=self.bot)
 
         else:
             # STOP_AND_CLEAR — queue genuinely exhausted with no auto-queue fallback.
@@ -1149,7 +1170,12 @@ class MusicCog(commands.Cog):
             LoopMode.SINGLE: LoopMode.QUEUE,
             LoopMode.QUEUE: LoopMode.OFF,
         }
-        queue.loop_mode = cycle[queue.loop_mode]
+        next_mode = cycle[queue.loop_mode]
+        # Phase 26 D-11: same one-choke-point discipline as /loop above — the
+        # now-playing button must not be able to leave radio armed either.
+        # The button re-draws the embed (which shows the live loop mode), so
+        # no extra announce is needed here.
+        queue.set_loop_mode(next_mode)
         return queue.loop_mode
 
     def _do_shuffle(self, queue: MusicQueue) -> int:
@@ -1862,9 +1888,17 @@ class MusicCog(commands.Cog):
     )
     async def loop(self, interaction: discord.Interaction, mode: app_commands.Choice[str]) -> None:
         queue = self.get_queue(interaction.guild.id)
-        queue.loop_mode = LoopMode(mode.value)
+        # Phase 26 D-11: route through the one model choke point (same
+        # discipline D-15 applies to skip) so this surface can never silently
+        # leave radio armed while loop is also active — LoopMode.QUEUE means
+        # the queue never exhausts (radio would pile tracks on forever) and
+        # LoopMode.SINGLE means the same track repeats (radio never advances).
+        radio_disarmed = queue.set_loop_mode(LoopMode(mode.value))
         await self._persist_queue(interaction.guild, queue)
-        await interaction.response.send_message(f"Loop mode: **{mode.name}**")
+        message = f"Loop mode: **{mode.name}**"
+        if radio_disarmed:
+            message += f" {pick_random_r(RADIO_LOOP_CONFLICT)}"
+        await interaction.response.send_message(message)
 
     @app_commands.command(name="nowplaying", description="Show what's currently playing")
     @app_commands.checks.cooldown(1, 2.0)
