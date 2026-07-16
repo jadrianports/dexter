@@ -2381,7 +2381,10 @@ class MusicCog(commands.Cog):
         # D-06a: fall back to the currently playing track when no seed is given;
         # if nothing is playing either, leave the seed None — try_auto_queue
         # falls back to the room's recent history.
-        seed_stripped = seed.strip() if seed else None
+        # WR-04: truncate here, once, before it's stored via arm_radio — the
+        # same capped value is what gets echoed into this reply AND
+        # re-embedded into every subsequent refill prompt for the session.
+        seed_stripped = seed.strip()[: config.RADIO_SEED_MAX_LENGTH] if seed else None
         if seed_stripped:
             effective_seed = seed_stripped
         else:

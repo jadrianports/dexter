@@ -403,6 +403,25 @@ class TestRadioLifecycleWiring:
         assert "disarm_radio" not in src
         assert "arm_radio" not in src
 
+    def test_radio_start_truncates_seed_before_arming(self):
+        """WR-04: an unbounded free-text seed is echoed into a public reply
+        AND re-embedded into every subsequent refill prompt for the life of
+        the session — it must be capped ONCE, before arm_radio stores it,
+        not at each downstream use site."""
+        src = _radio_start_source()
+        assert "config.RADIO_SEED_MAX_LENGTH" in src
+        truncate_pos = src.index("config.RADIO_SEED_MAX_LENGTH")
+        arm_pos = src.index("arm_radio(")
+        assert truncate_pos < arm_pos
+
+    def test_radio_seed_max_length_is_a_sane_positive_cap(self):
+        """A small sanity bound on the knob itself — comfortably below
+        Discord's 2000-char message limit once the RADIO_START template's
+        own text is accounted for, and comfortably above 0."""
+        import config
+
+        assert 0 < config.RADIO_SEED_MAX_LENGTH <= 500
+
 
 # ---------------------------------------------------------------------------
 # TestRadioDisarmsAtEveryTeardown — the SC-2 proof

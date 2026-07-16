@@ -315,6 +315,15 @@ INVITE_SCOPES: tuple[str, ...] = ("bot", "applications.commands")
 RADIO_LOOKAHEAD_DEPTH = 2  # D-10: refill trigger — tracks remaining after advance
 RADIO_ALREADY_PLAYED_HINT_CAP = 25  # D-03: prompt-hint cap; the hard filter is uncapped
 
+# WR-04 (26-REVIEW): the free-text /radio start seed has no client-side length
+# cap (Discord's STRING option max is 6000 chars) and is both echoed verbatim
+# into a public reply AND re-embedded into every subsequent refill prompt for
+# the life of the radio session (build_recommendation_prompt's seed block) —
+# an unbounded seed can push the reply past Discord's 2000-char message limit
+# and needlessly inflates every refill's Gemini call. Truncated once, at
+# arm time, mirroring the existing PLAYLIST_NAME_MAX_LENGTH precedent.
+RADIO_SEED_MAX_LENGTH = 100
+
 # D-09/D-09c: skip-vote strict majority. The threshold is floor(n * ratio) + 1,
 # clamped to n — NOT n // 2 + 1 (that hardcodes 0.5 and ignores this knob).
 SKIP_VOTE_MAJORITY_RATIO = 0.5
