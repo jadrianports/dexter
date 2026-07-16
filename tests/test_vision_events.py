@@ -16,6 +16,7 @@ discord.* mocks, patched `cogs.events.database.get_proactive_opt_out` +
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
@@ -64,6 +65,25 @@ def _make_bot() -> MagicMock:
             "vision_roasts_enabled": True,
         }
     )
+    return bot
+
+
+def _make_bot_with_memory() -> MagicMock:
+    """Like `_make_bot()`, but with a wired `memory_service` (WR-03).
+
+    `_make_bot()` sets `memory_service = None` to dodge a real bug: a bare
+    `MagicMock()` auto-attributes `.distill_and_remember(...)` as a truthy,
+    non-awaitable child `MagicMock`, and `asyncio.create_task(...)` on that
+    raises `TypeError: a coroutine was expected` (see 25-02 SUMMARY). The
+    correct fix for exercising the MEM-07 write's call-site wiring is NOT to
+    reintroduce a bare `MagicMock()` — it's to give `memory_service` an
+    explicit `AsyncMock` `distill_and_remember`, whose call DOES return a real
+    awaitable coroutine (so `create_task` works) while still recording call
+    args for assertion.
+    """
+    bot = _make_bot()
+    bot.memory_service = MagicMock()
+    bot.memory_service.distill_and_remember = AsyncMock()
     return bot
 
 
@@ -359,3 +379,130 @@ async def test_opt_out_short_circuits():
     good.read.assert_not_awaited()
     message.reply.assert_not_awaited()
     assert message.author.id not in cog._vision_roast_cooldowns
+
+
+# ---------------------------------------------------------------------------
+# (G) MEM-07 memory-write call-site wiring (WR-03)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_memory_write_fires_with_expected_kwargs_on_success():
+    """A genuine (non-fallback) roast line schedules distill_and_remember with
+    the expected user_id/guild_id/kind/raw_text/base_salience — exercises the
+    call-site WIRING itself (kwarg names, guild stamping), which the live-DB
+    `TestVisionRoastMemory` tests cannot catch since they call
+    `distill_and_remember` directly and never go through `_maybe_fire_vision_roast`.
+    """
+    good = _make_attachment("image/png", _GOOD_SIZE)
+    message = _make_message(attachments=[good], user_id=21, guild_id=777)
+    bot = _make_bot_with_memory()
+    cog = EventsCog(bot)
+
+    with (
+        patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
+        patch("cogs.events.random.random", return_value=0.0),
+        patch.object(
+            cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")
+        ),
+    ):
+        await cog._maybe_fire_vision_roast(message)
+        await asyncio.sleep(0)  # let the fire-and-forget asyncio.create_task run
+
+    bot.memory_service.distill_and_remember.assert_awaited_once_with(
+        user_id="21",
+        guild_id="777",
+        raw_text="a genuinely generated line",
+        kind="vision_roast",
+        base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["vision_roast"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_memory_write_skipped_when_line_is_none():
+    """VIS-02 silent skip (line is None) must never reach the memory write."""
+    good = _make_attachment("image/png", _GOOD_SIZE)
+    message = _make_message(attachments=[good], user_id=22)
+    bot = _make_bot_with_memory()
+    cog = EventsCog(bot)
+
+    with (
+        patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
+        patch("cogs.events.random.random", return_value=0.0),
+        patch.object(cog, "_generate_vision_roast", new=AsyncMock(return_value=None)),
+    ):
+        await cog._maybe_fire_vision_roast(message)
+        await asyncio.sleep(0)
+
+    bot.memory_service.distill_and_remember.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_memory_write_skipped_when_reply_fails():
+    """A failed message.reply (discord.HTTPException) must never reach the
+    memory write — the write is gated strictly after a confirmed successful
+    send, never pre-send."""
+    good = _make_attachment("image/png", _GOOD_SIZE)
+    message = _make_message(attachments=[good], user_id=23)
+    message.reply = AsyncMock(
+        side_effect=discord.HTTPException(MagicMock(status=500, reason="boom"), "boom")
+    )
+    bot = _make_bot_with_memory()
+    cog = EventsCog(bot)
+
+    with (
+        patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
+        patch("cogs.events.random.random", return_value=0.0),
+        patch.object(
+            cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")
+        ),
+    ):
+        await cog._maybe_fire_vision_roast(message)
+        await asyncio.sleep(0)
+
+    bot.memory_service.distill_and_remember.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_memory_write_skipped_for_transport_fallback_line():
+    """WR-02 regression: a canned VISION_ROAST_FALLBACKS template line (what
+    _generate_vision_roast returns on a Gemini transport failure) must NOT be
+    memorized — the fallback IS still sent to the user (VIS-02: a transport
+    failure is not a safety block), but only genuinely-generated commentary is
+    worth a vision_roast memory."""
+    good = _make_attachment("image/png", _GOOD_SIZE)
+    message = _make_message(attachments=[good], user_id=24)
+    bot = _make_bot_with_memory()
+    cog = EventsCog(bot)
+    fallback = roasts.VISION_ROAST_FALLBACKS[0]
+
+    with (
+        patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
+        patch("cogs.events.random.random", return_value=0.0),
+        patch.object(cog, "_generate_vision_roast", new=AsyncMock(return_value=fallback)),
+    ):
+        await cog._maybe_fire_vision_roast(message)
+        await asyncio.sleep(0)
+
+    message.reply.assert_awaited_once()
+    bot.memory_service.distill_and_remember.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_memory_write_skipped_when_memory_service_absent():
+    """A bot with no memory_service attached (the default `_make_bot()` shape,
+    memory_service=None) must not attempt the write and must not raise."""
+    good = _make_attachment("image/png", _GOOD_SIZE)
+    message = _make_message(attachments=[good], user_id=25)
+    cog = EventsCog(_make_bot())  # memory_service=None
+
+    with (
+        patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
+        patch("cogs.events.random.random", return_value=0.0),
+        patch.object(
+            cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")
+        ),
+    ):
+        await cog._maybe_fire_vision_roast(message)  # must not raise
+
+    message.reply.assert_awaited_once()
