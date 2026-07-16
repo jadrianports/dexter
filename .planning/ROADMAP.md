@@ -101,7 +101,7 @@ Full phase details, success criteria, and decisions archived in
 **Milestone Goal:** Clean the deploy story down to one honest Docker path, deepen the taste brain (durable memory + vision-sourced memories), add real DJ muscle (radio, skip-voting, crossfade), and finish the recruiter-facing surface. Continues phase numbering at Phase 24. Hosting model unchanged — the 24/7 deploy stays parked; this milestone makes Docker the clean, honest run path, not a 24/7 standup.
 
 - [x] **Phase 24: Hosting Honesty & Docker** - Purge every dead cloud-host reference and replace the Koyeb deploy doc with a verified Docker run guide (completed 2026-07-14)
-- [ ] **Phase 25: Smarter Memory** - Salience reinforcement (surfaced memories gain durability) + vision-sourced memory facts, additive on the existing pgvector store
+- [x] **Phase 25: Smarter Memory** - Salience reinforcement (surfaced memories gain durability) + vision-sourced memory facts, additive on the existing pgvector store (completed 2026-07-16)
 - [ ] **Phase 26: Radio Mode & Skip Democracy** - Endless taste-brain-driven radio mode + vote-gated `/skip` so the queue isn't one user's toy
 - [ ] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions, contingent on a plan-time spike proving playback-engine safety; descopes to a fast-follow if the spike shows instability
 - [ ] **Phase 28: Portfolio Finish & Release** - Verify the shipped landing-page redesign and close out the remaining owner-performed release steps
@@ -144,11 +144,11 @@ Full phase details, success criteria, and decisions archived in
 
 **Wave 1**
 
-- [ ] 25-01-PLAN.md — MEM-06: expiry-reinforcement DB helper (reinforce_memory_expiry) + kind-grouped recall() step 7b + SC-1/SC-3 regression guard (MEM-06)
+- [x] 25-01-PLAN.md — MEM-06: expiry-reinforcement DB helper (reinforce_memory_expiry) + kind-grouped recall() step 7b + SC-1/SC-3 regression guard (MEM-06)
 
 **Wave 2** *(depends on 25-01 — shares tests/test_database_phase25.py; SC-3 wants MEM-06 green first)*
 
-- [ ] 25-02-PLAN.md — MEM-07: register vision_roast kind (2 config entries) + fire-and-forget vision memory write in _maybe_fire_vision_roast + SC-2 write-through-firewall test (MEM-07)
+- [x] 25-02-PLAN.md — MEM-07: register vision_roast kind (2 config entries) + fire-and-forget vision memory write in _maybe_fire_vision_roast + SC-2 write-through-firewall test (MEM-07)
 
 ### Phase 26: Radio Mode & Skip Democracy
 
@@ -162,7 +162,14 @@ Full phase details, success criteria, and decisions archived in
   3. With more than one listener in voice, `/skip` requires reaching a configurable vote threshold (or listener majority) before the track actually skips, and Dexter narrates the running tally in response to each vote.
   4. A solo listener's `/skip` still skips instantly — vote-gating doesn't regress the single-listener case.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 26-01-PLAN.md — DJ-01 radio core: pure refill-gate seam (`logic/radio.py`), in-memory armed-state + session played-set on `MusicQueue`, seed/already-played prompt slots (wave 1)
+- [ ] 26-02-PLAN.md — DJ-02 vote core: pure `SkipVerdict` seam (`logic/skip_vote.py`), per-track vote state, templated tally + radio lifecycle copy (wave 2)
+- [ ] 26-03-PLAN.md — DJ-01 radio engine: `try_auto_queue(radio=True)` branch — cap lift, seed anchor, D-03 hard post-filter, D-05 ignored-signal suppression, byte-identical-when-disarmed guard (wave 2)
+- [ ] 26-04-PLAN.md — DJ-02 skip choke point: `_try_skip` gate, `/skip` slash body unified with the ⏭ button (closes RESEARCH Pitfall 1), `tests/test_music_wiring.py` (wave 3)
+- [ ] 26-05-PLAN.md — DJ-01 radio surface: `/radio start|stop` group, D-10 lookahead refill trigger, D-11 loop mutual exclusion, SC-2 teardown proof (wave 4)
 
 ### Phase 27: Crossfade Playback (Spike-Gated)
 
@@ -226,7 +233,7 @@ Full phase details, success criteria, and decisions archived in
 | 22. Invite Plumbing | v1.4 | 3/3 | Complete    | 2026-07-14 |
 | 23. Portfolio Surface & CI/CD | v1.4 | 7/7 | Complete   | 2026-07-14 |
 | 24. Hosting Honesty & Docker | v1.5 | 3/3 | Complete    | 2026-07-14 |
-| 25. Smarter Memory | v1.5 | 0/TBD | Not started | - |
+| 25. Smarter Memory | v1.5 | 2/2 | Complete   | 2026-07-16 |
 | 26. Radio Mode & Skip Democracy | v1.5 | 0/TBD | Not started | - |
 | 27. Crossfade Playback (spike-gated) | v1.5 | 0/TBD | Not started | - |
 | 28. Portfolio Finish & Release | v1.5 | 0/TBD | Not started | - |
