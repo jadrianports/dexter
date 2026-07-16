@@ -1175,7 +1175,15 @@ class MusicCog(commands.Cog):
         # now-playing button must not be able to leave radio armed either.
         # The button re-draws the embed (which shows the live loop mode), so
         # no extra announce is needed here.
-        queue.set_loop_mode(next_mode)
+        radio_disarmed = queue.set_loop_mode(next_mode)
+        # WR-01: same lifecycle-boundary reset as /loop above — this is the
+        # OTHER surface that can disarm radio via D-11 (the now-playing
+        # button), so it needs the identical reset_auto_queue() call or the
+        # leak only closes for one of the two loop entry points.
+        if radio_disarmed and hasattr(self.bot, "server_states"):
+            from models.server_state import get_server_state
+
+            get_server_state(self.bot.server_states, queue.guild_id).reset_auto_queue()
         return queue.loop_mode
 
     def _do_shuffle(self, queue: MusicQueue) -> int:
@@ -1904,6 +1912,15 @@ class MusicCog(commands.Cog):
         # LoopMode.SINGLE means the same track repeats (radio never advances).
         radio_disarmed = queue.set_loop_mode(LoopMode(mode.value))
         await self._persist_queue(interaction.guild, queue)
+
+        # WR-01: mirror radio_start/radio_stop's lifecycle-boundary reset —
+        # a mid-radio /loop disarm must not leak radio-era play/skip counts
+        # into the next non-radio auto-queue round's ignored-signal check.
+        if radio_disarmed and hasattr(self.bot, "server_states"):
+            from models.server_state import get_server_state
+
+            get_server_state(self.bot.server_states, interaction.guild.id).reset_auto_queue()
+
         message = f"Loop mode: **{mode.name}**"
         if radio_disarmed:
             message += f" {pick_random_r(RADIO_LOOP_CONFLICT)}"

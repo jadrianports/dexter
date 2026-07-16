@@ -385,6 +385,22 @@ class TestLoopRadioMutualExclusionWiring:
     def test_loop_cycle_routes_through_set_loop_mode(self):
         assert "set_loop_mode(" in _do_loop_cycle_source()
 
+    def test_loop_command_resets_auto_queue_on_radio_disarm(self):
+        """WR-01: a mid-radio /loop disarm must reset the auto-queue
+        play/skip counters, mirroring radio_start/radio_stop's own
+        lifecycle-boundary reset — otherwise radio-era counts leak into
+        the first post-radio auto-queue round's ignored-signal check."""
+        src = _loop_command_source()
+        assert "radio_disarmed" in src
+        assert "reset_auto_queue()" in src
+
+    def test_loop_cycle_resets_auto_queue_on_radio_disarm(self):
+        """The other D-11 disarm surface (the now-playing loop button) needs
+        the identical reset — the leak otherwise only closes for /loop."""
+        src = _do_loop_cycle_source()
+        assert "radio_disarmed" in src
+        assert "reset_auto_queue()" in src
+
     def test_no_direct_loop_mode_assignment_remains(self):
         """Both loop surfaces (/loop and the now-playing button) go through
         the one model choke point — no direct queue.loop_mode = assignment
