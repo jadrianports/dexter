@@ -106,6 +106,21 @@ class MusicQueue:
         # the armed-radio session lifetime IS the bound (D-08); only the prompt
         # HINT is capped (config.RADIO_ALREADY_PLAYED_HINT_CAP), never this dict.
         self.radio_played: dict[str, str] = {}
+        # Phase 26: DJ-02 skip-vote state (D-17). Votes are keyed to the
+        # track's identity (current_index, video_id) rather than reset at
+        # each current_index mutation site (_advance/skip/previous/jump_to)
+        # — this makes the D-17 "votes reset on track change" rule
+        # STRUCTURAL: any track change yields a different key, so the vote
+        # set is empty by construction on the next read. current_index is
+        # part of the key (not just video_id) so the same song queued twice
+        # at different positions gets its own independent vote. /replay
+        # re-plays the SAME track at the SAME index (key unchanged), so its
+        # votes correctly persist — a replay is not a "change". In-memory
+        # only, never persisted: services/queue_persistence.py's persist()
+        # builds an explicit typed key dict, so these fields are excluded
+        # by construction (same discipline as radio_armed/radio_seed above).
+        self._skip_votes: set[int] = set()
+        self._skip_votes_key: tuple[int, str] | None = None
 
     def add(self, track: Track) -> int:
         """Add a track to the end of the queue. Returns its index.
@@ -314,6 +329,53 @@ class MusicQueue:
             self.disarm_radio()
             return True
         return False
+
+    # ------------------------------------------------------------------
+    # Phase 26: Skip-vote state (DJ-02)
+    # ------------------------------------------------------------------
+
+    def skip_votes_for_current(self) -> frozenset[int]:
+        """Return the current track's live skip-vote set, auto-resetting on
+        track change (D-17).
+
+        Computes the key from ``(current_index, get_current().video_id)``.
+        If that key differs from the stored ``_skip_votes_key``, the vote
+        set is reset to empty and the new key is stored — this IS the D-17
+        reset, applied lazily on read rather than at every mutation site.
+
+        ``/replay`` restarts the SAME track at the SAME index, so the key is
+        unchanged and its votes correctly persist — D-17 clears votes only
+        when the track CHANGES, and a replay is not a change.
+
+        Returns:
+            An empty ``frozenset()`` if there is no current track.
+        """
+        current = self.get_current()
+        if current is None:
+            return frozenset()
+
+        key = (self.current_index, current.video_id)
+        if key != self._skip_votes_key:
+            self._skip_votes = set()
+            self._skip_votes_key = key
+        return frozenset(self._skip_votes)
+
+    def record_skip_votes(self, votes: frozenset[int]) -> None:
+        """Write back the updated skip-vote set for the current track.
+
+        This is the write-back half of the ``decide_skip`` cycle: glue reads
+        with ``skip_votes_for_current()``, passes the returned frozenset to
+        ``logic.skip_vote.decide_skip``, and writes the returned updated set
+        back here.
+
+        Calls ``skip_votes_for_current()`` first so the key is refreshed
+        before writing — votes are never written onto a stale key. No-op
+        when there is no current track.
+        """
+        self.skip_votes_for_current()  # refresh key/reset before writing
+        if self.get_current() is None:
+            return
+        self._skip_votes = set(votes)
 
     def __len__(self) -> int:
         return len(self.tracks)

@@ -17,6 +17,18 @@ match with no underscore-fuzzing.
 
 import config
 from logic.skip_vote import SkipVerdict, decide_skip, required_votes
+from models.queue import MusicQueue, Track
+
+
+def _make_track(video_id: str, requested_by: int = 1) -> Track:
+    return Track(
+        video_id=video_id,
+        title=f"Title {video_id}",
+        artist="Some Artist",
+        url=f"https://youtube.com/watch?v={video_id}",
+        duration_seconds=180,
+        requested_by=requested_by,
+    )
 
 # ---------------------------------------------------------------------------
 # TestRequiredVotesMajority  (-k majority)
@@ -255,3 +267,93 @@ class TestDecideSkipDepartedVoter:
 
         source = inspect.getsource(skip_vote_module)
         assert "new_votes & listener_ids" not in source
+
+
+# ---------------------------------------------------------------------------
+# TestSkipVotesResetOnTrackChange  (-k reset_on_track_change)
+# ---------------------------------------------------------------------------
+
+
+class TestSkipVotesResetOnTrackChange:
+    """D-17: per-track vote state on MusicQueue resets structurally on any
+    track-identity change (-k reset_on_track_change)."""
+
+    def test_reset_on_track_change_fresh_queue_returns_empty_frozenset(self):
+        """No current track (empty queue) -> frozenset(), no exception."""
+        queue = MusicQueue(guild_id=1)
+        assert queue.skip_votes_for_current() == frozenset()
+
+    def test_reset_on_track_change_round_trip_same_track(self):
+        """record_skip_votes then skip_votes_for_current on the SAME track
+        round-trips the set unchanged."""
+        queue = MusicQueue(guild_id=1)
+        queue.add(_make_track("aaa"))
+        queue.record_skip_votes(frozenset({7}))
+        assert queue.skip_votes_for_current() == frozenset({7})
+
+    def test_reset_on_track_change_skip_clears_votes(self):
+        queue = MusicQueue(guild_id=1)
+        queue.add(_make_track("aaa"))
+        queue.add(_make_track("bbb"))
+        queue.record_skip_votes(frozenset({1, 2}))
+        assert queue.skip_votes_for_current() == frozenset({1, 2})
+
+        queue.skip()
+        assert queue.skip_votes_for_current() == frozenset()
+
+    def test_reset_on_track_change_previous_does_not_resurrect_old_votes(self):
+        """Going back to track 0 after a skip does NOT bring the old votes
+        back — the reset already happened, votes do not resurrect."""
+        queue = MusicQueue(guild_id=1)
+        queue.add(_make_track("aaa"))
+        queue.add(_make_track("bbb"))
+        queue.record_skip_votes(frozenset({1, 2}))
+        queue.skip()
+        assert queue.skip_votes_for_current() == frozenset()
+
+        queue.previous()
+        assert queue.skip_votes_for_current() == frozenset()
+
+    def test_reset_on_track_change_jump_to_yields_empty_set(self):
+        queue = MusicQueue(guild_id=1)
+        queue.add(_make_track("aaa"))
+        queue.add(_make_track("bbb"))
+        queue.record_skip_votes(frozenset({1}))
+        queue.jump_to(1)
+        assert queue.skip_votes_for_current() == frozenset()
+
+    def test_reset_on_track_change_clear_leaves_empty_set(self):
+        queue = MusicQueue(guild_id=1)
+        queue.add(_make_track("aaa"))
+        queue.record_skip_votes(frozenset({1}))
+        queue.clear()
+        assert queue.skip_votes_for_current() == frozenset()
+
+    def test_reset_on_track_change_same_video_id_different_indices_independent(self):
+        """The same video_id present at two different indices keeps
+        independent votes — current_index is part of the key, not just
+        video_id."""
+        queue = MusicQueue(guild_id=1)
+        queue.add(_make_track("same_id"))
+        queue.add(_make_track("other"))
+        queue.add(_make_track("same_id"))
+        queue.record_skip_votes(frozenset({1}))
+        assert queue.skip_votes_for_current() == frozenset({1})
+
+        queue.jump_to(2)
+        assert queue.skip_votes_for_current() == frozenset()
+        queue.record_skip_votes(frozenset({2, 3}))
+        assert queue.skip_votes_for_current() == frozenset({2, 3})
+
+        # Back at index 0: the single-slot vote cache has already moved on to
+        # index 2's key, so index 0's earlier votes are gone (not resurrected)
+        # — same "no resurrection" rule as the previous() test above, proving
+        # index 2's same-video_id session never polluted index 0's votes.
+        queue.jump_to(0)
+        assert queue.skip_votes_for_current() == frozenset()
+
+    def test_reset_on_track_change_record_skip_votes_noop_on_empty_queue(self):
+        """record_skip_votes must not raise when there is no current track."""
+        queue = MusicQueue(guild_id=1)
+        queue.record_skip_votes(frozenset({1}))
+        assert queue.skip_votes_for_current() == frozenset()
