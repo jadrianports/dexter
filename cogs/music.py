@@ -28,6 +28,7 @@ from database import (
 )
 from logic.guild_config import AmbientSurface
 from logic.playback import TrackEndAction, decide_on_track_end, should_start_playback
+from logic.radio import should_refill_radio
 from logic.skip_vote import SkipVerdict, decide_skip, required_votes
 from models.queue import LoopMode, MusicQueue, QueueFullError, Track
 from models.user_profile import get_user_summary
@@ -38,6 +39,10 @@ from personality.responses import (
     FILTER_CLEARED,
     NOT_IN_VOICE,
     NOTHING_PLAYING,
+    RADIO_LOOP_CONFLICT,
+    RADIO_NOT_ARMED,
+    RADIO_START,
+    RADIO_STOP,
     SKIP_VOTE_TALLY,
 )
 from personality.responses import (
@@ -2257,6 +2262,108 @@ class MusicCog(commands.Cog):
             await interaction.followup.send(
                 embed=embeds.error("something broke while digging through the server's taste. try again later.")
             )
+
+    # ──────────────────────────── /radio GROUP (Phase 26, DJ-01) ────────────────────────────
+    # Endless radio mode. D-06b: a subcommand group, not a single /radio [seed] command — a
+    # seed value of "off"/"stop" would otherwise be indistinguishable from an artist named that.
+
+    radio = app_commands.Group(
+        name="radio",
+        description="Endless radio mode — dexter keeps the queue flowing",
+    )
+
+    @radio.command(name="start", description="Start endless radio mode, optionally seeded")
+    @app_commands.describe(seed="An artist or song to start from (optional)")
+    async def radio_start(self, interaction: discord.Interaction, seed: str | None = None) -> None:
+        """/radio start [seed] — arm radio and kick the first refill (D-06a/D-12).
+
+        Radio DJs a room; it does not join one — the bot must already be in
+        voice. No seed parsing: Gemini interprets the free text, and
+        validate_youtube_match still gates every track that actually queues.
+        """
+        guild = interaction.guild
+        voice_client = guild.voice_client
+
+        if voice_client is None:
+            await interaction.response.send_message(
+                embed=embeds.error("i'm not even in a voice channel. play something first."),
+                ephemeral=True,
+            )
+            return
+
+        queue = self.get_queue(guild.id)
+        queue._text_channel_id = interaction.channel.id
+
+        # D-06a: fall back to the currently playing track when no seed is given;
+        # if nothing is playing either, leave the seed None — try_auto_queue
+        # falls back to the room's recent history.
+        seed_stripped = seed.strip() if seed else None
+        if seed_stripped:
+            effective_seed = seed_stripped
+        else:
+            current = queue.get_current()
+            effective_seed = f"{current.title} by {current.artist}" if current else None
+
+        loop_was_on = queue.arm_radio(effective_seed)
+
+        # Radio always starts from a clean auto-queue round counter (Pitfall 2),
+        # mirroring /play's reset-on-human-action pattern.
+        if hasattr(self.bot, "server_states"):
+            from models.server_state import get_server_state
+
+            state = get_server_state(self.bot.server_states, guild.id)
+            state.reset_auto_queue()
+
+        # arm_radio changed loop_mode, which IS persisted; radio's own state is not (D-08).
+        await self._persist_queue(guild, queue)
+
+        message = pick_random_r(RADIO_START).format(seed=effective_seed or "whatever you've been playing")
+        if loop_was_on:
+            message += f" {pick_random_r(RADIO_LOOP_CONFLICT)}"
+        await interaction.response.send_message(message)
+
+        # D-12: kick the first refill through the SAME gate the lookahead uses
+        # below — an empty queue arms + refills + starts playback via
+        # try_auto_queue's existing should_start_playback gate (scar #2 —
+        # never gate on queue.is_playing); an existing queue deeper than the
+        # lookahead simply does not spend a refill yet. One code path, no
+        # special "starting" case. Dispatched AFTER the response so the 3s
+        # interaction window is never at risk (fire-and-forget).
+        ai_cog = self.bot.cogs.get("AICog")
+        humans_present = any(not m.bot for m in voice_client.channel.members)
+        if ai_cog is not None and should_refill_radio(
+            armed=True,
+            humans_present=humans_present,
+            upcoming_count=len(queue.upcoming()),
+        ):
+            make_task(ai_cog.try_auto_queue(guild, radio=True), name="radio-refill", bot=self.bot)
+
+    @radio.command(name="stop", description="Stop radio mode")
+    async def radio_stop(self, interaction: discord.Interaction) -> None:
+        """/radio stop — disarm radio without touching the queue (SC-2).
+
+        Ends the station, not the session: already-queued tracks play out,
+        the honest counterpart to /radio start's non-destructive arm (D-12).
+        """
+        queue = self.get_queue(interaction.guild.id)
+
+        if not queue.radio_armed:
+            await interaction.response.send_message(pick_random_r(RADIO_NOT_ARMED))
+            return
+
+        queue.disarm_radio()
+
+        # Radio-era play/skip counts must not leak into the first post-radio
+        # auto-queue's ignored-signal calculation (D-05's spirit at the
+        # lifecycle boundary) — an hour of normal radio channel-surfing must
+        # not fire a bogus "you skipped all my picks" afterward.
+        if hasattr(self.bot, "server_states"):
+            from models.server_state import get_server_state
+
+            state = get_server_state(self.bot.server_states, interaction.guild.id)
+            state.reset_auto_queue()
+
+        await interaction.response.send_message(pick_random_r(RADIO_STOP))
 
     # ──────────────────────────── VOICE EVENTS ────────────────────────────
 
