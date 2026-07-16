@@ -15,6 +15,7 @@ pytest's `-k` is a plain substring match with no underscore-fuzzing.
 
 import config
 from logic.radio import has_room_for_refill, is_already_played, should_refill_radio
+from models.queue import LoopMode, MusicQueue
 
 # ---------------------------------------------------------------------------
 # TestShouldRefillRadio  (-k should_refill)
@@ -266,3 +267,131 @@ class TestHasRoomForRefill:
         """An empty queue always has room for a single default batch."""
         result = has_room_for_refill(queue_size=0)
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# TestRadioDisarm  (-k disarm)  — mock-free: models/queue.py imports no Discord
+# ---------------------------------------------------------------------------
+
+
+class TestRadioDisarm:
+    """clear()/disarm_radio() coverage for MusicQueue radio state (SC-2/D-07/D-08)."""
+
+    def test_disarm_clear_disarms_armed_radio_and_empties_played_set(self):
+        """clear() disarms an armed radio and empties radio_played (D-07/D-08)."""
+        q = MusicQueue(guild_id=1)
+        q.arm_radio("daft punk")
+        q.radio_played["abc123"] = "One More Time by Daft Punk"
+        q.clear()
+        assert q.radio_armed is False
+        assert q.radio_played == {}
+
+    def test_disarm_clear_resets_radio_seed_to_none(self):
+        """A disarmed queue's radio_seed is None after clear()."""
+        q = MusicQueue(guild_id=1)
+        q.arm_radio("daft punk")
+        q.clear()
+        assert q.radio_seed is None
+
+    def test_disarm_radio_is_idempotent(self):
+        """Calling disarm_radio() on an already-disarmed queue is a safe no-op."""
+        q = MusicQueue(guild_id=1)
+        assert q.radio_armed is False
+        q.disarm_radio()
+        assert q.radio_armed is False
+        assert q.radio_seed is None
+        assert q.radio_played == {}
+
+    def test_disarm_radio_directly_clears_all_three_fields(self):
+        """disarm_radio() alone (without clear()) resets armed/seed/played."""
+        q = MusicQueue(guild_id=1)
+        q.arm_radio("phonk")
+        q.radio_played["xyz"] = "Some Track by Someone"
+        q.disarm_radio()
+        assert q.radio_armed is False
+        assert q.radio_seed is None
+        assert q.radio_played == {}
+
+    def test_disarm_new_queue_defaults_to_disarmed(self):
+        """A fresh MusicQueue starts disarmed with no seed and an empty played-set."""
+        q = MusicQueue(guild_id=1)
+        assert q.radio_armed is False
+        assert q.radio_seed is None
+        assert q.radio_played == {}
+
+    def test_disarm_never_persisted_in_queue_persistence_payload(self):
+        """D-08: no 'radio' key exists anywhere in services/queue_persistence.py."""
+        import pathlib
+
+        src = pathlib.Path("services/queue_persistence.py").read_text(encoding="utf-8")
+        assert "radio" not in src
+
+
+# ---------------------------------------------------------------------------
+# TestRadioLoopExclusion  (-k loop_exclusion)  — D-11 mutual exclusion
+# ---------------------------------------------------------------------------
+
+
+class TestRadioLoopExclusion:
+    """arm_radio()/set_loop_mode() mutual-exclusion coverage (D-11)."""
+
+    def test_loop_exclusion_arm_radio_forces_loop_off_and_returns_true_when_loop_was_on(self):
+        """arm_radio() forces loop_mode to OFF and returns True when loop was on."""
+        q = MusicQueue(guild_id=1)
+        q.loop_mode = LoopMode.QUEUE
+        result = q.arm_radio("daft punk")
+        assert result is True
+        assert q.loop_mode == LoopMode.OFF
+        assert q.radio_armed is True
+
+    def test_loop_exclusion_arm_radio_returns_false_when_loop_already_off(self):
+        """arm_radio() returns False when loop was already off (no conflict to announce)."""
+        q = MusicQueue(guild_id=1)
+        assert q.loop_mode == LoopMode.OFF
+        result = q.arm_radio("daft punk")
+        assert result is False
+        assert q.loop_mode == LoopMode.OFF
+
+    def test_loop_exclusion_set_loop_mode_queue_disarms_armed_radio(self):
+        """set_loop_mode(QUEUE) on an armed queue disarms radio and returns True."""
+        q = MusicQueue(guild_id=1)
+        q.arm_radio("daft punk")
+        result = q.set_loop_mode(LoopMode.QUEUE)
+        assert result is True
+        assert q.radio_armed is False
+        assert q.loop_mode == LoopMode.QUEUE
+
+    def test_loop_exclusion_set_loop_mode_single_disarms_armed_radio(self):
+        """set_loop_mode(SINGLE) on an armed queue also disarms radio and returns True."""
+        q = MusicQueue(guild_id=1)
+        q.arm_radio("daft punk")
+        result = q.set_loop_mode(LoopMode.SINGLE)
+        assert result is True
+        assert q.radio_armed is False
+        assert q.loop_mode == LoopMode.SINGLE
+
+    def test_loop_exclusion_set_loop_mode_off_leaves_armed_radio_armed(self):
+        """set_loop_mode(OFF) on an armed queue is NOT a conflict — stays armed, returns False."""
+        q = MusicQueue(guild_id=1)
+        q.arm_radio("daft punk")
+        result = q.set_loop_mode(LoopMode.OFF)
+        assert result is False
+        assert q.radio_armed is True
+
+    def test_loop_exclusion_set_loop_mode_on_disarmed_queue_returns_false(self):
+        """set_loop_mode() on a never-armed queue simply sets loop_mode, returns False."""
+        q = MusicQueue(guild_id=1)
+        result = q.set_loop_mode(LoopMode.QUEUE)
+        assert result is False
+        assert q.loop_mode == LoopMode.QUEUE
+        assert q.radio_armed is False
+
+    def test_loop_exclusion_arm_radio_twice_resets_played_set_between_sessions(self):
+        """arm_radio() called twice resets radio_played between sessions (Pitfall 3)."""
+        q = MusicQueue(guild_id=1)
+        q.arm_radio("a")
+        q.radio_played["vid1"] = "Track One by Artist"
+        assert q.radio_played != {}
+        q.arm_radio("b")
+        assert q.radio_played == {}
+        assert q.radio_seed == "b"

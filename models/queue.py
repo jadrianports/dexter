@@ -87,6 +87,25 @@ class MusicQueue:
         # Phase 6: prefetch state — cleared on queue clear (PERF-01, D-04)
         self._prefetch_video_id: str | None = None  # video_id currently being prefetched
         self._prefetch_task: asyncio.Task | None = None  # in-flight prefetch task
+        # Phase 26: radio mode state (DJ-01 / A3). Radio is PLAYBACK state, like
+        # loop_mode — NOT a server preference like auto_lyrics above. That's why
+        # it's reset by clear() (see clear() below): every existing queue-teardown
+        # site (/stop, the stop button, idle_check, reconnect-failure) already
+        # calls clear(), so all four become D-07 disarm sites for free, with zero
+        # bot.py changes. Never persisted (D-08) — services/queue_persistence.py's
+        # persist() builds an explicit typed key dict (tracks/current_index/
+        # loop_mode/text_channel_id/active_filter), never __dict__, so these new
+        # fields are unpersisted by construction.
+        self.radio_armed: bool = False
+        self.radio_seed: str | None = None
+        # keys = video_ids played this radio session (drive the D-03 independent
+        # hard post-filter via logic.radio.is_already_played); values = display
+        # strings ("Title by Artist") that drive the D-03 prompt hint
+        # (personality.prompts.build_recommendation_prompt's already_played=).
+        # Insertion-ordered so the hint is chronological. Deliberately uncapped —
+        # the armed-radio session lifetime IS the bound (D-08); only the prompt
+        # HINT is capped (config.RADIO_ALREADY_PLAYED_HINT_CAP), never this dict.
+        self.radio_played: dict[str, str] = {}
 
     def add(self, track: Track) -> int:
         """Add a track to the end of the queue. Returns its index.
@@ -231,10 +250,70 @@ class MusicQueue:
         # Phase 6: prefetch state reset
         self._prefetch_video_id = None
         self._prefetch_task = None
+        # Phase 26 (DJ-01, A3/D-07/D-08): radio is playback state and dies with
+        # the queue. This single line is what makes /stop, the stop button's
+        # _do_stop, bot.py::idle_check's idle-leave, and the reconnect-failure
+        # teardown all disarm radio — every one of them already calls clear(),
+        # so SC-2 needs no per-site edit.
+        self.disarm_radio()
 
     def upcoming(self) -> list[Track]:
         """Return tracks after the current one."""
         return self.tracks[self.current_index + 1 :]
+
+    # ------------------------------------------------------------------
+    # Phase 26: Radio mode (DJ-01)
+    # ------------------------------------------------------------------
+
+    def arm_radio(self, seed: str | None = None) -> bool:
+        """Arm radio mode for this guild's queue.
+
+        Sets radio_armed=True, records the (optional, free-text) seed, and
+        resets radio_played to a fresh empty dict. The reset-on-START is
+        required, not just reset-on-stop (Pitfall 3): a second radio session
+        must not inherit the first's play history, or it would false-positive
+        reject tracks the current session never actually played.
+
+        Enforces D-11 (radio and loop_mode are mutually exclusive) by forcing
+        loop_mode to LoopMode.OFF.
+
+        Returns:
+            True if loop_mode was non-OFF before arming (caller should
+            announce "turned loop off"), else False.
+        """
+        loop_was_active = self.loop_mode != LoopMode.OFF
+        self.radio_armed = True
+        self.radio_seed = seed
+        self.radio_played = {}
+        self.loop_mode = LoopMode.OFF
+        return loop_was_active
+
+    def disarm_radio(self) -> None:
+        """Disarm radio mode. Idempotent — safe to call when already disarmed."""
+        self.radio_armed = False
+        self.radio_seed = None
+        self.radio_played = {}
+
+    def set_loop_mode(self, mode: LoopMode) -> bool:
+        """Set loop_mode, enforcing the D-11 radio/loop mutual-exclusion choke point.
+
+        This is the ONE place both /loop and the now-playing loop button
+        (_do_loop_cycle) must route through, so a surface can never silently
+        leave radio armed while loop is also active — the same one-choke-point
+        discipline D-15 applies to skip.
+
+        If mode is not LoopMode.OFF and radio is currently armed, disarms radio
+        (the D-11 conflict) and returns True so the caller can announce it.
+        Turning loop OFF is never a conflict, even while radio is armed.
+
+        Returns:
+            True if this call disarmed radio, else False.
+        """
+        self.loop_mode = mode
+        if mode != LoopMode.OFF and self.radio_armed:
+            self.disarm_radio()
+            return True
+        return False
 
     def __len__(self) -> int:
         return len(self.tracks)
