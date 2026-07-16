@@ -315,6 +315,10 @@ INVITE_SCOPES: tuple[str, ...] = ("bot", "applications.commands")
 RADIO_LOOKAHEAD_DEPTH = 2  # D-10: refill trigger — tracks remaining after advance
 RADIO_ALREADY_PLAYED_HINT_CAP = 25  # D-03: prompt-hint cap; the hard filter is uncapped
 
+# D-09/D-09c: skip-vote strict majority. The threshold is floor(n * ratio) + 1,
+# clamped to n — NOT n // 2 + 1 (that hardcodes 0.5 and ignores this knob).
+SKIP_VOTE_MAJORITY_RATIO = 0.5
+
 
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
