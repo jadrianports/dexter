@@ -20,9 +20,11 @@ the skip path.
 from __future__ import annotations
 
 import inspect
+import pathlib
 
 import cogs.music as music_module
 from cogs.music import MusicCog, NowPlayingView
+from logic.playback import TrackEndAction
 
 
 def _skip_command_source() -> str:
@@ -43,6 +45,52 @@ def _do_skip_source() -> str:
 
 def _music_module_source() -> str:
     return inspect.getsource(music_module)
+
+
+def _on_track_end_source() -> str:
+    return inspect.getsource(MusicCog._on_track_end)
+
+
+def _radio_start_source() -> str:
+    return inspect.getsource(MusicCog.radio_start.callback)
+
+
+def _radio_stop_source() -> str:
+    return inspect.getsource(MusicCog.radio_stop.callback)
+
+
+def _play_source() -> str:
+    return inspect.getsource(MusicCog.play.callback)
+
+
+def _loop_command_source() -> str:
+    return inspect.getsource(MusicCog.loop.callback)
+
+
+def _do_loop_cycle_source() -> str:
+    return inspect.getsource(MusicCog._do_loop_cycle)
+
+
+def _stop_command_source() -> str:
+    return inspect.getsource(MusicCog.stop.callback)
+
+
+def _do_stop_source() -> str:
+    return inspect.getsource(MusicCog._do_stop)
+
+
+def _idle_check_source() -> str:
+    """inspect.getsource fails directly on a discord.ext.tasks.Loop object —
+    the underlying coroutine lives on its .coro attribute. Fall back to a
+    plain text read of bot.py if that attribute ever goes away."""
+    import bot as bot_module
+
+    try:
+        return inspect.getsource(bot_module.idle_check.coro)
+    except (TypeError, AttributeError):
+        text = pathlib.Path("bot.py").read_text(encoding="utf-8")
+        start = text.index("async def idle_check")
+        return text[start : start + 2000]
 
 
 def _non_comment_lines(src: str) -> list[str]:
@@ -172,3 +220,125 @@ class TestNoNewMemoryKindInSkipPath:
         """The existing recording path is intact — not accidentally removed
         during the D-15 unification."""
         assert "mark_song_skipped(" in _do_skip_source()
+
+
+# ---------------------------------------------------------------------------
+# TestRadioLookaheadWiring — 26-05 D-10
+# ---------------------------------------------------------------------------
+
+
+class TestRadioLookaheadWiring:
+    def test_on_track_end_calls_should_refill_radio(self):
+        assert "should_refill_radio(" in _on_track_end_source()
+
+    def test_on_track_end_dispatches_radio_refill_task(self):
+        assert 'name="radio-refill"' in _on_track_end_source()
+
+    def test_autoqueue_branch_forwards_radio_flag(self):
+        """Queue exhaustion with radio armed must not hit
+        AUTO_QUEUE_MAX_ROUNDS mid-radio — the flag must be forwarded."""
+        assert "radio=radio_armed" in _on_track_end_source()
+
+    def test_on_track_end_still_dispatches_on_track_end_action(self):
+        """The existing pure dispatch is untouched — radio is an additional
+        gate consulted alongside it, never a replacement."""
+        src = _on_track_end_source()
+        assert "decide_on_track_end(" in src
+        assert "TrackEndAction." in src
+
+    def test_track_end_action_has_no_new_radio_member(self):
+        """Radio is an additional gate, never a new TrackEndAction enum
+        member — logic/playback.py stays byte-identical (26-PATTERNS)."""
+        assert {m.name for m in TrackEndAction} == {"NOOP", "PLAY", "AUTOQUEUE", "STOP_AND_CLEAR"}
+
+    def test_on_track_end_source_has_no_radio_enum_member_reference(self):
+        assert "TrackEndAction.RADIO" not in _on_track_end_source()
+
+    def test_on_track_end_single_member_enumeration(self):
+        """Reuses the existing humans_present computation — no second
+        `not m.bot` member-scan was introduced for the lookahead gate."""
+        non_comment = "\n".join(_non_comment_lines(_on_track_end_source()))
+        assert non_comment.count("not m.bot") == 1
+
+
+# ---------------------------------------------------------------------------
+# TestRadioLifecycleWiring — 26-05 D-06a/D-06b/D-07/D-12
+# ---------------------------------------------------------------------------
+
+
+class TestRadioLifecycleWiring:
+    def test_radio_start_arms_and_resets(self):
+        src = _radio_start_source()
+        assert "arm_radio(" in src
+        assert "reset_auto_queue()" in src
+        assert "radio=True" in src
+
+    def test_radio_stop_disarms_and_resets(self):
+        src = _radio_stop_source()
+        assert "disarm_radio()" in src
+        assert "reset_auto_queue()" in src
+
+    def test_radio_stop_does_not_clear_the_queue(self):
+        """Stopping the station is not stopping the session — already-queued
+        tracks must keep playing out (SC-2's honest counterpart to D-12)."""
+        assert "queue.clear()" not in _radio_stop_source()
+
+    def test_play_never_disarms_or_arms_radio(self):
+        """D-07: a human /play mid-radio only INJECTS a track. One person
+        adding one song must not silently kill a mode nobody asked to end."""
+        src = _play_source()
+        assert "disarm_radio" not in src
+        assert "arm_radio" not in src
+
+
+# ---------------------------------------------------------------------------
+# TestRadioDisarmsAtEveryTeardown — the SC-2 proof
+# ---------------------------------------------------------------------------
+
+
+class TestRadioDisarmsAtEveryTeardown:
+    def test_clear_disarms_radio_behaviourally(self):
+        """The concrete SC-2 proof: a /stop that clears a queue radio
+        instantly refills would be an unstoppable bot. clear() (26-01) is
+        the single line that makes every existing teardown site a disarm
+        site, with zero per-site edits needed."""
+        from models.queue import MusicQueue
+
+        queue = MusicQueue(guild_id=1)
+        queue.arm_radio("some seed")
+        assert queue.radio_armed is True
+
+        queue.clear()
+
+        assert queue.radio_armed is False
+
+    def test_stop_command_still_calls_clear(self):
+        assert "queue.clear()" in _stop_command_source()
+
+    def test_do_stop_still_calls_clear(self):
+        assert "queue.clear()" in _do_stop_source()
+
+    def test_idle_check_still_calls_clear(self):
+        assert "queue.clear()" in _idle_check_source()
+
+
+# ---------------------------------------------------------------------------
+# TestLoopRadioMutualExclusionWiring — 26-05 D-11
+# ---------------------------------------------------------------------------
+
+
+class TestLoopRadioMutualExclusionWiring:
+    def test_loop_command_routes_through_set_loop_mode(self):
+        src = _loop_command_source()
+        assert "set_loop_mode(" in src
+        assert "RADIO_LOOP_CONFLICT" in src
+
+    def test_loop_cycle_routes_through_set_loop_mode(self):
+        assert "set_loop_mode(" in _do_loop_cycle_source()
+
+    def test_no_direct_loop_mode_assignment_remains(self):
+        """Both loop surfaces (/loop and the now-playing button) go through
+        the one model choke point — no direct queue.loop_mode = assignment
+        may remain in cogs/music.py."""
+        non_comment = "\n".join(_non_comment_lines(_music_module_source()))
+        assert "queue.loop_mode = " not in non_comment
