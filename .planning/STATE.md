@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
-status: executing
-stopped_at: Phase 26 context gathered
-last_updated: "2026-07-16T12:49:26.068Z"
-last_activity: 2026-07-16 -- Phase 25 execution started
+status: verifying
+stopped_at: Completed 26-05-PLAN.md
+last_updated: "2026-07-16T18:19:43.986Z"
+last_activity: 2026-07-16
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 40
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 10
+  percent: 60
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 25 — smarter-memory
+**Current focus:** Phase 26 — radio-mode-skip-democracy
 
 ## Current Position
 
-Phase: 25 (smarter-memory) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-07-16 -- Phase 25 execution started
+Phase: 27
+Plan: Not started
+Status: Phase complete — ready for verification
+Last activity: 2026-07-16
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -99,6 +99,11 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 24 P03 | 30min | 2 tasks | 2 files |
 | Phase 25 P01 | 25min | 3 tasks | 4 files |
 | Phase 25 P02 | 35min | 2 tasks | 4 files |
+| Phase 26 P01 | 45min | 3 tasks | 6 files |
+| Phase 26 P02 | 30min | 3 tasks | 5 files |
+| Phase 26 P03 | 40min | 3 tasks | 3 files |
+| Phase 26 P04 | 35min | 3 tasks | 3 files |
+| Phase 26 P05 | 38min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -129,6 +134,15 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 24]: [Phase 24-03] milestones/ sealed prefix kept as defensive/currently-vacuous (milestone docs nest under .planning/milestones/, already covered) rather than dropped or faked
 - [Phase 25-01]: recall() reinforces expiry via a new GREATEST-guarded batched helper, grouped by kind, at the single step-7 chokepoint; salience/hit_count/last_seen_at stay byte-identical (D-01/D-02)
 - [Phase 25]: MEM-07: vision_roast is a new memory kind (0.4 salience, TASTE_DECAY_DAYS decay); write is fire-and-forget after a successful roast reply, distilling the roast line (not the image) through the full accuracy/PII firewall (exempt_numbers=False since kind != taste_episode).
+- [Phase 26-01]: radio armed-state lives on MusicQueue (not a service/DB) and clear() disarms it -- covers all four existing teardown sites for free, zero bot.py changes — D-11 makes radio and loop_mode mutually exclusive, same category of state as loop_mode which clear() already resets
+- [Phase 26-01]: reconciled a prior executor's uncommitted mid-task-1 crash artifacts (logic/radio.py, config.py knobs) -- verified correct against plan spec, no rewrite needed, only added the missing test file
+- [Phase ?]: [Phase 26-02]: floor(listener_count * majority_ratio) + 1 clamped to listener_count (never n // 2 + 1) so config.SKIP_VOTE_MAJORITY_RATIO is an honoured knob, not a lie -- reproduces D-09c's table at ratio=0.5
+- [Phase ?]: [Phase 26-02]: decide_skip counts len(new_votes) never an intersection with listener_ids -- D-17 departed voters stay counted; locked by both a source-grep test and a behavioral test
+- [Phase ?]: [Phase 26-02]: MusicQueue skip-vote state is a single-slot cache keyed to (current_index, video_id), reset lazily on read -- structural D-17 reset with zero per-mutation-site hooks; a revisited track's earlier votes are not resurrected
+- [Phase 26-03]: try_auto_queue(guild, *, radio: bool = False) is the radio refill entry point (D-01) -- round cap lifted, prompt anchored on the armed seed, session repeats hard-rejected after YouTube resolution via an independent post-filter, ignored-signal announce/memory-write suppressed while armed (D-05); byte-identical when radio=False, locked by a source-scan regression guard
+- [Phase 26]: [Phase 26-04]: _try_skip is a new gate-wraps-mechanics wrapper; _do_skip stays completely unmodified and is called ONLY on SKIP_NOW, preserving D-20 and Critical Rule 3 for free
+- [Phase 26]: [Phase 26-04]: closed a second, plan-undocumented vote-bypass surface -- /seek's past-end auto-skip called _do_skip directly, letting any single user force an unvoted skip; routed through _try_skip too since the plan's own acceptance criteria (exactly one _do_skip call site) required it
+- [Phase 26-05]: radio start kicks its first refill through the same should_refill_radio gate the lookahead uses, giving D-12 non-destructive takeover with no special starting case; both /radio start and /radio stop call reset_auto_queue() so radio-era play/skip counts never leak into the next auto-queue session's ignored-signal check
 
 ### Pending Todos
 
@@ -170,9 +184,9 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 
 ## Session Continuity
 
-Last session: 2026-07-16T12:08:41.983Z
-Stopped at: Phase 26 context gathered
-Resume file: .planning/phases/26-radio-mode-skip-democracy/26-CONTEXT.md
+Last session: 2026-07-16T17:07:15.591Z
+Stopped at: Completed 26-05-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

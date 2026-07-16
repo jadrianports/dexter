@@ -102,7 +102,7 @@ Full phase details, success criteria, and decisions archived in
 
 - [x] **Phase 24: Hosting Honesty & Docker** - Purge every dead cloud-host reference and replace the Koyeb deploy doc with a verified Docker run guide (completed 2026-07-14)
 - [x] **Phase 25: Smarter Memory** - Salience reinforcement (surfaced memories gain durability) + vision-sourced memory facts, additive on the existing pgvector store (completed 2026-07-16)
-- [ ] **Phase 26: Radio Mode & Skip Democracy** - Endless taste-brain-driven radio mode + vote-gated `/skip` so the queue isn't one user's toy
+- [x] **Phase 26: Radio Mode & Skip Democracy** - Endless taste-brain-driven radio mode + vote-gated `/skip` so the queue isn't one user's toy (completed 2026-07-16)
 - [ ] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions, contingent on a plan-time spike proving playback-engine safety; descopes to a fast-follow if the spike shows instability
 - [ ] **Phase 28: Portfolio Finish & Release** - Verify the shipped landing-page redesign and close out the remaining owner-performed release steps
 
@@ -166,20 +166,20 @@ Full phase details, success criteria, and decisions archived in
 Plans:
 **Wave 1**
 
-- [ ] 26-01-PLAN.md — DJ-01 radio core: pure refill-gate seam (`logic/radio.py`), in-memory armed-state + session played-set on `MusicQueue`, seed/already-played prompt slots (wave 1)
+- [x] 26-01-PLAN.md — DJ-01 radio core: pure refill-gate seam (`logic/radio.py`), in-memory armed-state + session played-set on `MusicQueue`, seed/already-played prompt slots (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 26-02-PLAN.md — DJ-02 vote core: pure `SkipVerdict` seam (`logic/skip_vote.py`), per-track vote state, templated tally + radio lifecycle copy (wave 2)
-- [ ] 26-03-PLAN.md — DJ-01 radio engine: `try_auto_queue(radio=True)` branch — cap lift, seed anchor, D-03 hard post-filter, D-05 ignored-signal suppression, byte-identical-when-disarmed guard (wave 2)
+- [x] 26-02-PLAN.md — DJ-02 vote core: pure `SkipVerdict` seam (`logic/skip_vote.py`), per-track vote state, templated tally + radio lifecycle copy (wave 2)
+- [x] 26-03-PLAN.md — DJ-01 radio engine: `try_auto_queue(radio=True)` branch — cap lift, seed anchor, D-03 hard post-filter, D-05 ignored-signal suppression, byte-identical-when-disarmed guard (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 26-04-PLAN.md — DJ-02 skip choke point: `_try_skip` gate, `/skip` slash body unified with the ⏭ button (closes RESEARCH Pitfall 1), `tests/test_music_wiring.py` (wave 3)
+- [x] 26-04-PLAN.md — DJ-02 skip choke point: `_try_skip` gate, `/skip` slash body unified with the ⏭ button (closes RESEARCH Pitfall 1), `tests/test_music_wiring.py` (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 26-05-PLAN.md — DJ-01 radio surface: `/radio start|stop` group, D-10 lookahead refill trigger, D-11 loop mutual exclusion, SC-2 teardown proof (wave 4)
+- [x] 26-05-PLAN.md — DJ-01 radio surface: `/radio start|stop` group, D-10 lookahead refill trigger, D-11 loop mutual exclusion, SC-2 teardown proof (wave 4)
 
 ### Phase 27: Crossfade Playback (Spike-Gated)
 
@@ -244,6 +244,6 @@ Full phase details, success criteria, and decisions archived in
 | 23. Portfolio Surface & CI/CD | v1.4 | 7/7 | Complete   | 2026-07-14 |
 | 24. Hosting Honesty & Docker | v1.5 | 3/3 | Complete    | 2026-07-14 |
 | 25. Smarter Memory | v1.5 | 2/2 | Complete   | 2026-07-16 |
-| 26. Radio Mode & Skip Democracy | v1.5 | 0/TBD | Not started | - |
+| 26. Radio Mode & Skip Democracy | v1.5 | 5/5 | Complete    | 2026-07-16 |
 | 27. Crossfade Playback (spike-gated) | v1.5 | 0/TBD | Not started | - |
 | 28. Portfolio Finish & Release | v1.5 | 0/TBD | Not started | - |

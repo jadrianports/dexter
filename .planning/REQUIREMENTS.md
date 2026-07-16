@@ -16,13 +16,13 @@ Requirements for the "Deep Cuts" milestone. Each maps to a roadmap phase (Phase 
 
 ### Smarter Memory
 
-- [ ] **MEM-06**: Memories that get surfaced/hit gain durability (salience reinforcement) — a surfaced memory's salience/expiry is reinforced so frequently-relevant facts outlive one-off ones under the daily decay sweep. Additive on the existing `user_memories` pgvector store.
-- [ ] **MEM-07**: A vision roast persists a distilled, number-free fact into long-term memory (vision→RAG memory), subject to the same sensitivity / accuracy firewall as every other memory kind (no embedded SQL-known numbers).
+- [x] **MEM-06**: Memories that get surfaced/hit gain durability (salience reinforcement) — a surfaced memory's salience/expiry is reinforced so frequently-relevant facts outlive one-off ones under the daily decay sweep. Additive on the existing `user_memories` pgvector store.
+- [x] **MEM-07**: A vision roast persists a distilled, number-free fact into long-term memory (vision→RAG memory), subject to the same sensitivity / accuracy firewall as every other memory kind (no embedded SQL-known numbers).
 
 ### New Music Muscle
 
-- [ ] **DJ-01**: Radio / endless mode — a user seeds a track or artist and Dexter keeps the queue flowing indefinitely off the taste brain (no manual queueing) until stopped.
-- [ ] **DJ-02**: Skip-voting / queue democracy — a skip requires a configurable vote threshold (or listener majority) so one user can't unilaterally hijack the queue; Dexter narrates the tally.
+- [x] **DJ-01**: Radio / endless mode — a user seeds a track or artist and Dexter keeps the queue flowing indefinitely off the taste brain (no manual queueing) until stopped.
+- [x] **DJ-02**: Skip-voting / queue democracy — a skip requires a configurable vote threshold (or listener majority) so one user can't unilaterally hijack the queue; Dexter narrates the tally.
 - [ ] **DJ-03** *(spike-gated)*: Crossfade between tracks — the tail of the outgoing track blends into the head of the incoming track. Gated on a plan-time spike proving `/skip`-mid-crossfade + generation-counter safety on the existing playback engine; **descope to a fast-follow if the spike shows engine instability** (standing Descope Rule).
 
 ### Portfolio Finish
@@ -71,10 +71,10 @@ Explicitly excluded.
 | HOST-02 | Phase 24 | Complete |
 | HOST-03 | Phase 24 | Complete |
 | HOST-04 | Phase 24 | Complete |
-| MEM-06 | Phase 25 | Pending |
-| MEM-07 | Phase 25 | Pending |
-| DJ-01 | Phase 26 | Pending |
-| DJ-02 | Phase 26 | Pending |
+| MEM-06 | Phase 25 | Complete |
+| MEM-07 | Phase 25 | Complete |
+| DJ-01 | Phase 26 | Complete |
+| DJ-02 | Phase 26 | Complete |
 | DJ-03 | Phase 27 | Pending (spike-gated) |
 | PORT-05 | Phase 28 | Complete (`c7fd22e`) |
 | PORT-02 | Phase 28 | Pending (blocked-on-human) |
