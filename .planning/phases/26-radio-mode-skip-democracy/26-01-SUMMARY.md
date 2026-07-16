@@ -125,3 +125,14 @@ A prior executor died mid-Task-1 due to an API connection error, leaving `logic/
 ---
 *Phase: 26-radio-mode-skip-democracy*
 *Completed: 2026-07-16*
+
+## Self-Check: PASSED
+
+- FOUND: logic/radio.py
+- FOUND: tests/test_radio_logic.py
+- FOUND: .planning/phases/26-radio-mode-skip-democracy/26-01-SUMMARY.md
+- FOUND: e05d5e3 (Task 1 commit)
+- FOUND: 43017a6 (Task 2 commit)
+- FOUND: 503e497 (Task 3 commit)
+- FOUND: 83bd787 (deviation fix commit)
+- FOUND: c0309c1 (this summary's own commit)
