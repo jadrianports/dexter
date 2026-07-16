@@ -182,29 +182,41 @@ class MemoryService:
             # Step 6 — cap to MEMORY_INJECT_CAP (1–3)
             top = ranked[: config.MEMORY_INJECT_CAP]
 
-            # Step 7a — bump last_surfaced_at so D-05 novelty penalty applies next call
-            # (UNCHANGED — byte-identical call, same function, same args, so every
-            # existing mock of database.bump_surfaced still works).
-            await database.bump_surfaced(self._pool, [f.id for f in top])
+            # Steps 7a/7b — best-effort surfacing bookkeeping (WR-01). Wrapped in
+            # their OWN inner try/except, separate from the outer retrieval-body
+            # catch below: a transient failure in bump_surfaced/reinforce_memory_expiry
+            # (network blip, pool exhaustion) must never discard the already-computed
+            # `top` facts — it is purely cosmetic housekeeping, not part of the
+            # "did retrieval work" contract the outer except guards.
+            try:
+                # Step 7a — bump last_surfaced_at so D-05 novelty penalty applies next
+                # call (UNCHANGED — byte-identical call, same function, same args, so
+                # every existing mock of database.bump_surfaced still works).
+                await database.bump_surfaced(self._pool, [f.id for f in top])
 
-            # Step 7b — MEM-06 (D-01/D-02): reinforce expiry, grouped by each fact's
-            # own kind, at this single recall() chokepoint. kind is read from the RAW
-            # `rows` (never from MemoryFact — the dataclass stays kind-free) via
-            # .get("kind"), never ["kind"], so the pre-existing _DictRecord test
-            # fixtures (which lack a "kind" key) keep passing untouched. Reinforcement
-            # is expiry-only — salience/hit_count/last_seen_at are never touched here.
-            kind_by_id = {row["id"]: row.get("kind") for row in rows}
-            now2 = datetime.now(timezone.utc)
-            groups: dict[int, list[int]] = {}  # decay_days -> [ids]
-            for f in top:
-                days = resolve_decay_days(
-                    kind_by_id.get(f.id),
-                    default_days=config.MEMORY_DECAY_DAYS,
-                    kind_overrides=config.MEMORY_DECAY_DAYS_BY_KIND,
-                )
-                groups.setdefault(days, []).append(f.id)
-            for days, ids in groups.items():
-                await database.reinforce_memory_expiry(self._pool, ids, now2 + timedelta(days=days))
+                # Step 7b — MEM-06 (D-01/D-02): reinforce expiry, grouped by each
+                # fact's own kind, at this single recall() chokepoint. kind is read
+                # from the RAW `rows` (never from MemoryFact — the dataclass stays
+                # kind-free) via .get("kind"), never ["kind"], so the pre-existing
+                # _DictRecord test fixtures (which lack a "kind" key) keep passing
+                # untouched. Reinforcement is expiry-only — salience/hit_count/
+                # last_seen_at are never touched here.
+                kind_by_id = {row["id"]: row.get("kind") for row in rows}
+                reinforced_at = datetime.now(timezone.utc)
+                groups: dict[int, list[int]] = {}  # decay_days -> [ids]
+                for f in top:
+                    days = resolve_decay_days(
+                        kind_by_id.get(f.id),
+                        default_days=config.MEMORY_DECAY_DAYS,
+                        kind_overrides=config.MEMORY_DECAY_DAYS_BY_KIND,
+                    )
+                    groups.setdefault(days, []).append(f.id)
+                for days, ids in groups.items():
+                    await database.reinforce_memory_expiry(
+                        self._pool, ids, reinforced_at + timedelta(days=days)
+                    )
+            except Exception as e:
+                log.debug(f"memory.recall: step-7 surfacing bookkeeping failed (non-fatal): {e}")
 
             log.debug(
                 f"memory.recall: {len(top)} facts injected for user={user_id} "
