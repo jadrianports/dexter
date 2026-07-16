@@ -163,12 +163,22 @@ Full phase details, success criteria, and decisions archived in
   4. A solo listener's `/skip` still skips instantly — vote-gating doesn't regress the single-listener case.
 
 **Plans**: 5 plans
+Plans:
+**Wave 1**
 
-Plans:
 - [ ] 26-01-PLAN.md — DJ-01 radio core: pure refill-gate seam (`logic/radio.py`), in-memory armed-state + session played-set on `MusicQueue`, seed/already-played prompt slots (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 26-02-PLAN.md — DJ-02 vote core: pure `SkipVerdict` seam (`logic/skip_vote.py`), per-track vote state, templated tally + radio lifecycle copy (wave 2)
 - [ ] 26-03-PLAN.md — DJ-01 radio engine: `try_auto_queue(radio=True)` branch — cap lift, seed anchor, D-03 hard post-filter, D-05 ignored-signal suppression, byte-identical-when-disarmed guard (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 26-04-PLAN.md — DJ-02 skip choke point: `_try_skip` gate, `/skip` slash body unified with the ⏭ button (closes RESEARCH Pitfall 1), `tests/test_music_wiring.py` (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 26-05-PLAN.md — DJ-01 radio surface: `/radio start|stop` group, D-10 lookahead refill trigger, D-11 loop mutual exclusion, SC-2 teardown proof (wave 4)
 
 ### Phase 27: Crossfade Playback (Spike-Gated)

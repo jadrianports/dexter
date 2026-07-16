@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
 status: executing
-stopped_at: Phase 25 context gathered
-last_updated: "2026-07-15T09:27:59.048Z"
-last_activity: 2026-07-15 -- Phase 25 planning complete
+stopped_at: Phase 26 context gathered
+last_updated: "2026-07-16T12:49:26.068Z"
+last_activity: 2026-07-16 -- Phase 25 execution started
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 20
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
+  percent: 40
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 24 — hosting-honesty-docker
+**Current focus:** Phase 25 — smarter-memory
 
 ## Current Position
 
-Phase: 25
-Plan: Not started
+Phase: 25 (smarter-memory) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-07-15 -- Phase 25 planning complete
+Last activity: 2026-07-16 -- Phase 25 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -97,6 +97,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 24 P01 | 12min | 3 tasks | 7 files |
 | Phase 24 P02 | 15min | 3 tasks | 4 files |
 | Phase 24 P03 | 30min | 2 tasks | 2 files |
+| Phase 25 P01 | 25min | 3 tasks | 4 files |
+| Phase 25 P02 | 35min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -125,6 +127,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase ?]: [Phase 24-02] docs/DEPLOY-DOCKER.md deliberately omits the old doc's Neon-account walkthrough, UptimeRobot setup, Koyeb secrets-UI steps, and HeavenCloud/Wispbyte contingency -- none apply to the real docker compose up -> Neon flow
 - [Phase 24]: [Phase 24-03] RENDER_ALLOWLIST derived fresh from git grep against the post-scrub repo (29 entries/18 files), not copied from 24-PATTERNS.md's pre-scrub line-number guesses
 - [Phase 24]: [Phase 24-03] milestones/ sealed prefix kept as defensive/currently-vacuous (milestone docs nest under .planning/milestones/, already covered) rather than dropped or faked
+- [Phase 25-01]: recall() reinforces expiry via a new GREATEST-guarded batched helper, grouped by kind, at the single step-7 chokepoint; salience/hit_count/last_seen_at stay byte-identical (D-01/D-02)
+- [Phase 25]: MEM-07: vision_roast is a new memory kind (0.4 salience, TASTE_DECAY_DAYS decay); write is fire-and-forget after a successful roast reply, distilling the roast line (not the image) through the full accuracy/PII firewall (exempt_numbers=False since kind != taste_episode).
 
 ### Pending Todos
 
@@ -166,9 +170,9 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 
 ## Session Continuity
 
-Last session: 2026-07-15T08:20:57.552Z
-Stopped at: Phase 25 context gathered
-Resume file: .planning/phases/25-smarter-memory/25-CONTEXT.md
+Last session: 2026-07-16T12:08:41.983Z
+Stopped at: Phase 26 context gathered
+Resume file: .planning/phases/26-radio-mode-skip-democracy/26-CONTEXT.md
 
 ## Operator Next Steps
 
