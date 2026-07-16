@@ -198,3 +198,39 @@ DISCOVER_NO_HISTORY: list[str] = [
     "this server hasn't given me enough to go on. queue more, then ask again.",
     "i can't find a pattern yet. give me more songs to judge you by.",
 ]
+
+# --- Phase 26: Radio Mode & Skip Democracy (DJ-01/DJ-02) ---
+# D-18: {votes}/{required} are ALWAYS code-interpolated from live state — never
+# a Gemini call. A vote can fire several times per track, so this must work
+# even when the 15 RPM budget is exhausted.
+
+SKIP_VOTE_TALLY: list[str] = [
+    "skip vote open: {votes}/{required}. jump in if you agree.",
+    "that's {votes} out of {required} needed to skip. speak now.",
+    "vote's at {votes}/{required}. use /skip if you're on board too.",
+    "{votes}/{required} votes to skip so far. the rest of you get a say too.",
+]
+
+RADIO_START: list[str] = [
+    "radio mode on. seeding from {seed}, brace yourself.",
+    "fine, i'll dj indefinitely. starting from {seed}.",
+    "radio armed. {seed} is the seed, blame it for what happens next.",
+]
+
+RADIO_STOP: list[str] = [
+    "radio off. back to you all picking, god help us.",
+    "radio's done. i'm off the clock.",
+    "turned radio off. the silence before the next bad request begins.",
+]
+
+RADIO_LOOP_CONFLICT: list[str] = [
+    "radio and loop don't mix. pick one.",
+    "can't loop while radio's running. one or the other.",
+    "loop and radio fight each other. i turned the other one off.",
+]
+
+RADIO_NOT_ARMED: list[str] = [
+    "radio's not even on. nothing to stop.",
+    "there's no radio session running right now.",
+    "you can't turn off what isn't on. radio's already off.",
+]
