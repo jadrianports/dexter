@@ -306,6 +306,16 @@ INVITE_PERMISSIONS_VALUE = 309240908864
 INVITE_SCOPES: tuple[str, ...] = ("bot", "applications.commands")
 
 
+# --- Phase 26: Radio Mode & Skip Democracy (DJ-01/DJ-02) ---
+# The refill batch size deliberately reuses AUTO_QUEUE_SONGS_PER_ROUND above — no
+# radio-specific batch-size knob. There is also deliberately no played-set cap: the
+# armed-radio session lifetime IS the bound (D-08: dies with radio; D-07: disarmed at
+# every teardown). Only the prompt HINT is capped (RADIO_ALREADY_PLAYED_HINT_CAP); the
+# hard post-filter (logic.radio.is_already_played) stays uncapped.
+RADIO_LOOKAHEAD_DEPTH = 2  # D-10: refill trigger — tracks remaining after advance
+RADIO_ALREADY_PLAYED_HINT_CAP = 25  # D-03: prompt-hint cap; the hard filter is uncapped
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
