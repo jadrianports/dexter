@@ -388,11 +388,20 @@ class NowPlayingView(discord.ui.View):
             return
         # Ack first — skip starts a background task
         await interaction.response.defer()
-        next_track = await cog._do_skip(interaction.guild, queue, vc)
-        if next_track:
-            await interaction.followup.send(f"skipped. now playing **{next_track.title}**.", ephemeral=True)
+        # D-15: a button press is a vote exactly like /skip — route through
+        # the shared _try_skip gate, never _do_skip directly.
+        verdict, next_track, votes, required = await cog._try_skip(
+            interaction.guild, queue, vc, voter_id=interaction.user.id
+        )
+        if verdict == SkipVerdict.SKIP_NOW:
+            if next_track:
+                await interaction.followup.send(f"skipped. now playing **{next_track.title}**.", ephemeral=True)
+            else:
+                await interaction.followup.send("end of queue.", ephemeral=True)
+        elif verdict == SkipVerdict.VOTE_RECORDED:
+            await interaction.followup.send("vote counted.", ephemeral=True)
         else:
-            await interaction.followup.send("end of queue.", ephemeral=True)
+            await interaction.followup.send("you already voted to skip this one.", ephemeral=True)
 
     @discord.ui.button(label="🔁 Loop: Off", style=discord.ButtonStyle.secondary, custom_id="dex:np:loop")
     async def loop_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -1739,6 +1748,11 @@ class MusicCog(commands.Cog):
             view = SongSelectView(results, self, orig_query=query)
             await interaction.followup.send("Pick a song:", view=view)
 
+    # D-15 (Phase 26): unified into the single _try_skip vote gate — this
+    # command's body no longer duplicates _do_skip's mechanics inline (that
+    # duplication was 26-RESEARCH Pitfall 1, the exact hole DJ-02 closes).
+    # /pause, /resume, /stop retain their own inline bodies by design; only
+    # skip is in scope for this unification.
     @app_commands.command(name="skip", description="Skip to the next song")
     @app_commands.checks.cooldown(1, config.SKIP_COOLDOWN_SECONDS)
     async def skip(self, interaction: discord.Interaction) -> None:
@@ -1748,32 +1762,22 @@ class MusicCog(commands.Cog):
         if not voice_client or not queue.is_playing:
             return await interaction.response.send_message(embed=embeds.error("Nothing is playing."), ephemeral=True)
 
-        # Track skipped auto-queued songs for "ignored" memory
-        current = queue.get_current()
-        if current and current.was_auto_queued:
-            from models.server_state import get_server_state
-
-            await mark_song_skipped(self.bot.pool, guild_id=str(interaction.guild.id), url=current.url)
-            if hasattr(self.bot, "server_states"):
-                state = get_server_state(self.bot.server_states, interaction.guild.id)
-                state.auto_queue_results["skipped"] += 1
-
-        next_track = queue.skip()
-        await self._persist_queue(interaction.guild, queue)
-        if next_track:
-            await interaction.response.send_message(f"Skipped to **{next_track.title}**")
-            # Play in background — don't block the response.
-            # WR-01: make_task surfaces a re-raised _play_track failure + holds a
-            # strong reference (bare create_task could be GC'd mid-await).
-            make_task(self._play_track(interaction.guild, next_track), name="play-after-skip", bot=self.bot)
-            # WR-02: re-render the persistent now-playing message onto the new
-            # track so the slash path matches _do_skip / natural-advance (otherwise
-            # the embed + controls stay frozen on the previous song).
-            await self._refresh_now_playing(interaction.guild, queue)
+        # _try_skip awaits _do_skip (DB writes + a channel send) — defer
+        # first per the 3s interaction-response rule.
+        await interaction.response.defer()
+        verdict, next_track, votes, required = await self._try_skip(
+            interaction.guild, queue, voice_client, voter_id=interaction.user.id
+        )
+        if verdict == SkipVerdict.SKIP_NOW:
+            if next_track:
+                await interaction.followup.send(f"Skipped to **{next_track.title}**")
+            else:
+                await interaction.followup.send("End of queue.")
+        elif verdict == SkipVerdict.VOTE_RECORDED:
+            # The public tally is already posted by _try_skip — don't post it twice.
+            await interaction.followup.send("vote counted.", ephemeral=True)
         else:
-            queue.is_playing = False
-            voice_client.stop()
-            await interaction.response.send_message("End of queue.")
+            await interaction.followup.send("you already voted to skip this one.", ephemeral=True)
 
     @app_commands.command(name="pause", description="Pause the current song")
     async def pause(self, interaction: discord.Interaction) -> None:
@@ -2030,12 +2034,23 @@ class MusicCog(commands.Cog):
         await interaction.response.defer()
 
         if secs >= track.duration_seconds:
-            # Past end — skip to next track (D-15)
-            next_track = await self._do_skip(interaction.guild, queue, voice_client)
-            if next_track:
-                await interaction.followup.send(f"seek past the end — skipping to **{next_track.title}**.")
+            # Past end — this advances the queue exactly like a skip, so it
+            # must route through the same vote gate (Phase 26 D-15) or /seek
+            # would be a silent one-click bypass of the whole vote system.
+            verdict, next_track, votes, required = await self._try_skip(
+                interaction.guild, queue, voice_client, voter_id=interaction.user.id
+            )
+            if verdict == SkipVerdict.SKIP_NOW:
+                if next_track:
+                    await interaction.followup.send(f"seek past the end — skipping to **{next_track.title}**.")
+                else:
+                    await interaction.followup.send("seek past the end — nothing left to play.")
+            elif verdict == SkipVerdict.VOTE_RECORDED:
+                await interaction.followup.send("seek past the end — that counts as a skip vote.", ephemeral=True)
             else:
-                await interaction.followup.send("seek past the end — nothing left to play.")
+                await interaction.followup.send(
+                    "seek past the end — you already voted to skip this one.", ephemeral=True
+                )
             return
 
         # Re-play from the new offset (filter chain preserved via active_filter)
