@@ -183,6 +183,8 @@ def build_recommendation_prompt(
     *,
     recently_skipped: list[dict] | None = None,
     positive_taste: list[str] | None = None,
+    seed: str | None = None,
+    already_played: list[str] | None = None,
 ) -> str:
     """Build the auto-queue recommendation prompt from recent song history.
 
@@ -196,8 +198,29 @@ def build_recommendation_prompt(
                           facts for the in-voice members (Phase 14 / D-03). None
                           or [] renders byte-identical to the pre-Phase-14 prompt.
                           A non-empty list appends a "THE ROOM TENDS TO LIKE" block.
+        seed:             Optional free-text radio seed (Phase 26 / DJ-01 / D-02/
+                          D-06a). None or "" renders byte-identical to the
+                          pre-Phase-26 prompt. A non-empty seed appends an
+                          anchor line — the seed ANCHORS the recommendation, it
+                          does not replace the existing recent-history/room-taste
+                          context. The seed is free text; it is never parsed or
+                          classified as artist-vs-track here — Gemini interprets
+                          it (D-06a).
+        already_played:   Optional list of "Title by Artist" display strings for
+                          tracks already played this radio session (Phase 26 /
+                          DJ-01 / D-03). None or [] renders byte-identical to the
+                          pre-Phase-26 prompt. A non-empty list appends an
+                          "ALREADY PLAYED" block — this is D-03's PROMPT HINT
+                          only, advisory, never the guarantee. The independent
+                          hard post-filter (logic.radio.is_already_played) is
+                          what actually enforces no-repeats, exactly as
+                          is_recently_skipped_artist backs up
+                          validate_youtube_match (Phase 14 D-02).
 
-    Both new kwargs are keyword-only so every existing call site is unaffected.
+    All four optional kwargs are keyword-only so every existing call site is
+    unaffected. Concatenation order is skip_block + taste_block + played_block
+    + seed_block — the seed anchor lands last (closest to the model's most
+    recent attention), since it is what radio steers with.
     """
     lines = []
     for song in recent_songs:
@@ -214,12 +237,23 @@ def build_recommendation_prompt(
         taste_lines = "\n".join(f"- {t}" for t in positive_taste)
         taste_block = "\n\nTHE ROOM TENDS TO LIKE:\n" + taste_lines
 
+    played_block = ""
+    if already_played:
+        played_lines = "\n".join(f"- {entry}" for entry in already_played)
+        played_block = "\n\nALREADY PLAYED THIS SESSION — do not repeat these:\n" + played_lines
+
+    seed_block = ""
+    if seed:
+        seed_block = "\n\nSTART FROM THIS AND DRIFT NATURALLY:\n- " + seed
+
     return (
         MUSIC_RECOMMENDATION_PROMPT.format(
             recent_songs="\n".join(lines),
         )
         + skip_block
         + taste_block
+        + played_block
+        + seed_block
     )
 
 

@@ -227,6 +227,63 @@ class TestBuildRecommendationPromptPhase14Kwargs:
         assert "THE ROOM TENDS TO LIKE" in result
 
 
+class TestBuildRecommendationPromptPhase26Kwargs:
+    """Phase 26 / DJ-01: seed= / already_played= kwargs (D-02/D-03)."""
+
+    RECENT = [
+        {"title": "Blinding Lights", "artist": "The Weeknd"},
+        {"title": "Tadow", "artist": "Masego"},
+    ]
+
+    def test_byte_identical_when_both_new_kwargs_omitted(self):
+        """Omitting seed/already_played must equal the pre-Phase-26 two-kwarg call."""
+        pre_change_output = build_recommendation_prompt(self.RECENT)
+        assert build_recommendation_prompt(self.RECENT, seed=None, already_played=None) == pre_change_output
+
+    def test_byte_identical_when_both_new_kwargs_none(self):
+        without_kwargs = build_recommendation_prompt(self.RECENT)
+        with_none_kwargs = build_recommendation_prompt(self.RECENT, seed=None, already_played=None)
+        assert without_kwargs == with_none_kwargs
+
+    def test_byte_identical_when_seed_empty_string_and_already_played_empty_list(self):
+        """seed='' and already_played=[] (falsy-empty) render byte-identical to omitted,
+        matching the recently_skipped/positive_taste falsy-empty convention."""
+        without_kwargs = build_recommendation_prompt(self.RECENT)
+        with_empty_kwargs = build_recommendation_prompt(self.RECENT, seed="", already_played=[])
+        assert without_kwargs == with_empty_kwargs
+
+    def test_seed_appends_anchor_text_with_raw_seed_verbatim(self):
+        result = build_recommendation_prompt(self.RECENT, seed="daft punk")
+        assert "daft punk" in result
+
+    def test_already_played_renders_one_line_per_entry(self):
+        result = build_recommendation_prompt(
+            self.RECENT,
+            already_played=["X by Y", "Z by W"],
+        )
+        assert "- X by Y" in result
+        assert "- Z by W" in result
+
+    def test_seed_and_already_played_present_together_with_existing_blocks(self):
+        """A radio refill call can carry all four optional blocks at once; the
+        seed anchor lands last (closest to the model's most recent attention)."""
+        result = build_recommendation_prompt(
+            self.RECENT,
+            recently_skipped=[{"title": "Song X", "artist": "Artist X"}],
+            positive_taste=["keeps coming back to the killers"],
+            already_played=["X by Y"],
+            seed="daft punk",
+        )
+        assert "AVOID these" in result
+        assert "THE ROOM TENDS TO LIKE" in result
+        assert "ALREADY PLAYED THIS SESSION" in result
+        assert "- X by Y" in result
+        assert "START FROM THIS AND DRIFT NATURALLY" in result
+        assert "daft punk" in result
+        # seed anchor is the LAST block appended
+        assert result.rindex("daft punk") > result.rindex("ALREADY PLAYED THIS SESSION")
+
+
 class TestBuildDiscoverCommentaryPrompt:
     """Phase 14 / BRAIN-02 / D-04 firewall: Gemini wraps SQL-supplied names only."""
 
