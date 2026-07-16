@@ -1576,6 +1576,44 @@ async def refresh_memory_expiry(pool: asyncpg.Pool, memory_id: int, expires_at: 
         )
 
 
+async def reinforce_memory_expiry(pool: asyncpg.Pool, ids: list[int], expires_at: datetime) -> None:
+    """Push out expires_at for a batch of surfaced facts sharing one resolved
+    decay horizon (MEM-06 / D-01).
+
+    Sibling to refresh_memory_expiry — same expiry-only restraint (never
+    touches hit_count, salience, or last_seen_at), but batches over multiple
+    ids in one UPDATE via ANY($1), mirroring bump_surfaced's array-binding
+    shape. Called from MemoryService.recall() step 7b, once per distinct
+    resolved-decay-days group among the surfaced top-k facts.
+
+    GREATEST(expires_at, $2) guarantees reinforcement can only EXTEND, never
+    shorten, a fact's remaining window — a safety net against a stale group
+    computation ever landing with a shorter target date than the fact's
+    current expires_at. This is the one intentional deviation from
+    refresh_memory_expiry's hard overwrite, and must NOT be back-ported into
+    refresh_memory_expiry (that would change the D-05 dedup self-refresh
+    behavior for taste_episode — an SC-3 risk).
+
+    Args:
+        pool:       asyncpg connection pool.
+        ids:        List of user_memories.id values to reinforce. No-op if empty.
+        expires_at: New UTC decay horizon, computed by the caller ($2) — never
+                    computed SQL-side (e.g. via a date-arithmetic expression),
+                    so callers control the exact decay-days constant used per kind.
+
+    Security (T-25-SQLI): ids is passed via the ``ANY($1)`` array binding — no
+    SQL injection path. asyncpg encodes the Python list as a Postgres array.
+    """
+    if not ids:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE user_memories SET expires_at = GREATEST(expires_at, $2) WHERE id = ANY($1)",
+            ids,
+            expires_at,
+        )
+
+
 async def count_user_memories(pool: asyncpg.Pool, user_id: str) -> int:
     """Return the current count of active memory rows for a user.
 
