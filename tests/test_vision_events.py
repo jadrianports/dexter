@@ -32,7 +32,7 @@ from services.gemini import GeminiAPIError, GeminiRateLimitError
 
 
 def _make_bot() -> MagicMock:
-    """Return a minimal fake bot with a pool (memory_service unused for vision).
+    """Return a minimal fake bot with a pool; memory_service explicitly disabled.
 
     Phase 20 / D-14: `_maybe_fire_vision_roast` now re-checks the silence-aware
     `guild_config` cache immediately before `message.reply` (SC-2 pre-send
@@ -40,9 +40,21 @@ def _make_bot() -> MagicMock:
     `MagicMock()` `.get(...)` return value is truthy for every key lookup
     (including `silenced`), which would make the re-check bail on every test.
     Mirrors `tests/test_proactive_events.py::_make_bot`'s shape.
+
+    MEM-07: `_maybe_fire_vision_roast`'s success tail now spawns a fire-and-forget
+    `memory_service.distill_and_remember(...)` via `asyncio.create_task`. A bare
+    `MagicMock()` bot would make `getattr(self.bot, "memory_service", None)`
+    return a truthy auto-generated Mock (not None), whose `distill_and_remember(...)`
+    call returns a non-awaitable MagicMock — `asyncio.create_task` then raises
+    `TypeError: a coroutine was expected`. Set `memory_service = None` explicitly so
+    these reply/cooldown-focused tests stay isolated from the MEM-07 write path
+    (covered instead by the live-DB `TestVisionRoastMemory` round-trip in
+    `tests/test_database_phase25.py`), consistent with the existing Phase 16/17
+    "Discord glue is untested-by-design" precedent for fire-and-forget writes.
     """
     bot = MagicMock()
     bot.pool = MagicMock()
+    bot.memory_service = None
     bot.guild_config = MagicMock()
     bot.guild_config.get = MagicMock(
         return_value={

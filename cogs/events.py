@@ -693,6 +693,28 @@ class EventsCog(commands.Cog):
         # Successful send — mark the per-user cooldown.
         self._vision_roast_cooldowns[message.author.id] = asyncio.get_event_loop().time()
 
+        # MEM-07 / D-03/D-04: fire-and-forget vision memory write. Reached ONLY on
+        # the success path — line is not None (the :667-669 early return already
+        # guarantees this) AND message.reply succeeded (the except-return above
+        # already guarantees this). raw_text=line is the roast LINE Dex already
+        # generated (already conduct-clamped by build_vision_prompt) — never a
+        # second vision/image call. exempt_numbers is NOT passed: distill_and_remember
+        # computes exempt_numbers=(kind == "taste_episode") internally, so the FULL
+        # is_sensitive + contains_number firewall applies here (vision_roast !=
+        # taste_episode). Guild-stamped (Phase 21 MEM-03). distill_and_remember
+        # swallows all internal errors, so this can never crash the roast path.
+        memory_service = getattr(self.bot, "memory_service", None)
+        if memory_service is not None:
+            asyncio.create_task(
+                memory_service.distill_and_remember(
+                    user_id=str(message.author.id),
+                    guild_id=str(message.guild.id),
+                    raw_text=line,
+                    kind="vision_roast",
+                    base_salience=config.MEMORY_SALIENCE_BASE_WEIGHTS["vision_roast"],
+                )
+            )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(EventsCog(bot))

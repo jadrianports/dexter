@@ -200,6 +200,7 @@ MEMORY_SALIENCE_BASE_WEIGHTS: dict[str, float] = {
     "daily_batch": 0.2,  # background distill from message buffer — lower-confidence
     "taste_episode": 0.4,  # D-04: MUST stay < MEMORY_DECAY_SALIENCE_FLOOR (0.5) — taste rows
     # are genuinely sweep-eligible so fads age out (D-05 self-refresh design)
+    "vision_roast": 0.4,  # MEM-07: < MEMORY_DECAY_SALIENCE_FLOOR (0.5) — sweep-eligible, images ephemeral
 }
 
 
@@ -223,6 +224,7 @@ TASTE_BAND_FEW_PLAYS = 2  # qualitative band threshold: floor for "a few times" 
 # logic.taste.resolve_decay_days and the memory-service self-refresh (plan 13-03).
 MEMORY_DECAY_DAYS_BY_KIND: dict[str, int] = {
     "taste_episode": TASTE_DECAY_DAYS,
+    "vision_roast": TASTE_DECAY_DAYS,  # MEM-07: reuse the existing 30d constant — images are ephemeral
 }
 
 
