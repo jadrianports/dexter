@@ -521,18 +521,109 @@ class TestRecallService:
         async def fake_bump(pool, ids):
             bumped_ids.extend(ids)
 
+        async def fake_reinforce(pool, ids, expires_at):
+            # Pitfall 2 fix: recall() step 7b now makes an unconditional call to
+            # database.reinforce_memory_expiry. Without this no-op stub, the real
+            # function would hit the MagicMock() pool (no __aenter__/__aexit__)
+            # and this test would fail.
+            pass
+
         orig_search = database.search_memories
         orig_bump = database.bump_surfaced
+        orig_reinforce = database.reinforce_memory_expiry
         database.search_memories = fake_search
         database.bump_surfaced = fake_bump
+        database.reinforce_memory_expiry = fake_reinforce
         try:
             result = asyncio.run(svc.recall("user1", "guild1", "test query"))
         finally:
             database.search_memories = orig_search
             database.bump_surfaced = orig_bump
+            database.reinforce_memory_expiry = orig_reinforce
 
         assert len(result) <= cap
         assert len(bumped_ids) == len(result)  # bump called for each returned fact
+
+    def test_reinforces_expiry_grouped_by_kind(self) -> None:
+        """recall() step 7b groups surfaced facts by resolved decay-days and calls
+        reinforce_memory_expiry once per distinct group (MEM-06 / D-01/D-02)."""
+        import asyncio
+
+        import config
+        import database
+
+        svc, _, _ = self._make_service()
+
+        now = datetime.now(timezone.utc)
+        # Rows spanning two kinds so grouping is actually exercised:
+        # daily_batch falls back to the default MEMORY_DECAY_DAYS; taste_episode
+        # resolves to its own override in MEMORY_DECAY_DAYS_BY_KIND.
+        above_floor_rows = [
+            {
+                "id": 1,
+                "fact": "fact one",
+                "kind": "daily_batch",
+                "salience": 0.5,
+                "hit_count": 1,
+                "created_at": now,
+                "last_seen_at": now,
+                "last_surfaced_at": None,
+                "surface_count": 0,
+                "similarity": 0.80,
+            },
+            {
+                "id": 2,
+                "fact": "fact two",
+                "kind": "taste_episode",
+                "salience": 0.5,
+                "hit_count": 1,
+                "created_at": now,
+                "last_seen_at": now,
+                "last_surfaced_at": None,
+                "surface_count": 0,
+                "similarity": 0.85,
+            },
+        ]
+
+        reinforce_calls: list[tuple[list[int], object]] = []
+
+        async def fake_search(pool, *, user_id, query_embedding, k, kind=None):
+            return [_DictRecord(row) for row in above_floor_rows]
+
+        async def fake_bump(pool, ids):
+            pass  # no-op
+
+        async def fake_reinforce(pool, ids, expires_at):
+            reinforce_calls.append((list(ids), expires_at))
+
+        orig_search = database.search_memories
+        orig_bump = database.bump_surfaced
+        orig_reinforce = database.reinforce_memory_expiry
+        database.search_memories = fake_search
+        database.bump_surfaced = fake_bump
+        database.reinforce_memory_expiry = fake_reinforce
+        try:
+            result = asyncio.run(svc.recall("user1", "guild1", "test query"))
+        finally:
+            database.search_memories = orig_search
+            database.bump_surfaced = orig_bump
+            database.reinforce_memory_expiry = orig_reinforce
+
+        assert len(result) == 2
+
+        # Two distinct kinds resolve to two distinct decay-days -> two groups.
+        assert len(reinforce_calls) == 2
+
+        # Every surfaced id is reinforced exactly once — the ids across all
+        # calls partition the surfaced top-k with no overlap and no gaps.
+        all_reinforced_ids = [i for ids, _ in reinforce_calls for i in ids]
+        assert sorted(all_reinforced_ids) == [1, 2]
+        assert len(all_reinforced_ids) == len(set(all_reinforced_ids))  # no id reinforced twice
+
+        # Sanity: the two groups really do correspond to two different decay-days.
+        assert config.MEMORY_DECAY_DAYS_BY_KIND.get("taste_episode") != config.MEMORY_DECAY_DAYS
+        ids_by_call = {tuple(sorted(ids)) for ids, _ in reinforce_calls}
+        assert ids_by_call == {(1,), (2,)}
         assert all(isinstance(s, str) for s in result)  # returns strings
 
 
