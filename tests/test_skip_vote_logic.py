@@ -30,6 +30,7 @@ def _make_track(video_id: str, requested_by: int = 1) -> Track:
         requested_by=requested_by,
     )
 
+
 # ---------------------------------------------------------------------------
 # TestRequiredVotesMajority  (-k majority)
 # ---------------------------------------------------------------------------
