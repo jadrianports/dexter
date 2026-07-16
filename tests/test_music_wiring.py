@@ -265,6 +265,44 @@ class TestNoNewMemoryKindInSkipPath:
         assert "distill_and_remember(" not in src
         assert "kind=" not in src
 
+
+# ---------------------------------------------------------------------------
+# TestDoSkipAdvancesBeforeFirstAwait — WR-02
+# ---------------------------------------------------------------------------
+# _try_skip's own vote decision (decide_skip/record_skip_votes) has no await
+# in it, so if _do_skip also advances the queue (queue.skip()) before its
+# own first await (mark_song_skipped), the whole "decide SKIP_NOW -> advance
+# the queue" sequence is one atomic block with no yield point. Without this
+# ordering, a second concurrent _try_skip call — e.g. a different voter
+# crossing an already-met threshold while a first call was suspended at the
+# mark_song_skipped await — would observe the same not-yet-advanced current
+# track and the same pre-skip vote set, independently re-reach SKIP_NOW, and
+# double-skip (mark_song_skipped called twice, queue.skip() called twice for
+# what the room intended as a single skip). Locked structurally, matching
+# the file's existing untested-Discord-glue convention.
+
+
+class TestDoSkipAdvancesBeforeFirstAwait:
+    def test_queue_skip_precedes_mark_song_skipped(self):
+        src = _do_skip_source()
+        skip_pos = src.index("queue.skip()")
+        mark_pos = src.index("mark_song_skipped(")
+        assert skip_pos < mark_pos, (
+            "queue.skip() must run before the first await (mark_song_skipped) "
+            "in _do_skip, or a second concurrent _try_skip call can double-skip (WR-02)"
+        )
+
+    def test_no_await_between_current_read_and_queue_skip(self):
+        """No new await was introduced ahead of queue.skip() itself — the
+        current-track read and the queue advance stay in the same
+        synchronous stretch of _do_skip. Comment-stripped so an explanatory
+        comment that merely mentions "await" in prose can't false-positive."""
+        non_comment = "\n".join(_non_comment_lines(_do_skip_source()))
+        current_pos = non_comment.index("current = queue.get_current()")
+        skip_pos = non_comment.index("queue.skip()")
+        between = non_comment[current_pos:skip_pos]
+        assert "await " not in between
+
     def test_do_skip_still_records_via_mark_song_skipped(self):
         """The existing recording path is intact — not accidentally removed
         during the D-15 unification."""

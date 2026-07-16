@@ -1125,6 +1125,18 @@ class MusicCog(commands.Cog):
         """Skip to the next track. Returns the new track, or None if queue exhausted."""
         # Track skipped auto-queued songs for "ignored" memory
         current = queue.get_current()
+
+        # WR-02: advance the queue BEFORE the first await below. _try_skip's
+        # own vote decision has no await in it, so as long as this call also
+        # reaches queue.skip() with no intervening await, the whole "decide
+        # SKIP_NOW -> advance the queue" sequence is one atomic block. Without
+        # this ordering, a second concurrent _try_skip call (e.g. a different
+        # voter crossing an already-met threshold while this call was
+        # suspended at the mark_song_skipped await below) would still see the
+        # SAME not-yet-advanced current track and the SAME pre-skip vote set,
+        # independently re-reach SKIP_NOW, and double-skip.
+        next_track = queue.skip()
+
         if current and current.was_auto_queued:
             from models.server_state import get_server_state
 
@@ -1133,7 +1145,6 @@ class MusicCog(commands.Cog):
                 state = get_server_state(self.bot.server_states, guild.id)
                 state.auto_queue_results["skipped"] += 1
 
-        next_track = queue.skip()
         await self._persist_queue(guild, queue)
         if next_track:
             # WR-01: route through make_task so a re-raised _play_track failure
