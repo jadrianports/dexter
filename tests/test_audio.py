@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.audio import AudioService, _build_ffmpeg_opts
+from services.audio import AudioService, TruncatingSource, _build_ffmpeg_opts
 
 
 @pytest.fixture
@@ -260,3 +260,111 @@ class TestDownloadTimeout:
         assert any("timeout" in m.lower() or "falling back" in m.lower() for m in warning_msgs), (
             f"Expected a timeout warning, got: {warning_msgs}"
         )
+
+
+class _FakeAudioSource:
+    """Minimal discord.AudioSource-shaped stub for TruncatingSource/CrossfadeSource tests.
+
+    Not a discord.AudioSource subclass — TruncatingSource/CrossfadeSource only
+    call read()/is_opus()/cleanup() on their children, so duck typing is
+    sufficient and keeps these tests free of any FFmpeg subprocess.
+    """
+
+    def __init__(self, frames=None, opus: bool = False, raise_on_cleanup: bool = False):
+        self._frames = list(frames) if frames is not None else []
+        self._opus = opus
+        self._raise_on_cleanup = raise_on_cleanup
+        self.cleanup_calls = 0
+
+    def read(self) -> bytes:
+        if self._frames:
+            return self._frames.pop(0)
+        return b""
+
+    def is_opus(self) -> bool:
+        return self._opus
+
+    def cleanup(self) -> None:
+        self.cleanup_calls += 1
+        if self._raise_on_cleanup:
+            raise RuntimeError("boom: tail cleanup failed")
+
+
+def test_truncating_source():
+    """VALIDATION row 12 (exact node id, MANDATED name — do not rename):
+    exhausts at max_frames, delegates is_opus() to the inner source, cleans
+    the inner source exactly once, position_seconds tracks frames_read, and
+    cut_short distinguishes a fade cut from a natural early EOF.
+    """
+    frame = b"x" * 3840
+
+    # Exhausts at max_frames: 10 frames available, max_frames=5 -> exactly 5
+    # non-empty reads, then b"" forever.
+    inner = _FakeAudioSource([frame] * 10)
+    ts = TruncatingSource(inner, max_frames=5)
+    reads = [ts.read() for _ in range(7)]
+    assert reads[:5] == [frame] * 5
+    assert reads[5] == b""
+    assert reads[6] == b""
+    assert ts.frames_read == 5
+    assert ts.cut_short is True
+
+    # is_opus() delegates to the inner source — assert both True and False.
+    assert TruncatingSource(_FakeAudioSource(opus=True), 5).is_opus() is True
+    assert TruncatingSource(_FakeAudioSource(opus=False), 5).is_opus() is False
+
+    # cleanup() calls the inner's cleanup() exactly once.
+    inner2 = _FakeAudioSource()
+    ts2 = TruncatingSource(inner2, max_frames=5)
+    ts2.cleanup()
+    assert inner2.cleanup_calls == 1
+
+    # position_seconds == frames_read * 0.02
+    inner3 = _FakeAudioSource([frame] * 10)
+    ts3 = TruncatingSource(inner3, max_frames=10)
+    for _ in range(3):
+        ts3.read()
+    assert ts3.position_seconds == pytest.approx(0.06)
+
+    # cut_short is False after a natural inner EOF (inner exhausts before max_frames).
+    inner4 = _FakeAudioSource([frame] * 3)
+    ts4 = TruncatingSource(inner4, max_frames=10)
+    for _ in range(3):
+        ts4.read()
+    assert ts4.read() == b""
+    assert ts4.cut_short is False
+
+
+def test_suppress_flag_only_on_fade_cut():
+    """VALIDATION row 16 (exact node id, MANDATED name — do not rename). This
+    is the non-negotiable D-17.3 guard rail: _suppress_end_silence is False
+    at construction, False after a natural inner EOF, and True ONLY at the
+    instant the truncator itself cuts short for a fade.
+    """
+    frame = b"x" * 3840
+
+    # False at construction.
+    inner = _FakeAudioSource([frame] * 10)
+    ts = TruncatingSource(inner, max_frames=5)
+    assert ts._suppress_end_silence is False
+
+    # False after a natural inner EOF — a real end of transmission wants the
+    # silence marker, so the flag must stay unset.
+    inner_natural = _FakeAudioSource([frame] * 3)
+    ts_natural = TruncatingSource(inner_natural, max_frames=10)
+    for _ in range(3):
+        ts_natural.read()
+    assert ts_natural._suppress_end_silence is False
+    assert ts_natural.read() == b""
+    assert ts_natural._suppress_end_silence is False
+
+    # True only after a fade cut (frames_read reaching max_frames).
+    inner_fade = _FakeAudioSource([frame] * 10)
+    ts_fade = TruncatingSource(inner_fade, max_frames=5)
+    for _ in range(5):
+        assert ts_fade._suppress_end_silence is False
+        ts_fade.read()
+    # All 5 real frames consumed; the flag is still unset until the cut itself.
+    assert ts_fade._suppress_end_silence is False
+    assert ts_fade.read() == b""  # the 6th read is the fade cut
+    assert ts_fade._suppress_end_silence is True

@@ -44,6 +44,64 @@ def _build_ffmpeg_opts(seek_seconds: int = 0, ffmpeg_filter: str | None = None) 
     return {"before_options": before, "options": options}
 
 
+class TruncatingSource(discord.AudioSource):
+    """Wraps a source and exhausts it early, at a fixed frame count (Phase 27 / D-14).
+
+    To discord.py this looks like an ordinary natural end: read() returns b""
+    once frames_read >= max_frames, which triggers the same
+    after_callback -> _on_track_end path a real end of stream would. is_opus()
+    delegates to the inner source, so the OUTGOING track keeps the Phase 6/7
+    opus fast path for its entire body — only the last few seconds a caller
+    reads through this wrapper are ever consumed as PCM for a crossfade tail.
+
+    self._suppress_end_silence is set to True ONLY at the exact instant read()
+    cuts short for a fade — never at construction, and never on a natural
+    early EOF (the inner source itself returning b"" before max_frames is
+    reached, e.g. a file shorter than expected). A genuine end of transmission
+    still wants discord.py's silence marker; only a fade cut wants it
+    suppressed. This is the D-17.3 discipline: utils/discord_patch.py (plan
+    27-04) reads this attribute duck-typed via getattr(), so nothing else in
+    the codebase ever sets it and the crossfade-off path stays byte-identical.
+    """
+
+    def __init__(self, source: discord.AudioSource, max_frames: int) -> None:
+        self._inner = source
+        self._max_frames = max_frames
+        self._frames_read = 0
+        self.cut_short = False
+        self._suppress_end_silence = False
+
+    def read(self) -> bytes:
+        if self._frames_read >= self._max_frames:
+            # The cut for a fade — and ONLY this branch sets either flag.
+            self.cut_short = True
+            self._suppress_end_silence = True
+            return b""
+        data = self._inner.read()
+        if not data:
+            # Natural early EOF: a real end of transmission. Neither flag is set.
+            return b""
+        self._frames_read += 1
+        return data
+
+    def is_opus(self) -> bool:
+        return self._inner.is_opus()
+
+    def cleanup(self) -> None:
+        self._inner.cleanup()
+
+    @property
+    def frames_read(self) -> int:
+        return self._frames_read
+
+    @property
+    def position_seconds(self) -> float:
+        """The cut position in seconds — the ONLY safe source for a fade's -ss
+        offset (RESEARCH landmine #5: Track.duration_seconds is YouTube
+        metadata and disagrees with the real file)."""
+        return self._frames_read * 0.02
+
+
 class AudioService:
     """Manages FFmpeg audio sources and the download cache."""
 
