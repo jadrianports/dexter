@@ -79,6 +79,11 @@ class MusicQueue:
         # it's a server preference, not playback state. Resets only on restart.
         self.auto_lyrics: bool = False
         self.lyrics_thread_id: int | None = None  # reused "🎵 lyrics" thread id
+        # Phase 27: crossfade toggle (DJ-03 / D-12). Per-guild, in-memory,
+        # deliberately NOT reset by clear() — it's a server preference ("we
+        # like smooth transitions here"), not playback state, same category as
+        # auto_lyrics above. Resets only on restart.
+        self.crossfade_enabled: bool = False
         # Elapsed-tracking state (Phase 7). These ARE playback state → reset by clear().
         self.playback_started_at: float | None = None
         self.paused_at: float | None = None
@@ -121,6 +126,16 @@ class MusicQueue:
         # by construction (same discipline as radio_armed/radio_seed above).
         self._skip_votes: set[int] = set()
         self._skip_votes_key: tuple[int, str] | None = None
+        # Phase 27: crossfade playback state (DJ-03 / D-12). Unlike
+        # crossfade_enabled above, these ARE playback state — like radio_armed
+        # / loop_mode — which is why clear() nulls them (see clear() below). A
+        # stale _xf_pending surviving a /stop would make the next session's
+        # first track try to fade in from a track that is no longer playing
+        # (RESEARCH §7). Also unpersisted by construction:
+        # services/queue_persistence.py's persist() builds an explicit typed
+        # key dict, never __dict__, so these fields never reach Neon.
+        self._xf_pending: tuple[Track, float] | None = None
+        self._xf_truncator = None
 
     def add(self, track: Track) -> int:
         """Add a track to the end of the queue. Returns its index.
@@ -271,6 +286,14 @@ class MusicQueue:
         # teardown all disarm radio — every one of them already calls clear(),
         # so SC-2 needs no per-site edit.
         self.disarm_radio()
+        # Phase 27 (DJ-03 / D-12): crossfade handoff state is playback state,
+        # not the crossfade_enabled preference (which stays untouched here by
+        # design). Nulling both here means every existing teardown site
+        # (/stop, the stop button, idle_check's idle-leave, reconnect-failure)
+        # already clears a stale handoff for free — the same property radio
+        # inherited above.
+        self._xf_pending = None
+        self._xf_truncator = None
 
     def upcoming(self) -> list[Track]:
         """Return tracks after the current one."""
