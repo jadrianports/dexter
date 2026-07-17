@@ -1,5 +1,33 @@
 # Milestones: Dexter ("Dex")
 
+## v1.5 Deep Cuts (Shipped: 2026-07-18)
+
+**Phases completed:** 5 phases (24–28), 17 plans, 47 tasks
+**Requirements:** 13/13 shipped at the code level; 4 blocked-on-human (HOST-04 owner-done, PORT-02/CICD-02/CICD-03 deferred — see Known Gaps)
+**Git range:** v1.4 → v1.5 (102 commits, 135 files, +25.2k/-2.0k LOC), 2026-07-14 → 2026-07-18
+
+**Key accomplishments:**
+
+- **Hosting honesty (Phase 24):** every dead cloud-host reference (Render/Koyeb/Oracle) is gone from Dexter's runtime Python/Docker/config files, five dead Oracle-era-only files deleted, `docs/DEPLOY-KOYEB.md` replaced by a lean `DEPLOY-DOCKER.md` (`docker compose up` → Neon), and a permanent CI drift guard keeps the repo from regrowing dead host refs — Docker is now the one honest run path (24/7 deploy stays parked by design).
+- **Durable, richer memory (Phase 25):** a surfaced memory's `expires_at` is reinforced (GREATEST-guarded, never shortened) at the single `recall()` chokepoint grouped by kind — frequently-relevant facts outlive one-offs under the decay sweep (MEM-06) — and a successful vision roast now persists its own low-salience, short-decay `vision_roast` memory, distilled from the roast line through the full accuracy/PII firewall (MEM-07). Zero new tables, kind-agnostic `MemoryService` untouched, every prior kind byte-identical when the new paths aren't exercised.
+- **Radio mode (Phase 26, DJ-01):** `/radio start|stop` turns the existing taste-aware auto-queue brain into an endless DJ via a keyword-only `radio=True` branch (round cap lifted, seed-anchored, session repeats hard-filtered) behind a pure `logic/radio.py` refill-gate seam + in-memory `MusicQueue` armed-state; D-10 lookahead refills before the queue drains, D-11 makes radio/loop mutually exclusive, and every `clear()` teardown disarms it structurally. Byte-identical when disarmed.
+- **Skip democracy (Phase 26, DJ-02):** a pure `logic/skip_vote.py` verdict seam (config-honouring strict-majority arithmetic, requester bypass, D-17 departed-voter counting) + per-track vote state gate `/skip` behind a vote threshold with a narrated tally, at ONE choke point — `_do_skip` is called exactly once, from `_try_skip`, which all three entry points route through. Execution closed a third undocumented bypass (`/seek` past-end auto-skip); code review caught + fixed a Critical (two callers counted votes from users not in voice).
+- **Crossfade (Phase 27, DJ-03):** the spike ran first and returned **GO / suppressed** — the fade lives inside the incoming track's own `AudioSource` (`CrossfadeSource` equal-power `audioop` mixing, no numpy; `TruncatingSource` for the outgoing tail; one `cleanup()` owning both decoders), so the per-track `play()` + generation counter (the D-01 engine) are untouched. A pure `logic/crossfade.py` eligibility ladder, `/crossfade on|off` server preference, silent hard-cut fallback, and two mandatory D-17 rails (fail-soft `send_silence` patch + a `_do_run`-call-site CI drift guard).
+- **Portfolio finish (Phase 28):** PORT-05's shipped landing-page redesign is confirmed still true (fresh build + green drift guard) and locked as a new durable `tests/test_demo_transcript_guard.py` (token→previewSample contract over `site/dist/`); the one owner runbook `28-HUMAN-UAT.md` hands off the three genuinely blocked-on-human items. Suite green at **1238 passed / 129 skipped / 0 failed**, ruff clean.
+
+### Known Gaps
+
+4 requirements blocked-on-human (owner GitHub-UI / live-bot steps — no code work):
+
+- **HOST-04** — delete the dashboard-side Render service (owner did this 2026-07-15; no Render config was in the repo).
+- **PORT-02** — embed two verbatim real Dexter personality lines in the demo mock (needs a live bot; placeholder tokens intact, no invented lines).
+- **CICD-02** — enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first `pages.yml` run (attempted this session, owner deferred).
+- **CICD-03** — GHCR package-visibility flip + first `v*` tag `release.yml` run (strictly post-`v1.5`-tag).
+
+**Known deferred items at close: 44** (21 UAT gaps, 20 `human_needed` verification, 3 stale CONTEXT markers — all live-Discord/host-blocked or doc-only, zero code gaps; acknowledged 2026-07-18) — see STATE.md Deferred Items. The full live-Discord/24-7 tail resumes when an always-on residential host exists (DEPLOY-F1).
+
+---
+
 ## v1.4 Open House (Shipped: 2026-07-14)
 
 **Phases completed:** 6 phases (18–23), 32 plans, 78 tasks

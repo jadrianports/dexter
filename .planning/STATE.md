@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
-status: verifying
+status: Awaiting next milestone
 stopped_at: Completed 28-02-PLAN.md
-last_updated: "2026-07-17T19:20:23.887Z"
-last_activity: 2026-07-17
+last_updated: "2026-07-17T19:28:51.299Z"
+last_activity: 2026-07-17 — Milestone v1.5 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -18,19 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
+See: .planning/PROJECT.md (updated 2026-07-18 after v1.5 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 28 — portfolio-finish-release
+**Current focus:** Planning next milestone (v1.5 "Deep Cuts" shipped + tagged 2026-07-18)
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-07-17
-
-Progress: [░░░░░░░░░░] 0%
+Phase: Milestone v1.5 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-17 — Milestone v1.5 completed and archived
 
 ## Performance Metrics
 
@@ -172,18 +170,28 @@ None.
 
 ## Deferred Items
 
-Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open items from the pre-close artifact audit (17 UAT gaps, 16 `human_needed` verification, 3 stale CONTEXT markers) **plus 3 blocked-on-human v1.4 requirements** (PORT-02, CICD-02, CICD-03 — all carried forward into v1.5 as the same requirement IDs, now mapped to Phase 28). All are `human_needed` live-Discord checks, manual GitHub-UI toggles, or stale planning markers — **zero code gaps** (code-complete, CI green at HEAD `006da2a`). The live-Discord tail resumes when a Pi / always-on residential host exists (DEPLOY-F1); the blocked-on-human reqs resume when the owner performs the manual GitHub-UI / live-bot steps.
+Acknowledged and deferred at **v1.5 milestone close (2026-07-18)** — 44 open items from the pre-close artifact audit (21 UAT gaps, 20 `human_needed` verification, 3 stale CONTEXT markers) **plus 3 blocked-on-human release requirements** (PORT-02, CICD-02, CICD-03 — carried across milestones as the same IDs, mapped to Phase 28). HOST-04 (Render service deletion) was completed by the owner 2026-07-15. All remaining items are `human_needed` live-Discord checks, manual GitHub-UI toggles, or stale planning markers — **zero code gaps** (code-complete, suite green 1238 pass / 0 fail, CI green on `main`). The live-Discord tail resumes when a Pi / always-on residential host exists (DEPLOY-F1); the blocked-on-human reqs resume when the owner performs the manual GitHub-UI / live-bot steps.
 
-### Blocked-on-human v1.5 requirements (4, incl. 3 carried from v1.4)
+### Blocked-on-human release requirements (3)
 
 | Req | Item | Status |
 |-----|------|--------|
-| HOST-04 | Delete the dashboard-side Render service so the repo stops auto-deploying and CI/CD failure emails stop | Blocked on owner Render-UI step |
-| PORT-02 | Demo GIF needs two verbatim real Dexter personality lines (placeholder tokens intact; no invented lines) | Blocked on live bot capture |
-| CICD-02 | Enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first `pages.yml` run | Blocked on owner GitHub-UI toggle |
-| CICD-03 | GHCR package-visibility flip + first `v*` tag `release.yml` run | Blocked on owner GitHub-UI toggle |
+| PORT-02 | Demo mock needs two verbatim real Dexter personality lines (placeholder tokens intact; no invented lines) | Blocked on live bot capture |
+| CICD-02 | Enable GitHub Pages (Settings→Pages→Source=GitHub Actions) + first `pages.yml` run | Blocked on owner GitHub-UI toggle (attempted, deferred) |
+| CICD-03 | GHCR package-visibility flip + first `v*` tag `release.yml` run | Blocked on owner GitHub-UI toggle (strictly post-`v1.5` tag) |
 
-### Live-Discord / verification tail (33, carried from v1.4 close)
+> **CICD-03 note:** the `v1.5` tag created at this close is the first `v*` tag — its `release.yml` run is the CICD-03 owner step once GHCR visibility is set.
+
+### v1.5-native live-Discord tail (10, parked behind the residential host)
+
+| Category | Item | Status |
+|----------|------|--------|
+| uat/verification | Phase 25 (MEM-06/07) — `25-HUMAN-UAT.md` (1) + `25-VERIFICATION.md` (`human_needed`): salience-reinforcement observable durability, live vision→memory write | Blocked on live Discord/host |
+| uat/verification | Phase 26 (DJ-01/02) — `26-HUMAN-UAT.md` (5) + `26-VERIFICATION.md`: radio cadence feel, multi-listener tally narration, solo-skip regression, post-stop drain, clean-boot registration | Blocked on live Discord/host |
+| uat/verification | Phase 27 (DJ-03) — `27-HUMAN-UAT.md` (4) + `27-VERIFICATION.md`: blend smoothness, `/skip`-mid-crossfade, D-17.5 decoder tolerance, `/crossfade` toggle feel | Blocked on live Discord/host |
+| uat/verification | Phase 28 (PORT-05) — `28-HUMAN-UAT.md` (0 pending) + `28-VERIFICATION.md`: local visual pass + the 3 blocked-on-human items above | Marker-only / owner steps |
+
+### Live-Discord / verification tail (carried from prior closes)
 
 | Category | Item | Status |
 |----------|------|--------|
@@ -206,5 +214,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Review the roadmap draft (`.planning/ROADMAP.md`) and approve, or provide feedback for revision.
-- Once approved: `/gsd-plan-phase 24` to start planning Hosting Honesty & Docker.
+- Start the next milestone with /gsd-new-milestone

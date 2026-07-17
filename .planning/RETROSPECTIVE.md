@@ -214,6 +214,50 @@
 
 ---
 
+## Milestone: v1.5 — Deep Cuts
+
+**Shipped (code):** 2026-07-18
+**Phases:** 5 (24, 25, 26, 27, 28) | **Plans:** 17 | **Tasks:** 47 | **Commits:** 102 since v1.4 | **Timeline:** 2026-07-14 → 2026-07-18 (5 days)
+
+### What Was Built
+- Hosting honesty: every dead cloud-host reference (Render/Koyeb/Oracle) purged from code + config + docs, five dead Oracle-era files deleted, `DEPLOY-KOYEB.md` → a lean `DEPLOY-DOCKER.md`, and a permanent CI drift guard against regrowth (Phase 24).
+- Durable + richer memory: salience/expiry reinforcement at the single `recall()` chokepoint (GREATEST-guarded, kind-grouped) so frequently-relevant facts outlive one-offs under the decay sweep, plus a `vision_roast` memory kind persisted through the accuracy/PII firewall — additive on the pgvector store, zero new tables (Phase 25).
+- Radio mode: `/radio start|stop` endless taste-brain DJ via a keyword-only `radio=True` branch behind a pure `logic/radio.py` gate + in-memory `MusicQueue` armed-state, with lookahead refill, loop mutual-exclusion, and structural disarm on every `clear()` (Phase 26, DJ-01).
+- Skip democracy: vote-gated `/skip` with a narrated tally at ONE `_try_skip` choke point (pure `logic/skip_vote.py`, config-honouring majority, requester bypass, solo-instant) — `_do_skip` called exactly once (Phase 26, DJ-02).
+- Crossfade: DJ-03 shipped after a plan-time spike returned GO/suppressed — the fade lives inside the incoming track's own `AudioSource` (`CrossfadeSource`/`TruncatingSource` equal-power `audioop` mix, one `cleanup()` owning both decoders), `/crossfade on|off`, silent hard-cut fallback, two mandatory D-17 rails (Phase 27).
+- Portfolio finish: PORT-05's shipped redesign confirmed still true + locked as a durable build-scanning `test_demo_transcript_guard.py`; owner runbook handing off the three blocked-on-human items (Phase 28).
+
+### What Worked
+- **The spike gate did its job — and returned GO the safe way.** Phase 27's plan-time spike attacked the real generation-counter/`/skip`/prefetch engine before any implementation, and the verdict (GO / *suppressed*) reshaped the design: instead of touching the delicate per-track `play()` engine (which would have tripped D-01), the fade was pushed inside the incoming track's own `AudioSource`, so the engine stayed byte-identical. The Descope Rule's escape hatch was ready but unneeded.
+- **Adversarial code review caught a requirement-defeating Critical.** In Phase 26, `/skip` and `/seek` counted skip votes from users *not in the voice channel* (the button gated; those two didn't) — which would have silently defeated DJ-02 entirely. Because `decide_skip` deliberately doesn't filter by live membership (D-17), membership gating is the caller's job, and two of three callers skipped it. Review + regression lock closed it.
+- **Execution surfaced a skip surface no planning doc listed.** `/seek 99:99` past-end auto-skip called `_do_skip` directly — a full vote bypass. Routing it through `_try_skip` (required by the plan's own "exactly one `_do_skip` call site" criterion) closed a hole discovery-during-execution found, not planning.
+- **Additive-on-existing-substrate held for a fifth milestone.** MEM-06/07 rode the Phase 11/13 pgvector store with zero new tables and a kind-agnostic write path; the byte-identical-when-unexercised guard kept every prior kind's decay/salience intact.
+- **API-crash / session-limit resume was handled surgically, not blindly.** Two executors died mid-Task on "Connection closed mid-response"; the Phase 27-05 executor died on a session limit mid-Task-3 with work staged + green but uncommitted. Each was recovered by spot-checking partial state (commits? SUMMARY? staged diff?) and resuming, never blind-redispatched.
+
+### What Was Inefficient
+- **The `human_needed` tail kept growing — 44 at close** (up from 36 at v1.4). Radio cadence feel, multi-listener tally narration, crossfade blend smoothness, `/skip`-mid-crossfade — every new audible/interactive surface added live-Discord UAT that can't run without a standing host. A fifth straight milestone where "code-complete" outran "validated."
+- **The full suite had to run foreground (~7 min) — backgrounded runs got killed ~15% in.** A real friction tax on every verify pass; the `1233↔1232` count flip (a `site/dist` skip, not a regression) also cost a diagnostic detour before it was understood as benign.
+- **`phase.complete` left the REQUIREMENTS traceability row stale, and `milestone.complete` dumped 15 unstructured accomplishment bullets into MILESTONES.md** — both required a hand-fix at close (the same class of CLI-output-needs-curation friction seen at v1.4).
+- **Commits stayed unpushed across the whole milestone** — the local-main-only workflow means the entire v1.5 stack sat unpushed until close, so CI never saw the intermediate phases.
+
+### Patterns Established
+- **Spike-then-redesign** — a plan-time spike against the real engine doesn't just gate go/no-go, it can relocate the whole implementation (crossfade moved *inside* the AudioSource) so the risky surface is never touched.
+- **One choke point for a cross-cutting gate, with membership filtering pushed to callers by contract** — `_do_skip` called from exactly one place, and the deliberate D-17 "count departed voters" decision makes the caller responsible for live-membership filtering (a contract a reviewer must check every caller against).
+- **Suppress-with-rails over patch-and-hope** — the `send_silence` monkeypatch shipped only with a fail-soft wrapper *and* a CI drift guard asserting the real `_do_run` call site (with a positive control), so a discord.py upgrade that moves the call site fails the build.
+
+### Key Lessons
+1. Run the spike against the *real* engine and let the verdict reshape the design, not just gate it — GO/suppressed moved crossfade off the dangerous surface entirely.
+2. When a decision intentionally under-filters (D-17 counts departed voters), make "the caller filters" an explicit reviewed contract — two of three callers forgot, and it was a Critical.
+3. Discovery-during-execution finds entry points planning misses — the "exactly one `_do_skip` call site" acceptance criterion is what forced the third skip surface into the light.
+4. Budget for foreground suite time and CLI-output curation at close — the 7-min foreground suite and the MILESTONES/REQUIREMENTS hand-fixes are now predictable, not surprises.
+
+### Cost Observations
+- Model mix: executor/verifier/reviewer/fixer = sonnet; orchestration + planning = opus (per session memory). Not otherwise instrumented.
+- Sessions: not tracked; at least three sessions saw executor API-crash / session-limit interruptions, all recovered orchestrator-side.
+- Notable: the flagship *risk* this milestone was the playback-engine surface (radio refill + skip-voting + crossfade all touching the generation-counter/`/skip`/prefetch machinery). Containing crossfade to its own spike-gated phase *after* radio/skip-voting kept the engine risk from compounding — the sequencing lock from roadmap creation paid off.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -225,6 +269,7 @@
 | v1.2 | n/a | 4 | First milestone with a dedicated test-coverage phase (10) and a research-backed flagship phase (11) gated by a validation spike; pure-logic seam graduated to a `logic/` package |
 | v1.3 | n/a | 5 | Longest milestone by phase count; every phase built additively on the Phase 11 memory store (zero schema forks); trust-ordered sequencing (forget before proactive); adversarial review caught a goal-blocking no-op unit tests missed |
 | v1.4 | n/a | 6 | First real green CI gate (service-container pgvector) unskipping ~111 live-DB tests + catching latent fresh-boot bugs; multi-tenancy retrofit (config seam + cache) with structural silence; owner kill-switch at one choke point; portfolio pivot — first milestone to close with requirements it structurally couldn't finish in code (owner-performed GitHub steps) |
+| v1.5 | n/a | 5 | First spike-gated phase where the GO verdict *relocated* the implementation (crossfade inside the AudioSource) to keep the engine untouched; playback-engine-heavy milestone sequenced to contain risk (radio/skip before crossfade); adversarial review caught a requirement-defeating Critical (skip votes from non-listeners); multiple executor API-crash/session-limit resumes recovered orchestrator-side |
 
 ### Cumulative Quality
 
@@ -235,6 +280,7 @@
 | v1.2 | + ~83 mock-free `logic/` unit tests (playback/health/roasts) with named scar regressions + Phase 11 memory rerank/dedup/decay suites | Not measured (same convention; first explicit regression-gate phase) | `pgvector` (Neon extension) + `pgvector` Python codec; `gemini-embedding-001` embeddings |
 | v1.3 | + `logic/taste|proactive|vision` suites, kind-aware memory + DB aggregate helper tests, cadence rarity-invariants, live-DB forget-proof — suite green at 848 pass / 108 skip | Not measured (same convention) | **None** — zero new deps/tables/limiters; all built on the existing pgvector + Gemini stack |
 | v1.4 | + `logic/guild_config|invite` suites, GuildConfigService no-round-trip regressions, blocklist/silence/purge live-DB tests, invite + site drift-guards — **~1017 pass in CI, ~111 live-DB tests now execute** (not skip) against a pgvector service container | Not measured (same convention; first CI-enforced gate) | ruff (dev tooling); Astro (site build, isolated in `/site`) — **no new bot runtime deps/tables/limiters** |
+| v1.5 | + `logic/radio\|skip_vote\|crossfade` suites (incl. 24-row crossfade ladder), `MusicQueue` radio/vote/xf state guards, `TruncatingSource`/`CrossfadeSource` tests, `send_silence` + hosting + demo-transcript drift-guards — suite green at **1238 pass / 129 skip / 0 fail** | Not measured (same convention) | **None** — `audioop` is stdlib on the pinned 3.11 (numpy rejected); zero new tables/limiters/runtime deps |
 
 ### Top Lessons (Verified Across Milestones)
 
