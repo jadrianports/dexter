@@ -402,9 +402,7 @@ async def test_memory_write_fires_with_expected_kwargs_on_success():
     with (
         patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
         patch("cogs.events.random.random", return_value=0.0),
-        patch.object(
-            cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")
-        ),
+        patch.object(cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")),
     ):
         await cog._maybe_fire_vision_roast(message)
         await asyncio.sleep(0)  # let the fire-and-forget asyncio.create_task run
@@ -444,18 +442,14 @@ async def test_memory_write_skipped_when_reply_fails():
     send, never pre-send."""
     good = _make_attachment("image/png", _GOOD_SIZE)
     message = _make_message(attachments=[good], user_id=23)
-    message.reply = AsyncMock(
-        side_effect=discord.HTTPException(MagicMock(status=500, reason="boom"), "boom")
-    )
+    message.reply = AsyncMock(side_effect=discord.HTTPException(MagicMock(status=500, reason="boom"), "boom"))
     bot = _make_bot_with_memory()
     cog = EventsCog(bot)
 
     with (
         patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
         patch("cogs.events.random.random", return_value=0.0),
-        patch.object(
-            cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")
-        ),
+        patch.object(cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")),
     ):
         await cog._maybe_fire_vision_roast(message)
         await asyncio.sleep(0)
@@ -499,9 +493,7 @@ async def test_memory_write_skipped_when_memory_service_absent():
     with (
         patch("cogs.events.database.get_proactive_opt_out", new=AsyncMock(return_value=False)),
         patch("cogs.events.random.random", return_value=0.0),
-        patch.object(
-            cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")
-        ),
+        patch.object(cog, "_generate_vision_roast", new=AsyncMock(return_value="a genuinely generated line")),
     ):
         await cog._maybe_fire_vision_roast(message)  # must not raise
 

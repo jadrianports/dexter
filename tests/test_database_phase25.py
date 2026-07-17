@@ -59,9 +59,7 @@ class TestReinforceMemoryExpiryExists:
     """Verify reinforce_memory_expiry exists, is parameterized, and is extend-only."""
 
     def test_reinforce_memory_expiry_exists(self) -> None:
-        assert hasattr(database, "reinforce_memory_expiry"), (
-            "reinforce_memory_expiry must exist in database.py"
-        )
+        assert hasattr(database, "reinforce_memory_expiry"), "reinforce_memory_expiry must exist in database.py"
 
     def test_reinforce_memory_expiry_signature(self) -> None:
         sig = inspect.signature(database.reinforce_memory_expiry)
@@ -141,16 +139,10 @@ async def test_reinforced_fact_survives_sweep_unreinforced_does_not(pool) -> Non
     await database.delete_expired_memories(pool, now=now)
 
     async with pool.acquire() as conn:
-        row_reinforced = await conn.fetchrow(
-            "SELECT id FROM user_memories WHERE id = $1", id_reinforced
-        )
-        row_unreinforced = await conn.fetchrow(
-            "SELECT id FROM user_memories WHERE id = $1", id_unreinforced
-        )
+        row_reinforced = await conn.fetchrow("SELECT id FROM user_memories WHERE id = $1", id_reinforced)
+        row_unreinforced = await conn.fetchrow("SELECT id FROM user_memories WHERE id = $1", id_unreinforced)
 
-    assert row_reinforced is not None, (
-        "The reinforced fact must survive the sweep (its expires_at was pushed out)"
-    )
+    assert row_reinforced is not None, "The reinforced fact must survive the sweep (its expires_at was pushed out)"
     assert row_unreinforced is None, (
         "The unreinforced, equally-old fact must be swept (its expires_at stayed in the past)"
     )
@@ -191,9 +183,7 @@ async def test_recall_does_not_mutate_salience_or_hit_count(pool) -> None:
 
     # The two recall() step-7 calls, in order (7a then 7b).
     await database.bump_surfaced(pool, [memory_id])
-    await database.reinforce_memory_expiry(
-        pool, [memory_id], datetime.now(timezone.utc) + timedelta(days=90)
-    )
+    await database.reinforce_memory_expiry(pool, [memory_id], datetime.now(timezone.utc) + timedelta(days=90))
 
     async with pool.acquire() as conn:
         after = await conn.fetchrow(
@@ -278,8 +268,7 @@ class TestVisionRoastMemory:
         expected_horizon = datetime.now(timezone.utc) + timedelta(days=config.TASTE_DECAY_DAYS)
         delta_seconds = abs((row["expires_at"] - expected_horizon).total_seconds())
         assert delta_seconds < 60 * 60 * 24, (
-            f"expires_at must be ~TASTE_DECAY_DAYS ({config.TASTE_DECAY_DAYS}d) out, "
-            f"was off by {delta_seconds}s"
+            f"expires_at must be ~TASTE_DECAY_DAYS ({config.TASTE_DECAY_DAYS}d) out, was off by {delta_seconds}s"
         )
 
     @pytest.mark.skipif(_SKIP_LIVE, reason=_skip_reason)

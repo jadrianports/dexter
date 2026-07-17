@@ -212,9 +212,7 @@ class MemoryService:
                     )
                     groups.setdefault(days, []).append(f.id)
                 for days, ids in groups.items():
-                    await database.reinforce_memory_expiry(
-                        self._pool, ids, reinforced_at + timedelta(days=days)
-                    )
+                    await database.reinforce_memory_expiry(self._pool, ids, reinforced_at + timedelta(days=days))
             except Exception as e:
                 log.debug(f"memory.recall: step-7 surfacing bookkeeping failed (non-fatal): {e}")
 
