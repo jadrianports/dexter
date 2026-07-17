@@ -75,7 +75,7 @@ Explicitly excluded.
 | MEM-07 | Phase 25 | Complete |
 | DJ-01 | Phase 26 | Complete |
 | DJ-02 | Phase 26 | Complete |
-| DJ-03 | Phase 27 | Pending (spike-gated) |
+| DJ-03 | Phase 27 | Complete (spike GO/suppressed; live-Discord ear-check parked to 27-HUMAN-UAT.md) |
 | PORT-05 | Phase 28 | Complete (`c7fd22e`) |
 | PORT-02 | Phase 28 | Pending (blocked-on-human) |
 | CICD-02 | Phase 28 | Pending (blocked-on-human) |
