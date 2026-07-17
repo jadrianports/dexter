@@ -42,7 +42,8 @@ is instead asserted via the surviving hex color values (`0a0c11` near-black
 background, `ffb454` amber accent) that ARE present in the built CSS.
 
 Tests:
-- test_no_raw_token_in_built_demo              — THE dist-scan guard (D-01.1, T-28-01)
+- test_no_raw_token_in_built_demo              — THE token->preview dist-scan guard (D-01.1, T-28-01)
+- test_port05_copy_and_identity_survive_build   — PORT-05 design confirmation (copy + after-hours hex)
 - test_dist_scan_detects_a_leaked_token         — mandatory positive control
 - test_dist_scan_accepts_resolved_preview_samples — negative control for the positive control
 - test_every_unfilled_token_entry_has_a_preview_sample — build-independent structural guard (D-01.2)
@@ -131,34 +132,50 @@ def _raw_tokens_in(text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_no_raw_token_in_built_demo():
-    """D-01.1: no raw `{{...}}` placeholder ships in the built site, and the
-    resolved `previewSample` fallbacks + proper-case copy + after-hours
-    identity hex all survive into the shipped bytes.
-
-    Missing-dist handling mirrors `test_site_drift_guard.py`'s skip/fail
-    split exactly: `SITE_DIST_REQUIRED=1` (set only by `ci.yml`'s `site`
-    job) turns "no dist/ found" into a hard failure instead of a graceful
-    local skip, so CI can never silently recreate a vacuous-pass hole.
-    """
-    dist_dir = _site_dist_dir()
-    html_files = _dist_html_files(dist_dir)
+def _require_dist_html() -> list[Path]:
+    """Shared skip/fail gate for the two dist-scan tests. Mirrors
+    `test_site_drift_guard.py`'s split exactly: `SITE_DIST_REQUIRED=1` (set only
+    by `ci.yml`'s `site` job) turns "no dist/ found" into a hard failure instead
+    of a graceful local skip, so CI can never silently recreate a vacuous-pass
+    hole. Extracted so the token-contract guard (D-01.1) and the PORT-05 design
+    confirmation stay two separate, honestly-named tests (WR-02) that share one
+    gate."""
+    html_files = _dist_html_files(_site_dist_dir())
     if not html_files:
         if os.getenv("SITE_DIST_REQUIRED"):
             pytest.fail(
                 "site/dist/ is empty but SITE_DIST_REQUIRED=1 — the Astro build step did not run or produced no output"
             )
         pytest.skip("site/dist/ not built (local run, no `npm run build`)")
+    return html_files
+
+
+def _all_html_text(html_files: list[Path]) -> str:
+    """Concatenated, HTML-unescaped text of every shipped HTML file. Unescaped
+    because Astro/JSX-style templating escapes apostrophes (e.g. "I'm" ->
+    "I&#39;m"), so a literal previewSample/copy string only matches after
+    decoding HTML entities back to plain text."""
+    return html.unescape("\n".join(f.read_text(encoding="utf-8", errors="ignore") for f in html_files))
+
+
+def test_no_raw_token_in_built_demo():
+    """D-01.1 / T-28-01: no raw `{{...}}` placeholder ships in the built site,
+    and the resolved `previewSample` fallbacks both survive into the shipped
+    bytes (proof that `resolveLine()` substituted the token at build time).
+
+    Scoped strictly to the token->previewSample contract its name describes —
+    the PORT-05 design confirmation (proper-case copy + after-hours identity
+    hex) lives in `test_port05_copy_and_identity_survive_build` so a legitimate
+    copy/palette edit can never fail *this* token-leak guard (WR-02).
+    """
+    html_files = _require_dist_html()
 
     for html_file in html_files:
         text = html_file.read_text(encoding="utf-8", errors="ignore")
         tokens = _raw_tokens_in(text)
         assert tokens == [], f"raw placeholder token(s) leaked into {html_file}: {tokens}"
 
-    # HTML-unescaped: Astro/JSX-style templating escapes apostrophes (e.g. "I'm"
-    # -> "I&#39;m"), so the literal previewSample string only matches after
-    # decoding HTML entities back to plain text.
-    all_html_text = html.unescape("\n".join(f.read_text(encoding="utf-8", errors="ignore") for f in html_files))
+    all_html_text = _all_html_text(html_files)
     assert _PREVIEW_SAMPLE_1 in all_html_text, (
         f"previewSample fallback 1 not found in shipped HTML — resolveLine() may not have "
         f"resolved the {{DEXTER_DEMO_LINE_1}} token: {_PREVIEW_SAMPLE_1!r}"
@@ -168,18 +185,39 @@ def test_no_raw_token_in_built_demo():
         f"resolved the {{DEXTER_DEMO_LINE_2}} token: {_PREVIEW_SAMPLE_2!r}"
     )
 
+
+def test_port05_copy_and_identity_survive_build():
+    """PORT-05 design confirmation: the proper-case hero/feature copy and the
+    after-hours visual identity survive the Astro build into the shipped bytes.
+    Split out of the token-leak guard (WR-02) so this test's name points at the
+    real cause when a copy or palette change regresses.
+
+    WR-01: the identity hex is asserted across HTML *and* CSS bytes together,
+    with NO hard `assert css_files`. Astro's default `build.inlineStylesheets:
+    'auto'` inlines any stylesheet under Vite's ~4kB `assetsInlineLimit` into an
+    HTML `<style>` block — in which case `site/dist/` has zero `.css` files and
+    the hex lives only in the HTML. Searching both byte streams makes the guard
+    an assertion about the shipped identity, not about the build's CSS topology.
+    """
+    html_files = _require_dist_html()
+    all_html_text = _all_html_text(html_files)
+
     for copy in _PROPER_CASE_SUBSET:
         assert copy in all_html_text, f"proper-case copy {copy!r} missing from shipped HTML"
 
-    css_files = _dist_css_files(dist_dir)
-    assert css_files, "no built CSS files found under site/dist/ — cannot verify after-hours identity"
-    all_css_text = "\n".join(f.read_text(encoding="utf-8", errors="ignore") for f in css_files)
-    assert _IDENTITY_HEX_BG in all_css_text, (
-        f"after-hours near-black background hex {_IDENTITY_HEX_BG!r} missing from built CSS "
+    # WR-01: scan HTML + CSS together; the stylesheet may be an emitted *.css
+    # file OR inlined into an HTML <style> block depending on its size.
+    all_shipped_text = (
+        all_html_text
+        + "\n"
+        + "\n".join(f.read_text(encoding="utf-8", errors="ignore") for f in _dist_css_files(_site_dist_dir()))
+    )
+    assert _IDENTITY_HEX_BG in all_shipped_text, (
+        f"after-hours near-black background hex {_IDENTITY_HEX_BG!r} missing from shipped HTML/CSS "
         "(NOTE: never assert the literal phrase 'after hours' — it lives only in a stripped CSS comment)"
     )
-    assert _IDENTITY_HEX_ACCENT in all_css_text, (
-        f"after-hours amber accent hex {_IDENTITY_HEX_ACCENT!r} missing from built CSS "
+    assert _IDENTITY_HEX_ACCENT in all_shipped_text, (
+        f"after-hours amber accent hex {_IDENTITY_HEX_ACCENT!r} missing from shipped HTML/CSS "
         "(NOTE: never assert the literal phrase 'after hours' — it lives only in a stripped CSS comment)"
     )
 
