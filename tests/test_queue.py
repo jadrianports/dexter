@@ -34,6 +34,34 @@ def test_auto_lyrics_defaults_off_and_survives_clear():
     assert q.lyrics_thread_id == 999
 
 
+def test_crossfade_toggle_survives_clear():
+    """D-12: crossfade_enabled is a server preference (survives clear()); the
+    _xf_pending / _xf_truncator playback handoff state is NOT (nulled by it).
+
+    Both halves are asserted in one test — a test that only checked the
+    surviving half would not lock the rule that actually prevents the stale
+    handoff bug (a _xf_pending left over from a /stop making the next
+    session's first track try to fade in from a track that is no longer
+    playing).
+    """
+    q = MusicQueue(123)
+    # defaults
+    assert q.crossfade_enabled is False
+    assert q._xf_pending is None
+    assert q._xf_truncator is None
+
+    q.crossfade_enabled = True
+    q._xf_pending = (make_track(), 196.0)
+    q._xf_truncator = object()
+    q.clear()
+
+    # preference survives
+    assert q.crossfade_enabled is True
+    # playback handoff state is nulled
+    assert q._xf_pending is None
+    assert q._xf_truncator is None
+
+
 class TestMusicQueueAdd:
     def test_add_track(self):
         q = MusicQueue(guild_id=1)
