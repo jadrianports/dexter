@@ -260,5 +260,5 @@ Plans:
 | 24. Hosting Honesty & Docker | v1.5 | 3/3 | Complete    | 2026-07-14 |
 | 25. Smarter Memory | v1.5 | 2/2 | Complete   | 2026-07-16 |
 | 26. Radio Mode & Skip Democracy | v1.5 | 5/5 | Complete    | 2026-07-16 |
-| 27. Crossfade Playback (spike-gated) | v1.5 | 5/5 | Complete   | 2026-07-17 |
+| 27. Crossfade Playback (spike-gated) | v1.5 | 5/5 | Complete    | 2026-07-17 |
 | 28. Portfolio Finish & Release | v1.5 | 0/TBD | Not started | - |
