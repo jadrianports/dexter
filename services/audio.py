@@ -212,6 +212,7 @@ class AudioService:
         *,
         seek_seconds: int = 0,
         ffmpeg_filter: str | None = None,
+        crossfade_from: tuple[Track, float] | None = None,
     ) -> discord.AudioSource:
         """Get a playable audio source for a track.
 
@@ -219,13 +220,42 @@ class AudioService:
         opus-passthrough behaviour is preserved exactly (D-12): cached tracks
         use FFmpegOpusAudio with no extra options, downloaded tracks likewise.
         A transcode path is taken ONLY when a seek or filter is requested.
+        The same holds for crossfade_from (Phase 27 / D-14): when it is
+        omitted the crossfade branch below never runs and every line of the
+        existing ladder is byte-identical to before this kwarg existed.
 
         Args:
             track: the track to play.
             seek_seconds: start playback from this offset (0 = beginning).
             ffmpeg_filter: FFmpeg -af chain string from config.FFMPEG_FILTERS, or
                 None for no filter.
+            crossfade_from: (outgoing_track, cut_seconds) — when set and BOTH
+                the outgoing and incoming files are already cached, returns a
+                CrossfadeSource mixing the outgoing track's tail (re-decoded
+                from its cache file with -ss cut_seconds) into this track's
+                head. Defensive fall-through, never raises: if either file is
+                missing this falls straight through to the ordinary ladder
+                below (the NOT_CACHED rung in logic/crossfade.py should
+                already have prevented this call from happening at all — this
+                is defense in depth, not the primary gate).
         """
+        if crossfade_from is not None:
+            outgoing_track, cut_seconds = crossfade_from
+            outgoing_cache = self.cache_path(outgoing_track.video_id)
+            incoming_cache = self.cache_path(track.video_id)
+            if outgoing_cache.exists() and incoming_cache.exists():
+                # 50 frames/sec at the 20ms Discord frame — derived from the
+                # frame duration, not a second hardcoded magic number.
+                frames_per_second = 1000 // 20
+                fade_frames = config.CROSSFADE_SECONDS * frames_per_second
+                tail = discord.FFmpegPCMAudio(
+                    str(outgoing_cache),
+                    before_options=f"-ss {cut_seconds} {_RECONNECT_FLAGS}",
+                )
+                head = discord.FFmpegPCMAudio(str(incoming_cache))
+                return CrossfadeSource(tail=tail, head=head, fade_frames=fade_frames)
+            log.info("crossfade: hard cut (not_cached)")
+
         cached = self.cache_path(track.video_id)
         use_opts = seek_seconds > 0 or ffmpeg_filter is not None
 

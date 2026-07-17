@@ -472,3 +472,119 @@ def test_crossfade_tolerates_empty_tail():
     # After the fade window: head alone, no crash.
     remaining = head.read()
     assert cs.read() == remaining
+
+
+@pytest.mark.asyncio
+async def test_get_source_unchanged_without_crossfade(audio_service, tmp_cache):
+    """VALIDATION row 11 (exact test name, MANDATED — do not rename): the
+    standing additive-change discipline. With no crossfade_from, get_source()
+    takes the same opus-passthrough path as before this plan existed.
+    Parametrized over the cache-hit and download-success rungs.
+    """
+    import discord
+
+    from models.queue import Track
+
+    # --- Cache-hit rung ---
+    track_cached = Track(
+        video_id="regress_cached",
+        title="Regression Song (cached)",
+        url="https://youtube.com/watch?v=regress_cached",
+        duration_seconds=200,
+        requested_by=1,
+        thumbnail=None,
+        artist=None,
+    )
+    (tmp_cache / "regress_cached.opus").write_bytes(b"fake audio")
+    source = await audio_service.get_source(track_cached)
+    assert isinstance(source, discord.FFmpegOpusAudio)
+    assert not isinstance(source, CrossfadeSource)
+
+    # --- Download-success rung (no cache file; download succeeds) ---
+    track_downloaded = Track(
+        video_id="regress_downloaded",
+        title="Regression Song (downloaded)",
+        url="https://youtube.com/watch?v=regress_downloaded",
+        duration_seconds=200,
+        requested_by=1,
+        thumbnail=None,
+        artist=None,
+    )
+    downloaded_path = tmp_cache / "downloaded_only.opus"
+    downloaded_path.write_bytes(b"fake audio 2")
+    audio_service.youtube_service.async_download = AsyncMock(return_value=downloaded_path)
+    source2 = await audio_service.get_source(track_downloaded)
+    assert isinstance(source2, discord.FFmpegOpusAudio)
+    assert not isinstance(source2, CrossfadeSource)
+
+
+class TestGetSourceCrossfadeFrom:
+    """crossfade_from=... behavior: builds a CrossfadeSource when both files are
+    cached, falls through defensively (never raises) when either is missing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_crossfade_from_both_cached_returns_crossfade_source(self, audio_service, tmp_cache):
+        from models.queue import Track
+
+        outgoing = Track(
+            video_id="xf_outgoing",
+            title="Outgoing",
+            url="https://youtube.com/watch?v=xf_outgoing",
+            duration_seconds=200,
+            requested_by=1,
+            thumbnail=None,
+            artist=None,
+        )
+        incoming = Track(
+            video_id="xf_incoming",
+            title="Incoming",
+            url="https://youtube.com/watch?v=xf_incoming",
+            duration_seconds=200,
+            requested_by=1,
+            thumbnail=None,
+            artist=None,
+        )
+        (tmp_cache / "xf_outgoing.opus").write_bytes(b"fake outgoing audio")
+        (tmp_cache / "xf_incoming.opus").write_bytes(b"fake incoming audio")
+
+        with patch("services.audio.discord.FFmpegPCMAudio") as mock_ffmpeg:
+            mock_ffmpeg.side_effect = lambda *a, **k: MagicMock()
+            source = await audio_service.get_source(incoming, crossfade_from=(outgoing, 196.0))
+
+        assert isinstance(source, CrossfadeSource)
+        assert mock_ffmpeg.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_crossfade_from_outgoing_missing_falls_through(self, audio_service, tmp_cache):
+        """The outgoing file is absent -> falls through to the ordinary ladder,
+        never raises."""
+        import discord
+
+        from models.queue import Track
+
+        outgoing = Track(
+            video_id="xf_missing_outgoing",
+            title="Outgoing",
+            url="https://youtube.com/watch?v=xf_missing_outgoing",
+            duration_seconds=200,
+            requested_by=1,
+            thumbnail=None,
+            artist=None,
+        )
+        incoming = Track(
+            video_id="xf_present_incoming",
+            title="Incoming",
+            url="https://youtube.com/watch?v=xf_present_incoming",
+            duration_seconds=200,
+            requested_by=1,
+            thumbnail=None,
+            artist=None,
+        )
+        # Only the incoming file is cached; outgoing is absent.
+        (tmp_cache / "xf_present_incoming.opus").write_bytes(b"fake incoming audio")
+
+        source = await audio_service.get_source(incoming, crossfade_from=(outgoing, 196.0))
+
+        assert isinstance(source, discord.FFmpegOpusAudio)
+        assert not isinstance(source, CrossfadeSource)
