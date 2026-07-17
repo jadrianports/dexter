@@ -64,7 +64,7 @@ RENDER_ALLOWLIST = frozenset(
         ("README.md", 21),
         ("README.md", 23),
         ("README.md", 27),
-        ("bot.py", 684),
+        ("bot.py", 696),
         ("cogs/admin.py", 90),
         ("cogs/ai.py", 327),
         ("cogs/memory.py", 63),

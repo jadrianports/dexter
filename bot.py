@@ -60,11 +60,23 @@ class DexterBot(commands.AutoShardedBot):
         lets Discord route presses on pre-restart messages to the live handler.
         Import is inside the method to avoid a circular import at module load time
         (bot.py is imported by cogs; cogs import bot only via TYPE_CHECKING).
+
+        Also installs the D-17 send_silence suppression patch (Phase 27 / DJ-03)
+        here, before any voice playback can start -- this is the only invocation
+        site (utils/discord_patch.py). The install is fail-soft: a False return
+        just means crossfade transitions will carry discord.py's 100ms
+        end-of-transmission silence, never a boot crash.
         """
         from cogs.music import NowPlayingView
+        from utils import discord_patch
 
         self.add_view(NowPlayingView(self))
         log.info("Registered persistent NowPlayingView")
+
+        if discord_patch.install_send_silence_suppression():
+            log.info("send_silence suppression patch installed (crossfade fades will be gap-free)")
+        else:
+            log.info("send_silence suppression patch NOT installed (crossfade fades will carry the 100ms gap)")
 
     async def close(self) -> None:
         pool = getattr(self, "pool", None)
@@ -1045,6 +1057,23 @@ async def cache_cleanup():
             # Include in-flight prefetch slot
             if queue._prefetch_video_id:
                 protected_video_ids.add(queue._prefetch_video_id)
+            # Phase 27 / D-17: protect the OUTGOING track while a crossfade is
+            # in flight. By fade time current_index has already advanced to
+            # the incoming track, so without this the outgoing file -- being
+            # actively read by CrossfadeSource's tail decoder -- is
+            # eviction-eligible. This is a latent-accounting fix, not a
+            # crash fix: it does not manifest as a failure on either
+            # platform today (Windows: unlink fails, cleanup_cache already
+            # catches OSError and continues; Linux/Docker: unlink succeeds
+            # but the open fd keeps the decode alive, POSIX semantics).
+            # Nobody should try to "verify" this by reproducing a failure --
+            # verify by reading the constructed set.
+            if (
+                (queue._xf_truncator is not None or queue._xf_pending is not None)
+                and queue.current_index > 0
+                and queue.current_index - 1 < len(queue.tracks)
+            ):
+                protected_video_ids.add(queue.tracks[queue.current_index - 1].video_id)
 
     await bot.audio_service.cleanup_cache(bot.pool, protected_video_ids)
     log.info("Cache cleanup check completed (protected=%d)", len(protected_video_ids))
