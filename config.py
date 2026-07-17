@@ -336,7 +336,7 @@ SKIP_VOTE_MAJORITY_RATIO = 0.5
 # /crossfade [seconds] arg. If the fade feels long or short, THIS is the one
 # constant to change.
 CROSSFADE_SECONDS = 4  # fade length; at the 20ms Discord frame this is 200 mixed frames.
-# The D-08 spike render demonstrated this value and the user approved it at the D-04 gate.
+# The D-08 spike output demonstrated this value and the user approved it at the D-04 gate.
 
 # D-10b: below this, either track hard-cuts (fading a 15s clip is mostly fade).
 CROSSFADE_MIN_TRACK_SECONDS = 20
