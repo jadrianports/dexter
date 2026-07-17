@@ -751,6 +751,9 @@ class MusicCog(commands.Cog):
                 config.CROSSFADE_SECONDS,
             )
         else:
+            # REVIEW-FIX (WR-02): a stale truncator from a PRIOR FADE verdict
+            # must not linger past a hard-cut verdict for this track.
+            queue._xf_truncator = None
             log.info("crossfade: hard cut (%s)", verdict.value)
 
         # Increment generation — any old after-callbacks will see a stale generation and bail
@@ -776,8 +779,9 @@ class MusicCog(commands.Cog):
             if not voice_client.is_connected():
                 source.cleanup()
                 queue.is_playing = False
-                # REVIEW-FIX (WR-01): the just-cleaned-up source is gone --
-                # this field must not keep pointing at it.
+                # REVIEW-FIX (WR-01/WR-02): the just-cleaned-up source is
+                # gone -- neither field should keep pointing at it.
+                queue._xf_truncator = None
                 queue._xf_from_video_id = None
                 return
 
@@ -792,8 +796,9 @@ class MusicCog(commands.Cog):
         except Exception:
             source.cleanup()
             queue.is_playing = False
-            # REVIEW-FIX (WR-01): mirrors the not-connected early return
-            # above -- the source this field may reference is gone.
+            # REVIEW-FIX (WR-01/WR-02): mirrors the not-connected early
+            # return above -- the source these fields may reference is gone.
+            queue._xf_truncator = None
             queue._xf_from_video_id = None
             raise
 
