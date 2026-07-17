@@ -234,3 +234,23 @@ RADIO_NOT_ARMED: list[str] = [
     "there's no radio session running right now.",
     "you can't turn off what isn't on. radio's already off.",
 ]
+
+# --- Phase 27: Crossfade (DJ-03) ---
+# Zero-arg pools — no {} placeholders. There is no fade-length slot to
+# interpolate (D-12b: the length is a fixed constant, not a user-facing arg),
+# and the copy must not name the number — a hardcoded fade duration would
+# silently drift the moment config.CROSSFADE_SECONDS changes.
+
+CROSSFADE_ON: list[str] = [
+    "crossfade on. transitions get smoother, my patience does not.",
+    "fine, i'll blend the tracks together like i actually care.",
+    "crossfade enabled. try not to notice how much effort this takes.",
+    "smooth transitions, activated. don't get used to it. 🎚️",
+]
+
+CROSSFADE_OFF: list[str] = [
+    "crossfade off. back to hard cuts, like nature intended.",
+    "no more blending. songs just start now, no ceremony.",
+    "crossfade disabled. abrupt endings it is.",
+    "turned crossfade off. the silence between songs is your problem now.",
+]

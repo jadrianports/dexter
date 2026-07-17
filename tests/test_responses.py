@@ -135,3 +135,48 @@ class TestPhase26ResponsePools:
 
         source = inspect.getsource(responses)
         assert "import google" not in source
+
+
+class TestPhase27ResponsePools:
+    """Phase 27 (DJ-03) response pools: crossfade toggle confirmations."""
+
+    ALL_PHASE27_POOLS = [
+        "CROSSFADE_ON",
+        "CROSSFADE_OFF",
+    ]
+
+    def test_pools_are_non_empty_lists_of_str(self):
+        for name in self.ALL_PHASE27_POOLS:
+            pool = getattr(responses, name)
+            assert len(pool) >= 3, f"{name} has fewer than 3 entries"
+            assert all(isinstance(m, str) for m in pool), f"{name} contains non-str"
+
+    def test_pick_random_returns_member(self):
+        for name in self.ALL_PHASE27_POOLS:
+            pool = getattr(responses, name)
+            result = responses.pick_random(pool)
+            assert result in pool, f"pick_random did not return a member of {name}"
+
+    def test_crossfade_copy_style(self):
+        """Row 15: every entry in both pools is lowercase with at most one
+        emoji (Critical Rules 7/8), carries no format placeholder (D-12b:
+        the fade length is a fixed constant, never a user-facing arg), and
+        does not name the fade duration (a hardcoded "4 seconds" would
+        silently drift the moment config.CROSSFADE_SECONDS changes).
+
+        Emoji are counted by scanning codepoints in the unicodedata "So"
+        (Symbol, other) category — this covers the common emoji ranges
+        (Misc Symbols, Transport, Supplemental Symbols/Pictographs,
+        Dingbats) without needing a third-party emoji library.
+        """
+        import unicodedata
+
+        for name in self.ALL_PHASE27_POOLS:
+            pool = getattr(responses, name)
+            for entry in pool:
+                assert entry == entry.lower(), f"{name} entry not lowercase: {entry!r}"
+                emoji_count = sum(1 for ch in entry if unicodedata.category(ch) == "So")
+                assert emoji_count <= 1, f"{name} entry has more than one emoji: {entry!r}"
+                assert "{" not in entry, f"{name} entry has a format placeholder: {entry!r}"
+                assert "4" not in entry, f"{name} entry hardcodes a number: {entry!r}"
+                assert "second" not in entry, f"{name} entry names the fade unit: {entry!r}"
