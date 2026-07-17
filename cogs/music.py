@@ -34,6 +34,8 @@ from models.queue import LoopMode, MusicQueue, QueueFullError, Track
 from models.user_profile import get_user_summary
 from personality.prompts import build_chat_prompt, build_discover_commentary_prompt
 from personality.responses import (
+    CROSSFADE_OFF,
+    CROSSFADE_ON,
     DISCOVER_NO_HISTORY,
     FILTER_APPLIED,
     FILTER_CLEARED,
@@ -1991,6 +1993,30 @@ class MusicCog(commands.Cog):
             queue.auto_lyrics = False
             await interaction.response.send_message(
                 "auto-lyrics off. blessed silence.",
+                allowed_mentions=none,
+            )
+
+    @app_commands.command(name="crossfade", description="Toggle crossfade transitions for this server")
+    @app_commands.choices(
+        mode=[
+            app_commands.Choice(name="on", value="on"),
+            app_commands.Choice(name="off", value="off"),
+        ]
+    )
+    async def crossfade(self, interaction: discord.Interaction, mode: app_commands.Choice[str]) -> None:
+        """Toggle crossfade for this server (in-memory; survives /stop, resets on restart)."""
+        queue = self.get_queue(interaction.guild.id)
+        none = discord.AllowedMentions.none()
+        if mode.value == "on":
+            queue.crossfade_enabled = True
+            await interaction.response.send_message(
+                pick_random_r(CROSSFADE_ON),
+                allowed_mentions=none,
+            )
+        else:
+            queue.crossfade_enabled = False
+            await interaction.response.send_message(
+                pick_random_r(CROSSFADE_OFF),
                 allowed_mentions=none,
             )
 
