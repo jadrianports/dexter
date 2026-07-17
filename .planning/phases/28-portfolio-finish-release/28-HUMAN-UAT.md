@@ -8,7 +8,8 @@ updated: 2026-07-18T00:00:00Z
 
 ## Current Test
 
-[awaiting owner action on Test 1 (CICD-02); Tests 2-4 are correctly deferred/parked]
+[Test 1 (CICD-02) resolved: owner responded "deferred — tracked in 28-HUMAN-UAT.md" 2026-07-18;
+Tests 2-4 remain correctly deferred/parked]
 
 ## Tests
 
@@ -40,11 +41,12 @@ of whether the Pages source is set. The site goes live only after those commits 
 (the consolidated push is `/gsd:complete-milestone`'s job, not this phase's) and a subsequent
 `ci.yml` run on `main` succeeds.
 
-result: **BLOCKED-ON-HUMAN — do-now, prompted this session.** The owner was prompted during
-Phase 28 execution (Task 2, D-03) to perform this toggle. Accepted outcomes are "toggled" (Pages
-source set to GitHub Actions) or "deferred — tracked in this file"; either closes the phase
-green per the Phase 23/24 precedent. Regardless of which the owner chooses, the toggle by itself
-does not make the site live — that additionally needs the push + CI-success step above.
+result: **BLOCKED-ON-HUMAN — do-now, prompted this session, owner deferred.** The owner was
+prompted during Phase 28 execution (Task 2, D-03) to perform this toggle and responded
+"deferred — tracked in 28-HUMAN-UAT.md" (2026-07-18). This is one of the two accepted outcomes
+("toggled" or "deferred") and closes the phase green per the Phase 23/24 precedent. The toggle
+remains unset; whenever the owner performs it, the toggle by itself still does not make the site
+live — that additionally needs the push + CI-success step described in Test 2 below.
 
 ### 2. First real `pages.yml` run — blocked on Test 1 and the consolidated push
 expected: After Test 1's toggle is set AND the milestone-close consolidated push lands on
