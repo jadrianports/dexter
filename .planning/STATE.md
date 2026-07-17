@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
-status: executing
-stopped_at: Phase 28 context gathered
-last_updated: "2026-07-17T16:43:51.312Z"
+status: verifying
+stopped_at: Completed 28-02-PLAN.md
+last_updated: "2026-07-17T19:20:23.887Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
-  percent: 80
+  completed_phases: 5
+  total_plans: 17
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 27 — crossfade-playback-spike-gated
+**Current focus:** Phase 28 — portfolio-finish-release
 
 ## Current Position
 
 Phase: 28
 Plan: Not started
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-17
 
 Progress: [░░░░░░░░░░] 0%
@@ -108,6 +108,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 27 P02 | 15min | 3 tasks | 6 files |
 | Phase 27 P03 | 35min | 3 tasks | 2 files |
 | Phase 27 P04 | 20min | 3 tasks | 4 files |
+| Phase 28 P01 | 27min | 2 tasks | 1 files |
+| Phase 28 P02 | 8min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -155,6 +157,8 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase ?]: [Phase 27-03]: TruncatingSource._suppress_end_silence (D-17.3) is set ONLY at the instant read() cuts short for a fade -- never at construction, never on a natural early EOF -- so plan 27-04's send_silence patch stays byte-identical off-path via getattr duck-typing
 - [Phase 27-04]: send_silence_patch_target_present(player_cls=AudioPlayer) is parameterizable so the drift guard's positive control drives the exact same code path the real guard uses, not a reimplementation
 - [Phase 27-04]: bot.py imports the module (from utils import discord_patch), not the bare function, so grep -c install_send_silence_suppression bot.py returns exactly 1 -- the single-install-site acceptance criterion
+- [Phase 28]: 28-01: HTML-unescape dist/ text before previewSample comparison (Astro entity-escapes apostrophes at build time) — Literal-string comparison without unescaping produced a false negative on a correct build
+- [Phase 28]: Phase 28-02: CICD-02 Pages toggle checkpoint resolved as owner-deferred (accepted outcome per D-03/D-04); phase closes green without the toggle being set
 
 ### Pending Todos
 
@@ -196,9 +200,9 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 
 ## Session Continuity
 
-Last session: 2026-07-17T16:43:51.255Z
-Stopped at: Phase 28 context gathered
-Resume file: .planning/phases/28-portfolio-finish-release/28-CONTEXT.md
+Last session: 2026-07-17T18:03:40.002Z
+Stopped at: Completed 28-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

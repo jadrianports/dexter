@@ -104,7 +104,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 25: Smarter Memory** - Salience reinforcement (surfaced memories gain durability) + vision-sourced memory facts, additive on the existing pgvector store (completed 2026-07-16)
 - [x] **Phase 26: Radio Mode & Skip Democracy** - Endless taste-brain-driven radio mode + vote-gated `/skip` so the queue isn't one user's toy (completed 2026-07-16)
 - [x] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions. **Spike ran → GO / suppressed (D-17)**; 5 plans across 3 waves, implementation planned (completed 2026-07-17)
-- [ ] **Phase 28: Portfolio Finish & Release** - Verify the shipped landing-page redesign and close out the remaining owner-performed release steps
+- [x] **Phase 28: Portfolio Finish & Release** - Verify the shipped landing-page redesign and close out the remaining owner-performed release steps (completed 2026-07-17)
 
 ## Phase Details
 
@@ -226,10 +226,10 @@ Plans:
 **UI hint**: yes (this phase concerns the `/site` landing page — no new build work is expected since PORT-05 already shipped; the annotation is flagged for downstream consistency only, verification/owner-action is the actual remaining scope)
 
 **Plans**: 2 plans (1 wave)
-
 Plans:
-- [ ] 28-01-PLAN.md — PORT-05 confirmation: fresh clean build + a new committed drift guard (`tests/test_demo_transcript_guard.py`) locking the resolveLine() token→previewSample invariant over the built `site/dist/` (no raw token, previews + proper-case + after-hours hex present, positive control)
-- [ ] 28-02-PLAN.md — the D-04 owner runbook (`28-HUMAN-UAT.md`) for the three blocked-on-human items (PORT-02 verbatim lines, CICD-02 Pages toggle, CICD-03 GHCR flip) + the parked local visual pass; includes the CICD-02 attempt-now owner checkpoint
+
+- [x] 28-01-PLAN.md — PORT-05 confirmation: fresh clean build + a new committed drift guard (`tests/test_demo_transcript_guard.py`) locking the resolveLine() token→previewSample invariant over the built `site/dist/` (no raw token, previews + proper-case + after-hours hex present, positive control)
+- [x] 28-02-PLAN.md — the D-04 owner runbook (`28-HUMAN-UAT.md`) for the three blocked-on-human items (PORT-02 verbatim lines, CICD-02 Pages toggle, CICD-03 GHCR flip) + the parked local visual pass; includes the CICD-02 attempt-now owner checkpoint
 
 ## Progress
 
@@ -265,4 +265,4 @@ Plans:
 | 25. Smarter Memory | v1.5 | 2/2 | Complete   | 2026-07-16 |
 | 26. Radio Mode & Skip Democracy | v1.5 | 5/5 | Complete    | 2026-07-16 |
 | 27. Crossfade Playback (spike-gated) | v1.5 | 5/5 | Complete    | 2026-07-17 |
-| 28. Portfolio Finish & Release | v1.5 | 0/2 | Planned | - |
+| 28. Portfolio Finish & Release | v1.5 | 2/2 | Complete    | 2026-07-17 |

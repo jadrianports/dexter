@@ -115,3 +115,9 @@ toggle remains outstanding and is tracked in `28-HUMAN-UAT.md` (deferred, not pe
 ---
 *Phase: 28-portfolio-finish-release*
 *Completed: 2026-07-18*
+
+## Self-Check: PASSED
+
+- FOUND: .planning/phases/28-portfolio-finish-release/28-02-SUMMARY.md
+- FOUND commit: 9acfca2 (docs(28-02): write owner-action release runbook)
+- FOUND commit: d4693f5 (docs(28-02): resolve CICD-02 checkpoint as deferred, add plan summary)

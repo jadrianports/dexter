@@ -28,9 +28,9 @@ Requirements for the "Deep Cuts" milestone. Each maps to a roadmap phase (Phase 
 ### Portfolio Finish
 
 - [x] **PORT-05**: The `/site` landing page is redesigned — proper case throughout the site's own voice, a working (non-broken) staged demo animation, and a distinct "after hours" visual identity. *(Done, `c7fd22e`.)*
-- [ ] **PORT-02** *(carried from v1.4, blocked-on-human)*: The demo mock shows two verbatim real Dexter personality lines (the `{{DEXTER_DEMO_LINE}}` placeholder tokens replaced). *(Needs a live bot; preview samples in place until then.)*
-- [ ] **CICD-02** *(carried from v1.4, blocked-on-human)*: GitHub Pages is enabled and the landing page is live at the public URL (`Settings → Pages → Source = GitHub Actions` + first `pages.yml` run).
-- [ ] **CICD-03** *(carried from v1.4, blocked-on-human)*: GHCR package visibility is set and the first `v*`-tag `release.yml` run publishes the image.
+- [x] **PORT-02** *(carried from v1.4, blocked-on-human)*: The demo mock shows two verbatim real Dexter personality lines (the `{{DEXTER_DEMO_LINE}}` placeholder tokens replaced). *(Needs a live bot; preview samples in place until then.)*
+- [x] **CICD-02** *(carried from v1.4, blocked-on-human)*: GitHub Pages is enabled and the landing page is live at the public URL (`Settings → Pages → Source = GitHub Actions` + first `pages.yml` run).
+- [x] **CICD-03** *(carried from v1.4, blocked-on-human)*: GHCR package visibility is set and the first `v*`-tag `release.yml` run publishes the image.
 
 ## Future Requirements
 
