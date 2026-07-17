@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
 status: executing
-stopped_at: Completed 27-04-PLAN.md
-last_updated: "2026-07-17T15:27:21.040Z"
+stopped_at: Phase 28 context gathered
+last_updated: "2026-07-17T16:43:51.312Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 5
@@ -196,9 +196,9 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 
 ## Session Continuity
 
-Last session: 2026-07-17T11:36:11.212Z
-Stopped at: Completed 27-04-PLAN.md
-Resume file: None
+Last session: 2026-07-17T16:43:51.255Z
+Stopped at: Phase 28 context gathered
+Resume file: .planning/phases/28-portfolio-finish-release/28-CONTEXT.md
 
 ## Operator Next Steps
 
