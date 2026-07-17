@@ -329,6 +329,19 @@ RADIO_SEED_MAX_LENGTH = 100
 SKIP_VOTE_MAJORITY_RATIO = 0.5
 
 
+# --- Phase 27: Crossfade Playback (DJ-03) ---
+# Both knobs are GLOBAL module-level ints (Phase 26 D-21: music commands get global
+# knobs, never per-guild config) — no guild_config column, no /setup toggle.
+# D-12b: fixed knob, planner's discretion — there is deliberately no
+# /crossfade [seconds] arg. If the fade feels long or short, THIS is the one
+# constant to change.
+CROSSFADE_SECONDS = 4  # fade length; at the 20ms Discord frame this is 200 mixed frames.
+# The D-08 spike render demonstrated this value and the user approved it at the D-04 gate.
+
+# D-10b: below this, either track hard-cuts (fading a 15s clip is mostly fade).
+CROSSFADE_MIN_TRACK_SECONDS = 20
+
+
 def sanitize_database_url(dsn: str) -> str:
     """Strip asyncpg-incompatible query params from a Neon connection string.
 
