@@ -124,3 +124,7 @@ None - no external service configuration required. Zero new dependencies (`inspe
 ---
 *Phase: 27-crossfade-playback-spike-gated*
 *Completed: 2026-07-17*
+
+## Self-Check: PASSED
+
+All created/modified files found on disk; all 4 commit hashes (db5e20a, 63d3e03, 7ad8672, 7adc42e) found in git log.
