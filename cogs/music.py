@@ -26,6 +26,7 @@ from database import (
     set_resolution_cache,
     update_user_streak,
 )
+from logic.crossfade import FadeVerdict, cut_frame, decide_crossfade
 from logic.guild_config import AmbientSurface
 from logic.playback import TrackEndAction, decide_on_track_end, should_start_playback
 from logic.radio import should_refill_radio
@@ -57,6 +58,7 @@ from personality.roasts import (
     REPEAT_SONG_ROAST_TEMPLATES,
     pick_random,
 )
+from services.audio import TruncatingSource
 from services.gemini import GeminiRateLimitError
 from services.lyrics import chunk_lyrics
 from utils import embeds
@@ -668,6 +670,14 @@ class MusicCog(commands.Cog):
         if queue.active_filter != "off":
             ffmpeg_filter = config.FFMPEG_FILTERS.get(queue.active_filter)
 
+        # Phase 27 (DJ-03): consume a pending crossfade handoff armed by the
+        # track that just finished in _on_track_end, if any. Cleared
+        # immediately so it can never be consumed twice — a retry of this
+        # same call after an unavailable-track skip must not re-fade from a
+        # stale handoff.
+        xf_pending = queue._xf_pending
+        queue._xf_pending = None
+
         # Time-to-first-audio starts now: from source acquisition (cache/copy or
         # cold download + ffmpeg spawn) through to voice_client.play() (PERF-06).
         _ttfa_t0 = time.monotonic()
@@ -676,6 +686,7 @@ class MusicCog(commands.Cog):
                 track,
                 seek_seconds=offset_seconds,
                 ffmpeg_filter=ffmpeg_filter,
+                crossfade_from=xf_pending,
             )
         except Exception:
             log.warning(f"Skipping unavailable: '{track.title}'")
@@ -698,6 +709,40 @@ class MusicCog(commands.Cog):
             channel = self._get_text_channel(guild)
             if channel:
                 await channel.send(f"Skipped {len(_skipped)} unavailable tracks.")
+
+        # Phase 27 (DJ-03): decide whether THIS track's own eventual end
+        # should fade into the next track. Consulted once per _play_track
+        # call, before the generation block below — on FADE the verdict
+        # wraps `source` (this track's own source) in a TruncatingSource, so
+        # voice_client.play() below still receives exactly one AudioSource
+        # (D-01). The mixing half only happens on the OTHER side of the
+        # handoff — the next _play_track call's crossfade_from= consumption
+        # above.
+        _xf_upcoming = queue.upcoming()
+        _xf_next_track = _xf_upcoming[0] if _xf_upcoming else None
+        verdict = decide_crossfade(
+            enabled=queue.crossfade_enabled,
+            has_next=_xf_next_track is not None,
+            loop_single=queue.loop_mode is LoopMode.SINGLE,
+            filter_active=ffmpeg_filter is not None,
+            outgoing_cached=self.audio.is_cached(track.video_id),
+            incoming_cached=self.audio.is_cached(_xf_next_track.video_id) if _xf_next_track else False,
+            outgoing_duration=track.duration_seconds,
+            incoming_duration=_xf_next_track.duration_seconds if _xf_next_track else 0,
+            seek_offset=offset_seconds,
+        )
+        if verdict == FadeVerdict.FADE:
+            frame = cut_frame(outgoing_duration=track.duration_seconds, fade_seconds=config.CROSSFADE_SECONDS)
+            source = TruncatingSource(source, frame)
+            queue._xf_truncator = source
+            log.info(
+                "crossfade: mixing tail=%s into head=%s over %ds",
+                track.title,
+                _xf_next_track.title,
+                config.CROSSFADE_SECONDS,
+            )
+        else:
+            log.info("crossfade: hard cut (%s)", verdict.value)
 
         # Increment generation — any old after-callbacks will see a stale generation and bail
         log.debug("gen=%d → %d in guild %d", queue._play_generation, queue._play_generation + 1, guild.id)
