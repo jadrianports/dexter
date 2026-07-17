@@ -150,3 +150,10 @@ None - no external service configuration required.
 ---
 *Phase: 28-portfolio-finish-release*
 *Completed: 2026-07-18*
+
+## Self-Check: PASSED
+
+- FOUND: tests/test_demo_transcript_guard.py
+- FOUND: .planning/phases/28-portfolio-finish-release/28-01-SUMMARY.md
+- FOUND commit: 94a78bb (test(28-01): add demo-transcript token->preview drift guard)
+- FOUND commit: 48c6378 (docs(28-01): add plan summary)
