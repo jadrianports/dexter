@@ -1057,23 +1057,30 @@ async def cache_cleanup():
             # Include in-flight prefetch slot
             if queue._prefetch_video_id:
                 protected_video_ids.add(queue._prefetch_video_id)
-            # Phase 27 / D-17: protect the OUTGOING track while a crossfade is
-            # in flight. By fade time current_index has already advanced to
-            # the incoming track, so without this the outgoing file -- being
-            # actively read by CrossfadeSource's tail decoder -- is
-            # eviction-eligible. This is a latent-accounting fix, not a
-            # crash fix: it does not manifest as a failure on either
-            # platform today (Windows: unlink fails, cleanup_cache already
-            # catches OSError and continues; Linux/Docker: unlink succeeds
-            # but the open fd keeps the decode alive, POSIX semantics).
-            # Nobody should try to "verify" this by reproducing a failure --
-            # verify by reading the constructed set.
-            if (
-                (queue._xf_truncator is not None or queue._xf_pending is not None)
-                and queue.current_index > 0
-                and queue.current_index - 1 < len(queue.tracks)
-            ):
-                protected_video_ids.add(queue.tracks[queue.current_index - 1].video_id)
+            # Phase 27 / D-17, REVIEW-FIX WR-01: protect the OUTGOING track
+            # while a crossfade is in flight. By fade time current_index has
+            # already advanced to the incoming track, so without this the
+            # outgoing file -- being actively read by CrossfadeSource's tail
+            # decoder -- is eviction-eligible. This is a latent-accounting
+            # fix, not a crash fix: it does not manifest as a failure on
+            # either platform today (Windows: unlink fails, cleanup_cache
+            # already catches OSError and continues; Linux/Docker: unlink
+            # succeeds but the open fd keeps the decode alive, POSIX
+            # semantics). Nobody should try to "verify" this by reproducing a
+            # failure -- verify by reading the constructed set.
+            #
+            # WR-01: the original check here read `_xf_truncator`/
+            # `_xf_pending` and inferred the outgoing track from
+            # `current_index - 1`. Both flags are cleared by _play_track
+            # before the real mixing window opens (see cogs/music.py), so in
+            # the common single-fade case this never actually protected
+            # anything; it also mis-handled loop-QUEUE wraparound
+            # (current_index == 0). `queue._xf_from_video_id` is the direct,
+            # honestly-scoped replacement -- set at crossfade_from
+            # consumption time and cleared on natural end/cleanup/teardown
+            # (models/queue.py, cogs/music.py).
+            if queue._xf_from_video_id:
+                protected_video_ids.add(queue._xf_from_video_id)
 
     await bot.audio_service.cleanup_cache(bot.pool, protected_video_ids)
     log.info("Cache cleanup check completed (protected=%d)", len(protected_video_ids))

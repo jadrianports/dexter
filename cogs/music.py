@@ -677,6 +677,15 @@ class MusicCog(commands.Cog):
         # stale handoff.
         xf_pending = queue._xf_pending
         queue._xf_pending = None
+        # REVIEW-FIX (WR-01): record the outgoing track's video_id for the
+        # duration this track (the incoming side of the handoff) may still
+        # have a CrossfadeSource actively re-decoding it -- this is the
+        # actual signal bot.py::cache_cleanup's protected-set build reads.
+        # Overwritten on every call (None when there's no handoff), so this
+        # is self-clearing across normal _play_track chaining; the
+        # exception/early-return cleanup paths below and _on_track_end also
+        # null it explicitly for the "no further track plays" case.
+        queue._xf_from_video_id = xf_pending[0].video_id if xf_pending else None
 
         # Time-to-first-audio starts now: from source acquisition (cache/copy or
         # cold download + ffmpeg spawn) through to voice_client.play() (PERF-06).
@@ -767,6 +776,9 @@ class MusicCog(commands.Cog):
             if not voice_client.is_connected():
                 source.cleanup()
                 queue.is_playing = False
+                # REVIEW-FIX (WR-01): the just-cleaned-up source is gone --
+                # this field must not keep pointing at it.
+                queue._xf_from_video_id = None
                 return
 
             # Phase 7: record when this track started and from what offset (elapsed tracking)
@@ -780,6 +792,9 @@ class MusicCog(commands.Cog):
         except Exception:
             source.cleanup()
             queue.is_playing = False
+            # REVIEW-FIX (WR-01): mirrors the not-connected early return
+            # above -- the source this field may reference is gone.
+            queue._xf_from_video_id = None
             raise
 
         # Auto-lyrics (off the playback path): post this song's lyrics to the
@@ -930,6 +945,13 @@ class MusicCog(commands.Cog):
         if queue._xf_truncator is not None and queue._xf_truncator.cut_short and queue.is_playing:
             queue._xf_pending = (current, queue._xf_truncator.position_seconds)
         queue._xf_truncator = None
+        # REVIEW-FIX (WR-01): this track's own natural end closes the window
+        # bot.py::cache_cleanup was protecting the outgoing file for. If
+        # there IS a further track, the next _play_track call overwrites
+        # this anyway (see the crossfade_from consumption block above); this
+        # covers the "no next track plays" case so the reference does not
+        # linger indefinitely.
+        queue._xf_from_video_id = None
 
         next_track = queue.advance()
         await self._persist_queue(guild, queue)

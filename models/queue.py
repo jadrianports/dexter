@@ -136,6 +136,16 @@ class MusicQueue:
         # key dict, never __dict__, so these fields never reach Neon.
         self._xf_pending: tuple[Track, float] | None = None
         self._xf_truncator = None
+        # Phase 27 REVIEW-FIX (WR-01): the outgoing track's video_id while
+        # its cache file may still be actively re-decoded by a
+        # CrossfadeSource's tail mix. Set by _play_track at crossfade_from
+        # consumption time (before the D-01 engine block even starts) and
+        # cleared on this track's own natural end, on the exception/
+        # early-return cleanup paths, or here in clear() -- see
+        # cogs/music.py and bot.py::cache_cleanup (the actual reader, which
+        # previously read _xf_pending/_xf_truncator, both of which are
+        # cleared well before the real eviction-risk window opens).
+        self._xf_from_video_id: str | None = None
 
     def add(self, track: Track) -> int:
         """Add a track to the end of the queue. Returns its index.
@@ -294,6 +304,7 @@ class MusicQueue:
         # inherited above.
         self._xf_pending = None
         self._xf_truncator = None
+        self._xf_from_video_id = None
 
     def upcoming(self) -> list[Track]:
         """Return tracks after the current one."""
