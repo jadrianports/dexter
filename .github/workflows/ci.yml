@@ -50,6 +50,12 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
 
+      # The audio-source tests (Phase 27 crossfade + opus fast path) construct a
+      # REAL discord.FFmpegOpusAudio and assert isinstance — mocking would defeat
+      # them — so the runner needs the ffmpeg binary the bot depends on at runtime.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - run: pytest -q
 
   # Phase 23 / D-02, D-03: builds the Astro portfolio site and byte-checks the
