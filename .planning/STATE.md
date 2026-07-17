@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Deep Cuts
 status: executing
-stopped_at: Phase 27 context gathered
-last_updated: "2026-07-16T20:54:02.548Z"
-last_activity: 2026-07-16 -- Phase 27 planning complete
+stopped_at: Completed 27-04-PLAN.md
+last_updated: "2026-07-17T11:36:11.224Z"
+last_activity: 2026-07-17 -- Phase 27 execution started
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 15
+  completed_plans: 14
   percent: 60
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-14 after v1.4 milestone)
 
 **Core value:** A sarcastic, personality-driven music + AI Discord bot that runs reliably — playing music, answering `/ask`, and generating images without crashes or orphaned FFmpeg processes.
-**Current focus:** Phase 26 — radio-mode-skip-democracy
+**Current focus:** Phase 27 — crossfade-playback-spike-gated
 
 ## Current Position
 
-Phase: 27
-Plan: Not started
+Phase: 27 (crossfade-playback-spike-gated) — EXECUTING
+Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-07-16 -- Phase 27 planning complete
+Last activity: 2026-07-17 -- Phase 27 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -104,6 +104,10 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 26 P03 | 40min | 3 tasks | 3 files |
 | Phase 26 P04 | 35min | 3 tasks | 3 files |
 | Phase 26 P05 | 38min | 3 tasks | 3 files |
+| Phase 27 P01 | 25min | 3 tasks | 3 files |
+| Phase 27 P02 | 15min | 3 tasks | 6 files |
+| Phase 27 P03 | 35min | 3 tasks | 2 files |
+| Phase 27 P04 | 20min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -143,6 +147,14 @@ The full pre-v1.4 decision log (architecture, per-phase highlights, every prior-
 - [Phase 26]: [Phase 26-04]: _try_skip is a new gate-wraps-mechanics wrapper; _do_skip stays completely unmodified and is called ONLY on SKIP_NOW, preserving D-20 and Critical Rule 3 for free
 - [Phase 26]: [Phase 26-04]: closed a second, plan-undocumented vote-bypass surface -- /seek's past-end auto-skip called _do_skip directly, letting any single user force an unvoted skip; routed through _try_skip too since the plan's own acceptance criteria (exactly one _do_skip call site) required it
 - [Phase 26-05]: radio start kicks its first refill through the same should_refill_radio gate the lookahead uses, giving D-12 non-destructive takeover with no special starting case; both /radio start and /radio stop call reset_auto_queue() so radio-era play/skip counts never leak into the next auto-queue session's ignored-signal check
+- [Phase ?]: [Phase 27-01]: decide_crossfade ladder rung order and FadeVerdict value strings copied verbatim from RESEARCH §3 Narrow-go exclusions table row order (NO_TOGGLE -> NO_NEXT_TRACK -> LOOP_SINGLE -> FILTER_ACTIVE -> NOT_CACHED -> SEEKED -> TOO_SHORT -> FADE)
+- [Phase ?]: [Phase 27-01]: cut_frame floors at 0 (T-27-01) so a YouTube-metadata/real-file duration mismatch can never produce a negative -ss seek offset
+- [Phase 27]: [Phase 27-02]: crossfade_enabled placed beside auto_lyrics (survives clear()); _xf_pending/_xf_truncator placed beside radio_armed (nulled by clear()) -- the field's placement plus presence/absence in clear() together encode D-12's preference-vs-playback-state split
+- [Phase 27]: [Phase 27-02]: tests/test_queue_persistence.py created as a NEW file -- the repo's only prior persistence guard lives in test_radio_logic.py, VALIDATION's extend claim was wrong; guard uses exact key-set equality so a future field riding along via __dict__ fails the test
+- [Phase ?]: [Phase 27-03]: CrossfadeSource.cleanup() cleans the tail in a try and the head in a finally so a raising tail cleanup can never strand the head decoder (Critical Rule 3) -- matches the plan's key_links pattern exactly, no deviation
+- [Phase ?]: [Phase 27-03]: TruncatingSource._suppress_end_silence (D-17.3) is set ONLY at the instant read() cuts short for a fade -- never at construction, never on a natural early EOF -- so plan 27-04's send_silence patch stays byte-identical off-path via getattr duck-typing
+- [Phase 27-04]: send_silence_patch_target_present(player_cls=AudioPlayer) is parameterizable so the drift guard's positive control drives the exact same code path the real guard uses, not a reimplementation
+- [Phase 27-04]: bot.py imports the module (from utils import discord_patch), not the bare function, so grep -c install_send_silence_suppression bot.py returns exactly 1 -- the single-install-site acceptance criterion
 
 ### Pending Todos
 
@@ -184,9 +196,9 @@ Acknowledged and deferred at **v1.4 milestone close (2026-07-14)** — 36 open i
 
 ## Session Continuity
 
-Last session: 2026-07-16T19:38:47.437Z
-Stopped at: Phase 27 context gathered
-Resume file: .planning/phases/27-crossfade-playback-spike-gated/27-CONTEXT.md
+Last session: 2026-07-17T11:36:11.212Z
+Stopped at: Completed 27-04-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

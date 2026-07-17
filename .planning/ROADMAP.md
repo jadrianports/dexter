@@ -103,7 +103,7 @@ Full phase details, success criteria, and decisions archived in
 - [x] **Phase 24: Hosting Honesty & Docker** - Purge every dead cloud-host reference and replace the Koyeb deploy doc with a verified Docker run guide (completed 2026-07-14)
 - [x] **Phase 25: Smarter Memory** - Salience reinforcement (surfaced memories gain durability) + vision-sourced memory facts, additive on the existing pgvector store (completed 2026-07-16)
 - [x] **Phase 26: Radio Mode & Skip Democracy** - Endless taste-brain-driven radio mode + vote-gated `/skip` so the queue isn't one user's toy (completed 2026-07-16)
-- [ ] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions. **Spike ran → GO / suppressed (D-17)**; 5 plans across 3 waves, implementation planned
+- [x] **Phase 27: Crossfade Playback (Spike-Gated)** - Smooth track transitions. **Spike ran → GO / suppressed (D-17)**; 5 plans across 3 waves, implementation planned (completed 2026-07-17)
 - [ ] **Phase 28: Portfolio Finish & Release** - Verify the shipped landing-page redesign and close out the remaining owner-performed release steps
 
 ## Phase Details
@@ -199,17 +199,17 @@ Plans:
 
 **Wave 1**
 
-- [ ] 27-01-PLAN.md — D-14 pure eligibility seam (`logic/crossfade.py`: `FadeVerdict` + `decide_crossfade` + `cut_frame`) + the two global config knobs + mock-free ladder tests (rows 1-8) (DJ-03)
-- [ ] 27-02-PLAN.md — D-12 `MusicQueue` state split (`crossfade_enabled` survives `clear()`; `_xf_*` scratch state does not) + `CROSSFADE_ON`/`OFF` copy pools + not-persisted guard (rows 9, 10, 15) (DJ-03)
+- [x] 27-01-PLAN.md — D-14 pure eligibility seam (`logic/crossfade.py`: `FadeVerdict` + `decide_crossfade` + `cut_frame`) + the two global config knobs + mock-free ladder tests (rows 1-8) (DJ-03)
+- [x] 27-02-PLAN.md — D-12 `MusicQueue` state split (`crossfade_enabled` survives `clear()`; `_xf_*` scratch state does not) + `CROSSFADE_ON`/`OFF` copy pools + not-persisted guard (rows 9, 10, 15) (DJ-03)
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 27-03-PLAN.md — D-14 mixing half (`TruncatingSource`, `CrossfadeSource` with `audioop` equal-power mixing, additive `crossfade_from=` kwarg) + byte-identical-when-off regression guard (rows 11-14, 16) (DJ-03)
-- [ ] 27-04-PLAN.md — **D-17's mandatory guard rails**: fail-soft wrapped `send_silence` patch install (`utils/discord_patch.py`) + CI drift guard asserting the `_do_run` CALL SITE with a positive control + the latent fade-aware LFU protected-set fix (rows 17-18) (DJ-03)
+- [x] 27-03-PLAN.md — D-14 mixing half (`TruncatingSource`, `CrossfadeSource` with `audioop` equal-power mixing, additive `crossfade_from=` kwarg) + byte-identical-when-off regression guard (rows 11-14, 16) (DJ-03)
+- [x] 27-04-PLAN.md — **D-17's mandatory guard rails**: fail-soft wrapped `send_silence` patch install (`utils/discord_patch.py`) + CI drift guard asserting the `_do_run` CALL SITE with a positive control + the latent fade-aware LFU protected-set fix (rows 17-18) (DJ-03)
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 27-05-PLAN.md — the glue: `/crossfade on|off` (`/autolyrics` shape) + the two `_play_track` integration points + `_on_track_end` handoff + D-01/D-15 structural tripwires (DJ-03)
+- [x] 27-05-PLAN.md — the glue: `/crossfade on|off` (`/autolyrics` shape) + the two `_play_track` integration points + `_on_track_end` handoff + D-01/D-15 structural tripwires (DJ-03)
 
 ### Phase 28: Portfolio Finish & Release
 
@@ -260,5 +260,5 @@ Plans:
 | 24. Hosting Honesty & Docker | v1.5 | 3/3 | Complete    | 2026-07-14 |
 | 25. Smarter Memory | v1.5 | 2/2 | Complete   | 2026-07-16 |
 | 26. Radio Mode & Skip Democracy | v1.5 | 5/5 | Complete    | 2026-07-16 |
-| 27. Crossfade Playback (spike-gated) | v1.5 | 0/TBD | Not started | - |
+| 27. Crossfade Playback (spike-gated) | v1.5 | 5/5 | Complete   | 2026-07-17 |
 | 28. Portfolio Finish & Release | v1.5 | 0/TBD | Not started | - |

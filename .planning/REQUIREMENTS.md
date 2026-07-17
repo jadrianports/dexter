@@ -23,7 +23,7 @@ Requirements for the "Deep Cuts" milestone. Each maps to a roadmap phase (Phase 
 
 - [x] **DJ-01**: Radio / endless mode — a user seeds a track or artist and Dexter keeps the queue flowing indefinitely off the taste brain (no manual queueing) until stopped.
 - [x] **DJ-02**: Skip-voting / queue democracy — a skip requires a configurable vote threshold (or listener majority) so one user can't unilaterally hijack the queue; Dexter narrates the tally.
-- [ ] **DJ-03** *(spike-gated)*: Crossfade between tracks — the tail of the outgoing track blends into the head of the incoming track. Gated on a plan-time spike proving `/skip`-mid-crossfade + generation-counter safety on the existing playback engine; **descope to a fast-follow if the spike shows engine instability** (standing Descope Rule).
+- [x] **DJ-03** *(spike-gated)*: Crossfade between tracks — the tail of the outgoing track blends into the head of the incoming track. Gated on a plan-time spike proving `/skip`-mid-crossfade + generation-counter safety on the existing playback engine; **descope to a fast-follow if the spike shows engine instability** (standing Descope Rule).
 
 ### Portfolio Finish
 
