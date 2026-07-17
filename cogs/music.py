@@ -918,6 +918,19 @@ class MusicCog(commands.Cog):
             state = get_server_state(self.bot.server_states, guild.id)
             state.auto_queue_results["played"] += 1
 
+        # Phase 27 (DJ-03): hand off a cut-short truncator's position to the
+        # NEXT _play_track call, BEFORE advance() moves current_index — the
+        # outgoing track is the one that just finished, captured above as
+        # `current`. Read the cut position from truncator.position_seconds
+        # (an in-process frame count), NEVER from Track.duration_seconds
+        # (YouTube metadata, attacker-influenceable and known to disagree
+        # with the real file — RESEARCH landmine #5). Cleared unconditionally
+        # — a truncator that reached a natural EOF has nothing to hand off
+        # and must not linger into the next track (RESEARCH §7).
+        if queue._xf_truncator is not None and queue._xf_truncator.cut_short and queue.is_playing:
+            queue._xf_pending = (current, queue._xf_truncator.position_seconds)
+        queue._xf_truncator = None
+
         next_track = queue.advance()
         await self._persist_queue(guild, queue)
 

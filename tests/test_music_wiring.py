@@ -490,3 +490,145 @@ class TestLoopRadioMutualExclusionWiring:
         may remain in cogs/music.py."""
         non_comment = "\n".join(_non_comment_lines(_music_module_source()))
         assert "queue.loop_mode = " not in non_comment
+
+
+# ---------------------------------------------------------------------------
+# TestCrossfadeEngineWiring — 27-05 D-01 / D-10b / D-12c / D-12d
+# ---------------------------------------------------------------------------
+# This glue is untested-by-design per .planning/codebase/TESTING.md — its
+# safety evidence is the spike's D-11 attack artifacts recorded in
+# 27-RESEARCH.md §Evidence, not unit tests. These are structural review
+# encoded as tests, matching this file's existing convention.
+#
+# The equivalent of a "_do_skip has exactly one call site" tripwire already
+# exists above (test_skip_choke_point_do_skip_called_exactly_once_from_try_skip)
+# and is not duplicated here — Phase 26's D-15 invariant only needs to keep
+# passing, which the existing test already proves untouched by this plan's
+# zero-diff over _try_skip/_do_skip/the vote cache.
+
+
+def _play_track_source() -> str:
+    return inspect.getsource(MusicCog._play_track)
+
+
+class TestCrossfadeEngineWiring:
+    def test_play_track_generation_block_intact(self):
+        """D-01 tripwire: _play_track's engine block — increment, capture,
+        define the guarded after_callback, and the guard itself — must
+        appear in exactly this order. A future edit that reorders or removes
+        any of these turns this into a red build."""
+        src = _play_track_source()
+        gen_incr_pos = src.index("queue._play_generation += 1")
+        capture_pos = src.index("current_gen = queue._play_generation")
+        callback_def_pos = src.index("def after_callback")
+        guard_pos = src.index("queue._play_generation == current_gen")
+        assert gen_incr_pos < capture_pos < callback_def_pos < guard_pos
+
+    def test_crossfade_hard_cut_is_log_only(self):
+        """D-10b: the non-FADE branch must reach no user-facing send —
+        scoped to the crossfade decision block only, since _play_track
+        legitimately calls channel.send elsewhere (the skipped-tracks
+        summary)."""
+        src = _play_track_source()
+        start = src.index("decide_crossfade(")
+        end = src.index("# Increment generation")
+        block = src[start:end]
+        for banned in ("channel.send", "followup", "response.send_message"):
+            assert banned not in block
+
+    def test_decide_crossfade_called_exactly_once(self):
+        assert _play_track_source().count("decide_crossfade(") == 1
+
+    def test_crossfade_consulted_before_generation_increment(self):
+        src = _play_track_source()
+        decide_pos = src.index("decide_crossfade(")
+        gen_incr_pos = src.index("queue._play_generation += 1")
+        assert decide_pos < gen_incr_pos
+
+    def test_xf_pending_cleared_where_consumed(self):
+        """queue._xf_pending must be read and nulled in the same block —
+        it can never be consumed twice."""
+        src = _play_track_source()
+        read_pos = src.index("xf_pending = queue._xf_pending")
+        clear_pos = src.index("queue._xf_pending = None")
+        get_source_pos = src.index("self.audio.get_source(")
+        assert read_pos < clear_pos < get_source_pos
+
+    def test_filter_active_reuses_resolved_local_not_rederived(self):
+        """filter_active must be fed from the already-resolved ffmpeg_filter
+        local (:666), never a re-derived queue.active_filter != "off" check
+        at the crossfade call site."""
+        src = _play_track_source()
+        start = src.index("decide_crossfade(")
+        end = src.index("# Increment generation")
+        block = src[start:end]
+        assert "filter_active=ffmpeg_filter is not None" in block
+        assert 'queue.active_filter != "off"' not in block
+
+
+def _on_track_end_source_for_crossfade() -> str:
+    return inspect.getsource(MusicCog._on_track_end)
+
+
+class TestCrossfadeHandoffWiring:
+    def test_handoff_reads_position_seconds_not_duration(self):
+        """The cut position must come from TruncatingSource.position_seconds
+        (an in-process frame count), never from Track.duration_seconds
+        (YouTube metadata, attacker-influenceable — RESEARCH landmine #5).
+        Comment-stripped so an explanatory comment mentioning the banned
+        token in prose can't false-positive (matches this file's existing
+        convention)."""
+        src = _on_track_end_source_for_crossfade()
+        non_comment = "\n".join(_non_comment_lines(src))
+        assert "position_seconds" in non_comment
+        assert "duration_seconds" not in non_comment
+
+    def test_truncator_cleared_on_every_path(self):
+        """queue._xf_truncator must be nulled unconditionally — not only
+        inside the cut-short branch — so a naturally-ended truncator never
+        lingers into the next track."""
+        src = _on_track_end_source_for_crossfade()
+        assert "queue._xf_truncator = None" in src
+        # The clear must not be nested inside the cut_short conditional body
+        # — it is its own statement at the same indent as the `if`.
+        lines = src.splitlines()
+        if_line = next(i for i, ln in enumerate(lines) if "queue._xf_truncator is not None" in ln and "if " in ln)
+        clear_line = next(i for i, ln in enumerate(lines) if "queue._xf_truncator = None" in ln)
+        if_indent = len(lines[if_line]) - len(lines[if_line].lstrip())
+        clear_indent = len(lines[clear_line]) - len(lines[clear_line].lstrip())
+        assert clear_indent == if_indent, "the unconditional clear must not be nested inside the `if` body"
+
+    def test_handoff_precedes_advance(self):
+        """The outgoing track must be captured and the handoff computed
+        BEFORE advance() moves current_index — advance() changes what
+        get_current() would return."""
+        src = _on_track_end_source_for_crossfade()
+        handoff_pos = src.index("queue._xf_pending = (current,")
+        advance_pos = src.index("queue.advance()")
+        assert handoff_pos < advance_pos
+
+    def test_on_track_end_still_dispatches_on_track_end_action_with_crossfade_present(self):
+        """The crossfade handoff is an addition ahead of the existing pure
+        dispatch, never a replacement (Phase 10 D-02) — mirrors the Phase 26
+        radio-lookahead precedent of an additional gate, not a new
+        TrackEndAction member."""
+        src = _on_track_end_source_for_crossfade()
+        assert "decide_on_track_end(" in src
+        assert "TrackEndAction." in src
+
+
+class TestCrossfadeSkipChokePointUntouched:
+    """D-12c/D-12d: a skip already cuts the fade dead for free via
+    _do_skip -> _play_track -> voice_client.stop() (which tears down
+    CrossfadeSource's owned decoders). No edit to _try_skip, _do_skip, or
+    the vote cache is permitted in this plan — asserted by an empty diff."""
+
+    def test_try_skip_has_no_crossfade_references(self):
+        src = inspect.getsource(MusicCog._try_skip)
+        assert "crossfade" not in src.lower()
+        assert "_xf_" not in src
+
+    def test_do_skip_has_no_crossfade_references(self):
+        src = inspect.getsource(MusicCog._do_skip)
+        assert "crossfade" not in src.lower()
+        assert "_xf_" not in src
