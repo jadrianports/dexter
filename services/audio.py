@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import audioop  # stdlib on 3.11 (Dockerfile:4, ci.yml); removed in 3.13 (D-02 accepted
+import math  # cost); emits a DeprecationWarning on 3.12 — do not add -W error to pytest.
 from pathlib import Path
 
 import discord
@@ -100,6 +102,86 @@ class TruncatingSource(discord.AudioSource):
         offset (RESEARCH landmine #5: Track.duration_seconds is YouTube
         metadata and disagrees with the real file)."""
         return self._frames_read * 0.02
+
+
+class CrossfadeSource(discord.AudioSource):
+    """Mixes an outgoing track's tail into an incoming track's head (Phase 27 / D-14).
+
+    Both children are discord.FFmpegPCMAudio — mixing requires decoded PCM, so
+    is_opus() always returns False. For the first fade_frames reads, output is
+    an equal-power mix (g_out^2 + g_in^2 == 1, no headroom gain — RESEARCH
+    measured 0.0019% clipping with none applied). Once the fade window ends
+    the tail is cleaned and dropped immediately (never held for the rest of
+    the track) and read() returns the head's frames alone.
+
+    An empty tail on the very first read (short file / an -ss seek landing
+    past EOF) degrades to a plain fade-in rather than raising — FFmpegPCMAudio
+    always returns exactly 3840 bytes or b"", so this is the one case
+    audioop.add's equal-length requirement would otherwise be violated.
+
+    cleanup() owns BOTH children — this is the entire surface of Critical
+    Rule 3 for this feature (the two-live-decoder window is expressible as
+    ONE AudioSource, so one cleanup() call tears both down; no existing
+    teardown site needs editing). The tail is cleaned in a try, the head in a
+    finally, so a raising tail cleanup can never strand the head decoder.
+    cleanup() is idempotent — discord.py's player calls it once, and
+    _play_track's failure paths may call it again.
+    """
+
+    def __init__(self, tail: discord.AudioSource, head: discord.AudioSource, fade_frames: int) -> None:
+        self._tail = tail
+        self._head = head
+        self._fade_frames = fade_frames
+        self._frames_mixed = 0
+        self._tail_dropped = False
+        self._cleaned = False
+
+    def is_opus(self) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        if self._frames_mixed >= self._fade_frames:
+            return self._head.read()
+
+        # Equal-power curve: g_out = cos(progress * pi/2), g_in = sin(progress * pi/2).
+        progress = self._frames_mixed / self._fade_frames
+        g_out = math.cos(progress * math.pi / 2)
+        g_in = math.sin(progress * math.pi / 2)
+
+        tail_frame = self._tail.read()
+        head_frame = self._head.read()
+        self._frames_mixed += 1
+        if self._frames_mixed >= self._fade_frames:
+            # Drop the tail the INSTANT the fade window ends — never hold it
+            # for the rest of the track.
+            self._drop_tail()
+
+        if not tail_frame:
+            # Empty tail (short file / -ss past EOF) — degrade to a plain
+            # fade-in rather than raising.
+            return audioop.mul(head_frame, 2, g_in) if head_frame else b""
+        if not head_frame:
+            return audioop.mul(tail_frame, 2, g_out)
+
+        return audioop.add(
+            audioop.mul(tail_frame, 2, g_out),
+            audioop.mul(head_frame, 2, g_in),
+            2,
+        )
+
+    def _drop_tail(self) -> None:
+        if not self._tail_dropped:
+            self._tail_dropped = True
+            self._tail.cleanup()
+
+    def cleanup(self) -> None:
+        if self._cleaned:
+            return
+        self._cleaned = True
+        try:
+            self._drop_tail()
+        finally:
+            self._head.cleanup()
 
 
 class AudioService:

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.audio import AudioService, TruncatingSource, _build_ffmpeg_opts
+from services.audio import AudioService, CrossfadeSource, TruncatingSource, _build_ffmpeg_opts
 
 
 @pytest.fixture
@@ -368,3 +368,107 @@ def test_suppress_flag_only_on_fade_cut():
     assert ts_fade._suppress_end_silence is False
     assert ts_fade.read() == b""  # the 6th read is the fade cut
     assert ts_fade._suppress_end_silence is True
+
+
+class TestCrossfadeSourceMixing:
+    """Additional CrossfadeSource coverage beyond the two VALIDATION-mandated tests."""
+
+    def test_is_opus_false(self):
+        cs = CrossfadeSource(tail=_FakeAudioSource(), head=_FakeAudioSource(), fade_frames=4)
+        assert cs.is_opus() is False
+
+    def test_mixes_for_exactly_fade_frames_then_head_alone(self):
+        """With fade_frames=N, frames 0..N-1 differ from the head-alone bytes;
+        frame N onward equals the head's bytes exactly."""
+        head_frames = [bytes([i]) * 3840 for i in range(1, 7)]
+        tail_frames = [bytes([200 + i]) * 3840 for i in range(4)]
+        tail = _FakeAudioSource(list(tail_frames))
+        head = _FakeAudioSource(list(head_frames))
+        cs = CrossfadeSource(tail=tail, head=head, fade_frames=4)
+
+        mixed = [cs.read() for _ in range(4)]
+        for i, out in enumerate(mixed):
+            assert out != head_frames[i], f"frame {i} should differ from head-alone bytes"
+
+        # Frame 4 onward: head alone, byte-identical to the head's own output.
+        assert cs.read() == head_frames[4]
+        assert cs.read() == head_frames[5]
+
+    def test_tail_dropped_the_instant_fade_window_ends(self):
+        tail = _FakeAudioSource([b"x" * 3840] * 2)
+        head = _FakeAudioSource([b"y" * 3840] * 10)
+        cs = CrossfadeSource(tail=tail, head=head, fade_frames=2)
+        assert tail.cleanup_calls == 0
+        cs.read()
+        assert tail.cleanup_calls == 0
+        cs.read()
+        # The fade window just ended on this read — the tail must already be dropped.
+        assert tail.cleanup_calls == 1
+        cs.read()
+        # Never cleaned a second time just because the track keeps playing.
+        assert tail.cleanup_calls == 1
+
+    def test_equal_power_no_headroom_gain(self):
+        """Verifies the equal-power mix formula directly, with no extra gain applied
+        beyond audioop.mul/add (RESEARCH: 0.0019% clipping measured with none)."""
+        import audioop
+        import math
+
+        sample = (10000).to_bytes(2, "little", signed=True) * 1920  # 3840 bytes
+        tail = _FakeAudioSource([sample, sample])
+        head = _FakeAudioSource([sample, sample])
+        cs = CrossfadeSource(tail=tail, head=head, fade_frames=2)
+
+        cs.read()  # frame 0: progress=0 -> g_out=1, g_in=0
+        out = cs.read()  # frame 1: progress=0.5 -> g_out=g_in=cos/sin(pi/4)
+        g = math.sin(0.5 * math.pi / 2)
+        expected = audioop.add(audioop.mul(sample, 2, g), audioop.mul(sample, 2, g), 2)
+        assert out == expected
+
+
+def test_crossfade_source_cleans_both():
+    """VALIDATION row 13 (exact test name, MANDATED — do not rename) / Critical
+    Rule 3: a tail whose cleanup() raises still results in the head's
+    cleanup() being called. The head must be cleaned in a finally, never
+    skipped just because the tail raised.
+    """
+    frame = b"x" * 3840
+    tail = _FakeAudioSource([frame] * 2, raise_on_cleanup=True)
+    head = _FakeAudioSource([frame] * 10)
+    cs = CrossfadeSource(tail=tail, head=head, fade_frames=4)
+
+    with pytest.raises(RuntimeError):
+        cs.cleanup()
+
+    assert tail.cleanup_calls == 1
+    assert head.cleanup_calls == 1
+
+    # cleanup() is idempotent — a second call (e.g. from _play_track's failure
+    # path, or discord.py's player calling it again) must not re-invoke
+    # either child's cleanup or raise again.
+    cs.cleanup()
+    assert tail.cleanup_calls == 1
+    assert head.cleanup_calls == 1
+
+
+def test_crossfade_tolerates_empty_tail():
+    """VALIDATION row 14 (exact test name, MANDATED — do not rename): a tail
+    returning b"" on its very first read (a short file, or an -ss seek
+    landing past EOF) degrades to a plain fade-in and never raises.
+    """
+    frame = b"x" * 3840
+    tail = _FakeAudioSource([])  # empty from the very first read
+    head = _FakeAudioSource([frame] * 10)
+    cs = CrossfadeSource(tail=tail, head=head, fade_frames=4)
+
+    # Must not raise, and must still produce non-empty output for every fade frame.
+    outputs = [cs.read() for _ in range(4)]
+    for out in outputs:
+        assert out != b""
+
+    # The (empty) tail is still cleaned up once the fade window ends.
+    assert tail.cleanup_calls == 1
+
+    # After the fade window: head alone, no crash.
+    remaining = head.read()
+    assert cs.read() == remaining
